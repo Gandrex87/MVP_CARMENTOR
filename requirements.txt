@@ -1,0 +1,27 @@
+# Cloud and Google Services
+google-cloud-bigquery
+google-auth
+google-cloud-aiplatform
+db-dtypes
+pandas
+
+# LangChain Ecosystem
+langgraph
+langchain-core
+langchain-community
+langchain_google_vertexai
+trustcall
+
+# Data Handling
+python-dotenv
+pandas
+Pillow
+matplotlib
+tavily-python
+ipython
+
+Flask
+Flask-SocketIO
+
+
+
