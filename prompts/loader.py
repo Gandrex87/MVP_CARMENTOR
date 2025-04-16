@@ -1,0 +1,24 @@
+from langchain_core.messages import SystemMessage
+from langchain_core.runnables import Runnable
+from pathlib import Path
+
+def load_prompt(filename: str) -> SystemMessage:
+    path = Path(__file__).resolve().parent.parent / "prompts" / filename
+    with open(path, "r", encoding="utf-8") as f:
+        return SystemMessage(content=f.read())
+
+# Ejemplo de uso:
+perfil_structured_sys_msg = load_prompt("perfil_structured_prompt.txt")
+
+
+# Cargar un prompt desde un archivo   
+def cargar_prompt(nombre_archivo: str) -> str:
+    prompt_path = Path(__file__).parent / nombre_archivo
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"❌ El prompt '{nombre_archivo}' no fue encontrado en {prompt_path}")
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+prompt_base = cargar_prompt("validacion_dinamica.txt")
+
+
