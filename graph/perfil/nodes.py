@@ -51,7 +51,7 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
         "solo_electricos", "uso_profesional", "altura_mayor_190",
         "peso_mayor_100", "valora_estetica", "cambio_automatico", "apasionado_motor"
     ]
-    campos_filtros = ["tipo_carroceria", "tipo_mecanica", "premium_min", "singular_min"]
+    campos_filtros = ["tipo_mecanica", "premium_min", "singular_min"]
 
     preferencias_completas = all(preferencias.get(k) not in [None, "", "null"] for k in campos_preferencias)
     filtros_completos = all(filtros.get(k) not in [None, "", [], "null"] for k in campos_filtros)

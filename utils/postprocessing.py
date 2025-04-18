@@ -11,6 +11,12 @@ def aplicar_postprocesamiento(preferencias, filtros):
 
     def es_nulo(valor):
         return valor in [None, "", "null", "0.0"]
+    
+      # ────────────── REGLA ELÉCTRICO → AUTOMÁTICO ──────────────
+    solo_elec = preferencias.get("solo_electricos", "").strip().lower()
+    if solo_elec in ["sí", "si"] and es_nulo(preferencias.get("cambio_automatico")):
+        preferencias["cambio_automatico"] = "si"
+    # ────────────────────────────────────────────────────────────
 
     # 1. Tipo de mecánica si no quiere eléctricos
     if preferencias.get("solo_electricos", "").strip().lower() == "no" and not filtros.get("tipo_mecanica"):

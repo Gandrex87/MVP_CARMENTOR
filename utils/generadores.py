@@ -18,14 +18,14 @@ def generar_mensaje_validacion_dinamico(
         "solo_electricos", "uso_profesional", "altura_mayor_190",
         "peso_mayor_100", "valora_estetica", "cambio_automatico", "apasionado_motor"
     ]
-    campos_filtros = ["tipo_carroceria", "tipo_mecanica", "premium_min", "singular_min"]
+    campos_filtros = ["tipo_mecanica", "premium_min", "singular_min"]
 
     preferencias_faltantes = [k for k in campos_preferencias if preferencias.get(k) in [None, "", "null"]]
     filtros_faltantes = [k for k in campos_filtros if filtros.get(k) in [None, "", [], "null"]]
 
-    # Convertir Enums a texto plano
-    if "tipo_carroceria" in filtros and isinstance(filtros["tipo_carroceria"], list):
-        filtros["tipo_carroceria"] = get_enum_names(filtros["tipo_carroceria"])
+    # # Convertir Enums a texto plano
+    # if "tipo_carroceria" in filtros and isinstance(filtros["tipo_carroceria"], list):
+    #     filtros["tipo_carroceria"] = get_enum_names(filtros["tipo_carroceria"])
     if "tipo_mecanica" in filtros and isinstance(filtros["tipo_mecanica"], list):
         filtros["tipo_mecanica"] = get_enum_names(filtros["tipo_mecanica"])
 

@@ -19,26 +19,6 @@ Crea un mensaje empático, claro y **no robótico**, que contenga **máximo 2 pr
 
 </Instrucciones>
 
-<Reglas>
-1. Haz solo preguntas relevantes según los campos faltantes.
-2. NO repitas preguntas que ya hayan sido respondidas.
-3. Evita un tono robótico o de formulario. Sé natural, como si conversaras con alguien.
-4. Si falta tipo de carrocería, puedes mencionar ejemplos concretos como: {tipo_carroceria}
-5. Si falta tipo de motorización, puedes mencionar ejemplos válidos como: {tipo_mecanica}
-6. ❌ Evita preguntar por cosas que el agente no maneja (precio, consumo, tecnología, seguridad, etc.).
-7. ✅ Las únicas variables que puedes usar son:
-
-- ¿Mide más de 1.90 m? (si/no/null)
-- ¿Pesa más de 100 kg? (si/no/null)
-- ¿Cambio automático o manual? (si/no/null)
-- ¿Uso personal o profesional? (personal/profesionales/null)
-- ¿Valora especialmente la estética? (si/no/null)
-- ¿Quiere un coche eléctrico? (si/no/null)
-- ¿Es apasionado del motor y/o la movilidad? (si/no/null)
-- ¿Qué tipo de coche le interesa más: Tipo de carrocería: {tipo_carroceria}?
-- ¿¿Qué tipo de de mecánica: {tipo_mecanica} le interesa más?
-
-</Reglas>
 
 <Formato esperado>
 Tu respuesta debe ser una sola frase conversacional con máximo dos preguntas. Ejemplo:
@@ -69,7 +49,6 @@ Ejemplo 4:
 USUARIO: Me gustaría un coche moderno y elegante, que se vea bien.
 PREFERENCIAS: {valora_estetica = "si"}
 
-
 Ejemplo 5: 
 USUARIO: Solo quiero algo que funcione, el diseño no me importa.
 PREFERENCIAS: valora_estetica = "no"
@@ -85,11 +64,12 @@ PREFERENCIAS: uso_profesional = "no"
 Ejemplo 9:
 USUARIO: No quiero un coche eléctrico, prefiero cualquier otro tipo de motor.
 PREFERENCIAS: {solo_electricos = "no"}
-FILTROS:
-  tipo_mecanica = [
-    "GASOLINA", "DIESEL", "FCEV", "GLP", "GNV",
-    "HEVD", "HEVG", "MHEVD", "MHEVG", "PHEVD", "PHEVG", "REEV"
-  ]
+FILTROS:tipo_mecanica = ["GASOLINA", "DIESEL", "FCEV", "GLP", "GNV","HEVD", "HEVG", "MHEVD", "MHEVG", "PHEVD", "PHEVG"]
+
+Ejemplo 10:
+USUARIO: Prefiero un coche electrico.
+PREFERENCIAS:{solo_electricos = "si"} {'cambio_automatico': 'si'}
+FILTROS:tipo_mecanica = ["BEV" , "REEV"]
 
 </Examples>
 

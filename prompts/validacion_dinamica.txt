@@ -24,7 +24,6 @@ Crea un mensaje empático, claro y **no robótico**, que contenga **máximo 2 pr
 - apasionado_motor : ¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'
 
 [filtros_inferidos]
-- tipo_carroceria:Lista de carrocerías recomendadas,{tipo_carroceria}
 - tipo_mecanica: Lista de motorizaciones recomendadas {tipo_mecanica}
 </Campos disponibles>
 
@@ -32,10 +31,9 @@ Crea un mensaje empático, claro y **no robótico**, que contenga **máximo 2 pr
 1. Haz solo preguntas relevantes según los campos faltantes.
 2. NO repitas preguntas que ya hayan sido respondidas.
 3. Evita un tono robótico o de formulario. Sé natural, como si conversaras con alguien.
-4. Si falta tipo de carrocería, puedes mencionar ejemplos concretos como: {tipo_carroceria}
-5. Si falta tipo de motorización, puedes mencionar ejemplos válidos como: {tipo_mecanica}
-6. ❌ Evita  **PROHIBIDO** preguntar por cosas que el agente no maneja (precio, consumo, tecnología, seguridad, maletero, sistema de audio etc.).
-7. ✅ Las únicas variables que puedes usar son:
+4. Si falta tipo de motorización, puedes mencionar ejemplos válidos como: {tipo_mecanica}
+5. ❌ Evita  **PROHIBIDO** preguntar por cosas que el agente no maneja (precio, consumo, tecnología, seguridad, maletero, sistema de audio etc.).
+6. ✅ Las únicas variables que puedes usar son:
 
 - ¿Mide más de 1.90 m?
 - ¿Pesa más de 100 kg?
@@ -44,8 +42,8 @@ Crea un mensaje empático, claro y **no robótico**, que contenga **máximo 2 pr
 - ¿Valora la estética?
 - ¿Quiere un coche eléctrico?
 - ¿Es apasionado del motor?
-- Tipo de carrocería: {tipo_carroceria}
 - Tipo de mecánica: {tipo_mecanica}
+
 
 </Reglas>
 <Examples>

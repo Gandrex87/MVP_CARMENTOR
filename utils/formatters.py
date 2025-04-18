@@ -24,7 +24,7 @@ def formatear_preferencias_en_tabla(preferencias, filtros=None) -> str:
 
     if filtros: 
         tipo_mecanica = ", ".join(get_enum_names(filtros.get("tipo_mecanica", [])))
-        tipo_carroceria = ", ".join(get_enum_names(filtros.get("tipo_carroceria", [])))
+        #tipo_carroceria = ", ".join(get_enum_names(filtros.get("tipo_carroceria", [])))
         estetica_min = filtros.get("estetica_min")
         premium_min = filtros.get("premium_min")
         singular_min = filtros.get("singular_min")
@@ -33,7 +33,7 @@ def formatear_preferencias_en_tabla(preferencias, filtros=None) -> str:
         texto += "| Filtro técnico       | Valor                           |\n"
         texto += "|----------------------|----------------------------------|\n"
         texto += f"| Tipo de mecánica     | {tipo_mecanica or 'No definido'}\n"
-        texto += f"| Tipo de carrocería   | {tipo_carroceria or 'No definido'}\n"
+       # texto += f"| Tipo de carrocería   | {tipo_carroceria or 'No definido'}\n"
         texto += f"| Estética mínima      | {estetica_min if estetica_min else 'No definido'}\n"
         texto += f"| Premium mínima       | {premium_min if premium_min else 'No definido'}\n"
         texto += f"| Singularidad mínima  | {singular_min if singular_min else 'No definido'}\n"

@@ -35,9 +35,9 @@ class FiltrosInferidos(BaseModel):
     indice_altura_interior_min: Optional[int] = Field(
         description="Valor mínimo de índice de altura interior recomendado (rango: 1439 a 9200). Relevante si el usuario mide más de 189 cm."
     )
-    tipo_carroceria: Optional[List[TipoCarroceria]] = Field(
-        description="Lista de carrocerías recomendadas, por ejemplo ['COMERCIAL']"
-    )
+    # tipo_carroceria: Optional[List[TipoCarroceria]] = Field(
+    #     description="Lista de carrocerías recomendadas, por ejemplo ['COMERCIAL']"
+    # )
     estetica_min: Optional[float] = Field(
         description="Mínimo valor de estética recomendado (0.0 a 10.0)"
     )
@@ -50,6 +50,7 @@ class FiltrosInferidos(BaseModel):
     singular_min: Optional[float] = Field(
         description="Mínimo valor de singularidad recomendado (0.0 a 10.0)"
     )
+
 
 class ResultadoPerfil(BaseModel):
     preferencias_usuario: PerfilUsuario
