@@ -21,9 +21,11 @@ def necesita_mas_info(state: EstadoAnalisisPerfil) -> str:
     if hasattr(filtros, "model_dump"):
         filtros = filtros.model_dump()
 
-    filtros_criticos = ["tipo_mecanica", "premium_min", "singular_min"]
+    filtros_criticos = ["tipo_mecanica"]
     filtros_completos = all(filtros.get(f) not in [None, [], "null", ""] for f in filtros_criticos)
 
     if prefs_completas and filtros_completos:
         return "END"
     return "repetir"
+
+#"premium_min", "singular_min"

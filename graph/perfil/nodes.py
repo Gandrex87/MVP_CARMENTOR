@@ -47,11 +47,18 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     if hasattr(filtros, "model_dump"):
         filtros = filtros.model_dump()
 
+    # campos_preferencias = [
+    #     "solo_electricos", "uso_profesional", "altura_mayor_190",
+    #     "peso_mayor_100", "valora_estetica", "cambio_automatico", "apasionado_motor"
+    # ]
+    # campos_filtros = ["tipo_mecanica", "premium_min", "singular_min"]
+      # Ahora solo revisamos como hard preferences:
     campos_preferencias = [
         "solo_electricos", "uso_profesional", "altura_mayor_190",
         "peso_mayor_100", "valora_estetica", "cambio_automatico", "apasionado_motor"
     ]
-    campos_filtros = ["tipo_mecanica", "premium_min", "singular_min"]
+    # Hard filters críticos → solo tipo_mecanica
+    campos_filtros = ["tipo_mecanica"]
 
     preferencias_completas = all(preferencias.get(k) not in [None, "", "null"] for k in campos_preferencias)
     filtros_completos = all(filtros.get(k) not in [None, "", [], "null"] for k in campos_filtros)
