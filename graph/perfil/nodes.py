@@ -88,7 +88,7 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             singular=      filtros["singular_min"],
             aventura_level=aventura_lvl
         )
-        print("RAW WEIGHTS:", raw)
+        # ➡️ Normalizar pesos
         pesos = normalize_weights(raw)
           
     else:

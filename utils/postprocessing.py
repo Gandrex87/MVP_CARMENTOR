@@ -1,16 +1,10 @@
 # Separar responsabilidades: dejar al LLM lo fácil y completar lo crítico
 # En lugar de depender de que el LLM devuelva la lista completa, se definen reglas de negocio fija:
-# 🧠 Este es el enfoque más robusto y estándar en producción:
+# Este enfoque más robusto y estándar en producción:
 # Combinar inferencia + reglas determinísticas para asegurar integridad del estado.
 
-# Mapa nivel de aventura → lista de carrocerías
-AVENTURA_CARROCERIA = {
-    "ninguna":   ["2VOL","3VOL","MONOVOLUMEN","COUPE","FURGONETA","TRES_VOL","DOS_VOL","AUTOCARAVANA"],
-    "ocasional": ["SUV"],
-    "extrema":   ["PICKUP","TODOTERRENO"]
-}
-
 # utils/postprocessing.py
+from utils.rag_carroceria import get_recommended_carrocerias, AVENTURA_SYNONYMS
 
 def aplicar_postprocesamiento(preferencias, filtros):
     # ─── 0. Inicialización segura ───
@@ -60,10 +54,12 @@ def aplicar_postprocesamiento(preferencias, filtros):
         filtros["premium_min"]  = 1.0
         filtros["singular_min"] = 1.0
 
-    # ─── 5. Aventura → tipo_carroceria ───
-    nivel = preferencias.get("aventura")
-    if nivel in AVENTURA_CARROCERIA:
-        filtros["tipo_carroceria"] = AVENTURA_CARROCERIA[nivel]
+     # ─── 5. Tipo de carrocería via RAG (si no hay ninguna inferida) ───
+    # ─── 5. Tipo de carrocería via RAG (sólo si ya sabemos algo de aventura o de uso profesional) ───
+    tiene_uso   = preferencias.get("uso_profesional") not in (None, "", "null")
+    tiene_av   =  preferencias.get("aventura") in AVENTURA_SYNONYMS.keys()
+    if not filtros.get("tipo_carroceria") and tiene_uso and tiene_av:
+        filtros["tipo_carroceria"] = get_recommended_carrocerias(preferencias, filtros)
 
     return preferencias, filtros
 
