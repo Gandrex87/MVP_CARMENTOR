@@ -16,7 +16,7 @@ structured_llm = llm.with_structured_output(ResultadoPerfil)
 
 
 # LLM usado con prompt especifico para realiar preguntas de validación. #temp04 va bien
-llm_validacion = init_chat_model("openai:gpt-4o-mini" , temperature=0.3 , verbose=True)
+llm_validacion = init_chat_model("openai:gpt-4o-mini" , temperature=0.4)
 
 
 # 🧠 Prompt dinámico para validación natural

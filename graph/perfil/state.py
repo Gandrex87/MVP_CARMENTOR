@@ -3,7 +3,7 @@ from typing import List, Optional, Annotated, Literal
 from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
-from utils.enums import TipoCarroceria, TipoMecanica
+from utils.enums import TipoCarroceria, TipoMecanica, NivelAventura
 
 
 # Este archivo define la estructura del estado para:
@@ -16,6 +16,7 @@ class EstadoAnalisisPerfil(TypedDict):
     preferencias_usuario: Optional[dict]
     filtros_inferidos: Optional[dict]
     mensaje_validacion: Optional[str]
+    pesos:              Optional[dict]  # soft‑weights normalizados
 
 
 # 🧠 Respuestas binarios como texto plano: "sí", "no"
@@ -27,6 +28,12 @@ class PerfilUsuario(BaseModel):
     solo_electricos: Optional[str] = Field(description="¿Quiere solo coches eléctricos? Responde 'sí' o 'no'")
     cambio_automatico: Optional[str] = Field(description="¿Quiere solo vehículos con cambio automático? Responde 'sí' o 'no'")
     apasionado_motor : Optional[str] = Field(description="¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'")
+    aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
+
+    class Config:
+        use_enum_values = True
+        ignored_types = (NivelAventura,)
+
 
 class FiltrosInferidos(BaseModel):
     batalla_min: Optional[int] = Field(

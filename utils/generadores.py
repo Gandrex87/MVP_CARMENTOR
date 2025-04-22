@@ -15,10 +15,10 @@ def generar_mensaje_validacion_dinamico(
     """
 
     campos_preferencias = [
-        "solo_electricos", "uso_profesional", "altura_mayor_190",
-        "peso_mayor_100", "valora_estetica", "cambio_automatico", "apasionado_motor"
+        "solo_electricos", "aventura", "altura_mayor_190", "valora_estetica",
+        "apasionado_motor", "uso_profesional", "cambio_automatico", "peso_mayor_100"
     ]
-    campos_filtros = ["tipo_mecanica", "premium_min", "singular_min"]
+    campos_filtros = ["tipo_mecanica"]
 
     preferencias_faltantes = [k for k in campos_preferencias if preferencias.get(k) in [None, "", "null"]]
     filtros_faltantes = [k for k in campos_filtros if filtros.get(k) in [None, "", [], "null"]]
@@ -43,3 +43,5 @@ def generar_mensaje_validacion_dinamico(
 
     # Generar respuesta
     return llm_validacion.invoke(mensajes_llm)
+
+

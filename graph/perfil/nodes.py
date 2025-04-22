@@ -1,39 +1,51 @@
 
 from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from utils.formatters import formatear_preferencias_en_tabla
-from utils.postprocessing import es_fuera_de_dominio , aplicar_postprocesamiento
+from utils.postprocessing import aplicar_postprocesamiento
 from .state import EstadoAnalisisPerfil
 from config.llm import structured_llm
 from prompts.loader import perfil_structured_sys_msg
 from config.llm import llm_validacion
 from utils.generadores import generar_mensaje_validacion_dinamico
+from utils.preprocesing import extraer_preferencias_iniciales
+from utils.weights import compute_raw_weights, normalize_weights
 import random
 
-
 def analizar_perfil_usuario_node(state: EstadoAnalisisPerfil) -> dict:
+    # ① Historial de mensajes
     historial = state.get("messages", [])
+    ultimo = historial[-1].content if historial else ""
+    iniciales = extraer_preferencias_iniciales(ultimo)
+    # Inyectar en estado antes de llamar al LLM
+    existing = state.get("preferencias_usuario") or {}
+    state["preferencias_usuario"] = {**existing, **iniciales}
 
-    # Aquí podrías usarlo para registrar entradas fuera de dominio si lo deseas:
-    # if es_fuera_de_dominio(historial[-1].content.lower()):
-    #     print("⚠️ Pregunta fuera de dominio detectada:", historial[-1].content)
-
-    # Ejecutar el modelo estructurado con todo el historial y el system message
+    # ② Llamada al LLM estructurado
     response = structured_llm.invoke([
         perfil_structured_sys_msg,
         *historial
     ])
 
-    # Aplicar reglas defensivas post-LLM
+    # ③ Reglas defensivas
     preferencias, filtros = aplicar_postprocesamiento(
-        response.preferencias_usuario, response.filtros_inferidos
+        response.preferencias_usuario,
+        response.filtros_inferidos
     )
+    # ④ Fusionar las preferencias iniciales para que no se pierdan
+    preferencias = {**preferencias, **iniciales}
+    # Construir el mensaje de validación
+    ai_msg = AIMessage(content=response.mensaje_validacion)
 
+    # 5️ Devolver estado completo, agregando el mensaje al historial
     return {
         **state,
-        "preferencias_usuario": preferencias,
-        "filtros_inferidos": filtros,
-        "mensaje_validacion": response.mensaje_validacion
+        "preferencias_usuario": preferencias,  # ya incorporadas las iniciales
+        "filtros_inferidos":    filtros,
+        # Si ya no necesitas este campo aparte, puedes omitirlo
+        "mensaje_validacion":   response.mensaje_validacion,
+        "messages":             historial + [ai_msg]
     }
+
 
 
 
@@ -47,25 +59,38 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     if hasattr(filtros, "model_dump"):
         filtros = filtros.model_dump()
 
-    # campos_preferencias = [
-    #     "solo_electricos", "uso_profesional", "altura_mayor_190",
-    #     "peso_mayor_100", "valora_estetica", "cambio_automatico", "apasionado_motor"
-    # ]
-    # campos_filtros = ["tipo_mecanica", "premium_min", "singular_min"]
-      # Ahora solo revisamos como hard preferences:
     campos_preferencias = [
-        "solo_electricos", "uso_profesional", "altura_mayor_190",
-        "peso_mayor_100", "valora_estetica", "cambio_automatico", "apasionado_motor"
+        "solo_electricos", "aventura", "altura_mayor_190", "valora_estetica",
+        "apasionado_motor", "uso_profesional", "cambio_automatico", "peso_mayor_100"
     ]
-    # Hard filters críticos → solo tipo_mecanica
     campos_filtros = ["tipo_mecanica"]
 
     preferencias_completas = all(preferencias.get(k) not in [None, "", "null"] for k in campos_preferencias)
-    filtros_completos = all(filtros.get(k) not in [None, "", [], "null"] for k in campos_filtros)
+    filtros_completos       = all(filtros.get(k) not in [None, "", [], "null"] for k in campos_filtros)
 
     if preferencias_completas and filtros_completos:
-        tabla = formatear_preferencias_en_tabla(preferencias, filtros)
+        # ① Formatear tabla 
+        tabla   = formatear_preferencias_en_tabla(preferencias, filtros)
         mensaje = AIMessage(content=tabla)
+
+        # ② Calcular pesos suaves
+        aventura_val = preferencias.get("aventura")
+        # ➡️ Si es un Enum, toma .value; si es string no vacío, si no, fallback a "ninguna"
+        if hasattr(aventura_val, "value"):
+            aventura_lvl = aventura_val.value
+        elif isinstance(aventura_val, str) and aventura_val:
+            aventura_lvl = aventura_val
+        else:
+            aventura_lvl = "ninguna"
+        raw   = compute_raw_weights(
+            estetica=      filtros["estetica_min"],
+            premium=       filtros["premium_min"],
+            singular=      filtros["singular_min"],
+            aventura_level=aventura_lvl
+        )
+        print("RAW WEIGHTS:", raw)
+        pesos = normalize_weights(raw)
+          
     else:
         # Usa el generador dinámico de mensajes para formular la próxima pregunta
         mensaje = generar_mensaje_validacion_dinamico(
@@ -73,73 +98,16 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             filtros=filtros,
             mensajes=state.get("messages", []),
             llm_validacion=llm_validacion
-    )
+        )
 
-    return {"messages": [mensaje]}
+    # ③ Devolver todo el estado incluyendo pesos (si los calculamos)
+    new_state = {
+        **state,
+        "preferencias_usuario": preferencias,
+        "filtros_inferidos":    filtros,
+        "messages":             state.get("messages", []) + [mensaje]
+    }
+    if preferencias_completas and filtros_completos:
+        new_state["pesos"] = pesos
 
-
-
-#Valida que el usuario ha respondido todas las preguntas necesarias para hacer una recomendación
-# y si no, le pregunta lo que falta.
-#Opcion funcional al 14 de Abril.
-# def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
-#     preferencias = state.get("preferencias_usuario", {})
-#     if hasattr(preferencias, "model_dump"):
-#         preferencias = preferencias.model_dump()
-
-#     filtros = state.get("filtros_inferidos", {})
-#     if hasattr(filtros, "model_dump"):
-#         filtros = filtros.model_dump()
-
-#     campos_preferencias = [
-#         "solo_electricos", "uso_profesional", "altura_mayor_190",
-#         "peso_mayor_100", "valora_estetica", "cambio_automatico", "apasionado_motor"
-#     ]
-#     campos_filtros = ["tipo_carroceria", "tipo_mecanica", "premium_min", "singular_min"]
-
-#     preferencias_completas = all(preferencias.get(k) not in [None, "", "null"] for k in campos_preferencias)
-#     filtros_completos = all(filtros.get(k) not in [None, "", [], "null"] for k in campos_filtros)
-
-#     if preferencias_completas and filtros_completos:
-#         tabla = formatear_preferencias_en_tabla(preferencias, filtros)
-#         mensaje = AIMessage(content=tabla)
-#     else:
-#         texto = ""
-
-#         intros = [
-#             "",
-#             "",
-#             "Un detalle más para ayudarte:",
-#             "Gracias, me falta saber:",
-#             "continuemos afinando la recomendación:",
-#             "Perfecto. Para afinar la recomendación",
-#             "Antes de continuar, una pregunta rápida:",
-#             "Para darte una mejor sugerencia:",
-#             "necesito saber algo más:",
-#             ""
-#         ]
-
-#         campos_prioritarios = [
-#             ("solo_electricos", "¿Quieres un coche totalmente eléctrico o estás abierto a otras opciones?"),
-#             ("uso_profesional", "¿Lo usarás principalmente para trabajar o para uso personal?"),
-#             ("valora_estetica", "¿Qué tan importante es que el coche se vea bien (estética)?"),
-#             ("cambio_automatico", "¿Prefieres un coche automático o manual?"),
-#             ("altura_mayor_190", "¿Podrías decirme si mides más de 1.90 m?"),
-#             ("peso_mayor_100", "¿Sabes si pesas más de 100 kg?"),
-#             ("apasionado_motor", "¿Eres un apasionado/a del motor y/o la movilidad?"),
-#             ("tipo_carroceria", "¿Qué tipo de coche te interesa más? Puedes pensar en algo:\n"
-#              "• Compacto o urbano (como una berlina o coupé)\n"
-#              "• Familiar y amplio (como un SUV, monovolumen o furgoneta)\n"
-#              "• Aventura o trabajo (como una pickup, comercial o autocaravana)\n"
-#              "• Descubierto y con estilo (como un descapotable)\n")
-#         ]
-
-#         preguntas_faltantes = [pregunta for campo, pregunta in campos_prioritarios if preferencias.get(campo) in [None, "", "null"] or (campo == "tipo_carroceria" and not filtros.get("tipo_carroceria"))]
-
-#         if preguntas_faltantes:
-#             texto += random.choice(intros) + "\n"
-#             texto += f"{preguntas_faltantes[0]}\n" # podriamos poner un maximo de 2 preguntas, guiones o dar algun formato a cada mensaje
-
-#         mensaje = AIMessage(content=texto.strip())
-
-#     return {"messages": [mensaje]}
+    return new_state

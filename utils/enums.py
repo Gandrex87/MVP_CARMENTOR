@@ -33,3 +33,9 @@ class TipoMecanica(str, Enum):
     REEV = "REEV"
 
 
+
+
+class NivelAventura(str, Enum):
+    ninguna   = "ninguna"
+    ocasional = "ocasional"
+    extrema   = "extrema"
