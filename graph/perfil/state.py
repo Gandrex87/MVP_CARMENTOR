@@ -26,7 +26,7 @@ class PerfilUsuario(BaseModel):
     uso_profesional: Optional[str] = Field(description="¿Usará el coche para trabajo? Responde 'sí' o 'no'")
     valora_estetica: Optional[str] = Field(description="¿Valora la estética del coche? Responde 'sí' o 'no'")
     solo_electricos: Optional[str] = Field(description="¿Quiere solo coches eléctricos? Responde 'sí' o 'no'")
-    cambio_automatico: Optional[str] = Field(description="¿Quiere solo vehículos con cambio automático? Responde 'sí' o 'no'")
+    cambio_automatico: Optional[str] = Field(description="¿Quieres solo vehículos con cambio automático? Responde 'sí' o 'no'")
     apasionado_motor : Optional[str] = Field(description="¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'")
     aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
 

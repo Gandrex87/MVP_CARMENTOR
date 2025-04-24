@@ -11,12 +11,12 @@ def generar_mensaje_validacion_dinamico(
     llm_validacion: Runnable
 ) -> AIMessage:
     """
-    Genera un mensaje conversacional natural con máximo 2 preguntas basadas en las preferencias y filtros faltantes.
+    Genera un mensaje conversacional natural con 1 o máximo 2 preguntas basadas en las preferencias y filtros faltantes.
     """
 
     campos_preferencias = [
-        "solo_electricos", "aventura", "altura_mayor_190", "valora_estetica",
-        "apasionado_motor", "uso_profesional", "cambio_automatico", "peso_mayor_100"
+        "solo_electricos","uso_profesional","aventura", "cambio_automatico","valora_estetica","altura_mayor_190", "peso_mayor_100", 
+        "apasionado_motor"
     ]
     campos_filtros = ["tipo_mecanica"]
 

@@ -11,9 +11,9 @@ def necesita_mas_info(state: EstadoAnalisisPerfil) -> str:
         preferencias = preferencias.model_dump()
 
     campos_preferencias = [
-        "solo_electricos", "uso_profesional", "altura_mayor_190", "peso_mayor_100", 
-        "valora_estetica", "cambio_automatico","apasionado_motor" , "aventura"
-        ]
+        "solo_electricos","uso_profesional","aventura", "cambio_automatico","valora_estetica","altura_mayor_190", "peso_mayor_100", 
+        "apasionado_motor"
+    ]
     prefs_completas = all(preferencias.get(c) not in [None, "null", ""] for c in campos_preferencias)
 
     # Filtros inferidos

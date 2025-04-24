@@ -133,3 +133,4 @@ carmentor_project/
 │
 ├── main.py   ← punto de entrada (si usas uno)
 └── README.md
+```

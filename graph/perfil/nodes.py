@@ -25,6 +25,8 @@ def analizar_perfil_usuario_node(state: EstadoAnalisisPerfil) -> dict:
         perfil_structured_sys_msg,
         *historial
     ])
+    print("DEBUG ► respuesta.raw:", response)
+    print("DEBUG ► response.preferencias_usuario:", response.preferencias_usuario)
 
     # ③ Reglas defensivas
     preferencias, filtros = aplicar_postprocesamiento(
@@ -41,12 +43,9 @@ def analizar_perfil_usuario_node(state: EstadoAnalisisPerfil) -> dict:
         **state,
         "preferencias_usuario": preferencias,  # ya incorporadas las iniciales
         "filtros_inferidos":    filtros,
-        # Si ya no necesitas este campo aparte, puedes omitirlo
         "mensaje_validacion":   response.mensaje_validacion,
         "messages":             historial + [ai_msg]
     }
-
-
 
 
 #Funcion de prueba para tener conversaciones mas naturales 
@@ -60,8 +59,8 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
         filtros = filtros.model_dump()
 
     campos_preferencias = [
-        "solo_electricos", "aventura", "altura_mayor_190", "valora_estetica",
-        "apasionado_motor", "uso_profesional", "cambio_automatico", "peso_mayor_100"
+        "solo_electricos","uso_profesional","aventura", "cambio_automatico","valora_estetica","altura_mayor_190", "peso_mayor_100", 
+        "apasionado_motor"
     ]
     campos_filtros = ["tipo_mecanica"]
 

@@ -54,7 +54,6 @@ def aplicar_postprocesamiento(preferencias, filtros):
         filtros["premium_min"]  = 1.0
         filtros["singular_min"] = 1.0
 
-     # ─── 5. Tipo de carrocería via RAG (si no hay ninguna inferida) ───
     # ─── 5. Tipo de carrocería via RAG (sólo si ya sabemos algo de aventura o de uso profesional) ───
     tiene_uso   = preferencias.get("uso_profesional") not in (None, "", "null")
     tiene_av   =  preferencias.get("aventura") in AVENTURA_SYNONYMS.keys()

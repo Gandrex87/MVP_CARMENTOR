@@ -16,9 +16,8 @@ AVENTURA_SYNONYMS = {
 }
 
 USO_PROF_SYNONYMS = [
-    "logística", "entregas", "transporte", "carga", "comercio", "servicio técnico"
+    "profesional", "entregas", "transporte", "carga", "comercio"
 ]
-
 
 # 1️⃣ Define tu fuente de datos enriquecida (puede venir de un CSV o PDF)
 DATA = cargar_carrocerias_desde_pdf("./utils/tipos_carroceria.pdf")

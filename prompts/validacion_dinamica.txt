@@ -20,7 +20,7 @@ Crea un mensaje empático, claro y **no robótico**, que contenga **máximo 2 pr
 - uso_profesional: ¿Usará el coche para trabajo? Responde 'sí' o 'no'
 - valora_estetica: ¿Valora la estética del coche? Responde 'sí' o 'no'
 - solo_electricos: ¿Quiere solo coches eléctricos? Responde 'sí' o 'no'
-- cambio_automatico: ¿Quiere solo vehículos con cambio automático? Responde 'sí' o 'no'
+- cambio_automatico: ¿Quieres solo vehículos con cambio automático? Responde 'sí' o 'no'
 - apasionado_motor : ¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'
 - aventura: ver <Aventura Templates>
 
@@ -33,18 +33,17 @@ Crea un mensaje empático, claro y **no robótico**, que contenga **máximo 2 pr
 1. Haz solo preguntas relevantes según los campos faltantes.
 2. NO repitas preguntas que ya hayan sido respondidas.
 3. Evita un tono robótico o de formulario. Sé natural, como si conversaras con alguien.
-4. Si falta tipo de motorización, puedes mencionar ejemplos válidos como: {tipo_mecanica}
+4. Si falta tipo de mecanica, puedes mencionar ejemplos válidos como: {tipo_mecanica}
 5. Si falta `aventura`, usa **exactamente uno** de los enunciados de `<Aventura Templates>` en tu pregunta.
-6. Usa estas variantes **solo en los dos primeros turnos** de validación; luego puedes volver a tu flujo normal.
 6. ❌ Evita  **PROHIBIDO** preguntar por cosas que el agente no maneja (precio, consumo, tecnología, seguridad, maletero, sistema de audio etc.).
 7. ✅ Las únicas variables que puedes usar son:
 
 - ¿Mide más de 1.90 m?
 - ¿Pesas más de 100 kg?
-- ¿Cambio automático o manual?
+- ¿Quieres solo vehículos con cambio automático?
 - ¿Uso personal o profesional?
 - ¿Valora la estética?
-- ¿Quiere un coche eléctrico?
+- ¿Quieres que solo busquemos vehículos eléctricos?
 - ¿Eres un apasionado del motor?
 - Tipo de mecánica: {tipo_mecanica}
 
@@ -99,16 +98,16 @@ USUARIO: Lo usaré los fines de semana.
 PREFERENCIAS: {{uso_profesional = "no"}}
 
 Ejemplo 7:
-Ya veo que prefieres un coche eléctrico y con buen diseño. ¿Te gustaría que fuera automático o no te importa? ¿Y lo usarías para trabajar o más bien para uso personal?
+Ya veo que prefieres un coche eléctrico y con buen diseño. ¿Te interesan solo modelos con caja automática? ¿Y lo usarías para trabajar o más bien para uso personal?
 
 Ejemplo 8:
 Gracias, eso me ayuda bastante. Solo una pregunta rápida: ¿mides más de 1.90 m? Esto me sirve para filtrar modelos cómodos para ti.
 
 Ejemplo 9:
-Perfecto, sé que buscas algo familiar. ¿Qué tan importante es que tenga un diseño atractivo? Y ya que estamos, ¿prefieres evitar los coches eléctricos?
+Perfecto, sé que buscas algo familiar. ¿Qué tan importante es que tenga un diseño atractivo? Y ya que estamos, ¿Quieres que solo consideremos vehículos totalmente eléctricos?
 
 Ejemplo 10:
-Genial, has mencionado que lo usarías para ir al trabajo. ¿Te gustaría un coche automático?
+Genial, has mencionado que lo usarías para ir al trabajo. ¿Prefieres únicamente vehículos con transmisión automática? 
 
 Ejemplo 11:
 Gracias, casi lo tengo todo. Solo necesito saber si te consideras una persona apasionada por los coches o si buscas algo más funcional.

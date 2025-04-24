@@ -48,11 +48,11 @@ Recibe el historial de conversación y devuelve **solo** un JSON que cumpla el m
   "filtros_inferidos": {
     "batalla_min": 2800,
     "indice_altura_interior_min": 5000,
-    "tipo_carroceria": ["SUV"],
-    "tipo_mecanica": ["BEV"],
     "estetica_min": 7.0,
+    "tipo_mecanica": ["BEV"],
     "premium_min": 1.0,
-    "singular_min": 1.0
+    "singular_min": 1.0,
+    "tipo_carroceria": ["SUV"]    
   },
-  "mensaje_validacion": "¿Me confirmas si prefieres cambio automático? Y, ¿te consideras apasionado del motor?"
+  "mensaje_validacion": "¿Me confirmas si prefieres únicamente vehículos con cambio automático? Y, ¿te consideras apasionado del motor?"
 }
