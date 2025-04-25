@@ -1,7 +1,7 @@
 from .state import EstadoAnalisisPerfil
 
 # actúa como una función de control de flujo del grafo.
-# Ayuda a que el grafo sea más modular y mantenible: condiciones, nodos y estado en archivos bien diferenciados.
+# Si aún falta algo (necesita_mas_info devuelve "repetir"), basta que retorne "repetir" para que la máquina, al compilar, inserte otra arista de vuelta a analizar_perfil_usuario.
 
 # graph/perfil/condition.py
 def necesita_mas_info(state: EstadoAnalisisPerfil) -> str:

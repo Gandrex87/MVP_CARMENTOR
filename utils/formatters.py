@@ -17,6 +17,16 @@ def formatear_preferencias_en_tabla(preferencias, filtros=None) -> str:
         estetica_str = "No definido"
     else:
         estetica_str = "Importante" if normalizar_texto(estetica_pref) == "si" else "No prioritaria"
+     # Transmisión preferida ahora puede ser AUTOMÁTICO, MANUAL o AMBOS
+    transm = preferencias.get("transmision_preferida")
+    if transm:
+        # Aseguramos capitalizar bien, incluso si viene como enum o str
+        transm_str = str(transm).capitalize()
+    else:
+        transm_str = "No definido"
+    
+    # … resto de la tabla …
+
         
     texto = "✅ He entendido lo siguiente sobre tus preferencias:     \n\n"
     texto +=  "| Preferencia             | Valor                      |\n"
@@ -26,8 +36,7 @@ def formatear_preferencias_en_tabla(preferencias, filtros=None) -> str:
     texto += f"| Altura                  | {'Mayor a 1.90 m' if normalizar_texto(preferencias.get('altura_mayor_190', '')) == 'si' else 'Menor a 1.90 m'}       \n"
     texto += f"| Peso                    | {'Mayor a 100 kg' if normalizar_texto(preferencias.get('peso_mayor_100', '')) == 'si' else 'Menor a 100 kg'}         \n"   
     texto += f"| Estética                | {estetica_str}                                                                                                       \n"   
-#   texto += f"| Estética                | {'Importante' if normalizar_texto(preferencias.get('valora_estetica', '')) == 'si' else 'No prioritaria'}            |\n"
-    texto += f"| Cambio                  | {'Automático' if normalizar_texto(preferencias.get('cambio_automatico', '')) == 'si' else 'Manual'}                  \n"
+    texto += f"| Transmisión preferida   | {transm_str}                                                                                                        \n"
     texto += f"| Apasionado del motor    | {'Sí' if normalizar_texto(preferencias.get('apasionado_motor', '')) == 'si' else 'No'}                               \n"
     texto += f"| Aventura con tu vehiculo| {aventura.value.capitalize() if hasattr(aventura, 'value') else (aventura or 'No definido').capitalize()}             \n"
     

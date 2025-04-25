@@ -9,7 +9,8 @@ from config.llm import llm_validacion
 from utils.generadores import generar_mensaje_validacion_dinamico
 from utils.preprocesing import extraer_preferencias_iniciales
 from utils.weights import compute_raw_weights, normalize_weights
-import random
+from utils.rag_carroceria import get_recommended_carrocerias
+
 
 def analizar_perfil_usuario_node(state: EstadoAnalisisPerfil) -> dict:
     # ① Historial de mensajes
@@ -59,7 +60,7 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
         filtros = filtros.model_dump()
 
     campos_preferencias = [
-        "solo_electricos","uso_profesional","aventura", "cambio_automatico","valora_estetica","altura_mayor_190", "peso_mayor_100", 
+        "solo_electricos","uso_profesional","aventura", "transmision_preferida","valora_estetica","altura_mayor_190", "peso_mayor_100", 
         "apasionado_motor"
     ]
     campos_filtros = ["tipo_mecanica"]
@@ -68,6 +69,10 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     filtros_completos       = all(filtros.get(k) not in [None, "", [], "null"] for k in campos_filtros)
 
     if preferencias_completas and filtros_completos:
+        # ─) Generar recomendación RAG de carrocerías UNA SOLA VEZ ───
+        if not filtros.get("tipo_carroceria"):
+            filtros["tipo_carroceria"] = get_recommended_carrocerias(preferencias, filtros, k=4)
+        
         # ① Formatear tabla 
         tabla   = formatear_preferencias_en_tabla(preferencias, filtros)
         mensaje = AIMessage(content=tabla)

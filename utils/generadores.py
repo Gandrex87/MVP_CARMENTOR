@@ -15,8 +15,8 @@ def generar_mensaje_validacion_dinamico(
     """
 
     campos_preferencias = [
-        "solo_electricos","uso_profesional","aventura", "cambio_automatico","valora_estetica","altura_mayor_190", "peso_mayor_100", 
-        "apasionado_motor"
+        "solo_electricos","uso_profesional", "transmision_preferida","valora_estetica","altura_mayor_190", "peso_mayor_100", 
+        "apasionado_motor","aventura"
     ]
     campos_filtros = ["tipo_mecanica"]
 

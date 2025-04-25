@@ -2,7 +2,6 @@
 from enum import Enum
 
 #✅ Si luego agrego otros Enums (por ejemplo, para UsoVehiculo o NivelEstetica), este es el lugar ideal para añadirlos.
-
 # Enums para campos compatibles
 class TipoCarroceria(str, Enum):
     COMERCIAL = "COMERCIAL"
@@ -32,10 +31,12 @@ class TipoMecanica(str, Enum):
     PHEVG = "PHEVG"
     REEV = "REEV"
 
-
-
-
 class NivelAventura(str, Enum):
     ninguna   = "ninguna"
     ocasional = "ocasional"
     extrema   = "extrema"
+    
+class Transmision(str, Enum):
+    AUTOMATICO = "automático"
+    MANUAL      = "manual"
+    AMBOS       = "ambos"

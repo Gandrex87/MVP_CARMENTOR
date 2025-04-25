@@ -4,7 +4,7 @@
 # Combinar inferencia + reglas determinísticas para asegurar integridad del estado.
 
 # utils/postprocessing.py
-from utils.rag_carroceria import get_recommended_carrocerias, AVENTURA_SYNONYMS
+from utils.enums import Transmision
 
 def aplicar_postprocesamiento(preferencias, filtros):
     # ─── 0. Inicialización segura ───
@@ -22,12 +22,11 @@ def aplicar_postprocesamiento(preferencias, filtros):
         return valor in [None, "", "null", "0.0"]
 
     # ─── 1. Regla eléctrico → automático ───
-    solo_elec_raw = preferencias.get("solo_electricos") or ""
-    solo_elec = str(solo_elec_raw).strip().lower()
+    solo_elec = str(preferencias.get("solo_electricos", "") or "").strip().lower()
     if solo_elec in ["sí", "si"]:
-        cambio_raw = preferencias.get("cambio_automatico")
-        if es_nulo(cambio_raw):
-            preferencias["cambio_automatico"] = "si"
+        # Si no hay ya preferencia de transmisión
+        if es_nulo(preferencias.get("transmision_preferida")):
+            preferencias["transmision_preferida"] = Transmision.AUTOMATICO.value
 
     # ─── 2. Tipo de mecánica si no quiere eléctricos ───
     if solo_elec == "no" and not filtros.get("tipo_mecanica"):
@@ -53,17 +52,5 @@ def aplicar_postprocesamiento(preferencias, filtros):
     else:
         filtros["premium_min"]  = 1.0
         filtros["singular_min"] = 1.0
-
-    # ─── 5. Tipo de carrocería via RAG (sólo si ya sabemos algo de aventura o de uso profesional) ───
-    tiene_uso   = preferencias.get("uso_profesional") not in (None, "", "null")
-    tiene_av   =  preferencias.get("aventura") in AVENTURA_SYNONYMS.keys()
-    if not filtros.get("tipo_carroceria") and tiene_uso and tiene_av:
-        filtros["tipo_carroceria"] = get_recommended_carrocerias(preferencias, filtros)
-
+        
     return preferencias, filtros
-
-
-
-
-
-

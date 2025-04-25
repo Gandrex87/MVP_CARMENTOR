@@ -7,7 +7,7 @@
 AVENTURA_RAW = {
   "ninguna":   {"altura_libre_suelo":  0,   "traccion":  0,  "reductoras":  0},
   "ocasional": {"altura_libre_suelo":  6,   "traccion":  4,  "reductoras":  1},
-  "extrema":   {"altura_libre_suelo":  2,   "traccion": 10,  "reductoras":  8},
+  "extrema":   {"altura_libre_suelo":  5,   "traccion": 10,  "reductoras":  8},
 }
 
 # utils/weights.py
