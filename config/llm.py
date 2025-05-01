@@ -1,35 +1,44 @@
 # instanciación del modelo, init_chat_model, y configuración de structured_llm.
 from langchain.chat_models import init_chat_model
-from graph.perfil.state import ResultadoPerfil
+from graph.perfil.state import ResultadoSoloPerfil, ResultadoSoloFiltros, ResultadoEconomia # Ajusta la ruta de importación
 from dotenv import load_dotenv
-from prompts.loader import prompt_base
-from utils.enums import TipoCarroceria, TipoMecanica
-from pydantic import BaseModel, Field
-from utils.conversion import get_enum_names  # si no estaba antes en utils, usa el correcto
+
 
 load_dotenv()
 
-# LLM base
-llm = init_chat_model("openai:gpt-4o-mini", temperature=0.2)
-# LLM con output estructurado /  agente principal, que infiere preferencias y filtros usando el esquema ResultadoPerfil.
-structured_llm = llm.with_structured_output(ResultadoPerfil)
+# --- LLMs Base ---
+# LLM base para consistencia
+llm = init_chat_model("openai:gpt-4o-mini", temperature=0.2) 
 
+# LLM para generar preguntas de seguimiento más naturales (si es necesario)
+llm_validacion = init_chat_model("openai:gpt-4o-mini", temperature=0.4) 
 
-# LLM usado con prompt especifico para realiar preguntas de validación. #temp04 va bien
-llm_validacion = init_chat_model("openai:gpt-4o-mini" , temperature=0.3 , verbose=True)
+# --- LLMs con Salida Estructurada por Etapa ---
 
-
-# 🧠 Prompt dinámico para validación natural
-# Convertir Enums a strings para pasar al prompt
-carrocerias_str = ", ".join([e.value for e in TipoCarroceria])
-mecanicas_str = ", ".join([e.value for e in TipoMecanica])
-
-# Rellenar placeholders del prompt
-prompt_validacion = prompt_base.format(
-    tipo_carroceria=carrocerias_str,
-    tipo_mecanica=mecanicas_str
+# 1. LLM para la Etapa de Perfil del Usuario
+#    Usará un prompt específico para perfil y devolverá solo PerfilUsuario + mensaje_validacion
+llm_solo_perfil = llm.with_structured_output(
+    ResultadoSoloPerfil, # <-- Nuevo modelo de salida Pydantic
+    # include_raw=True # Opcional: añadir si necesitas ver la salida raw del LLM para depurar
 )
 
+# 2. LLM para la Etapa de Inferencia de Filtros
+#    Usará un prompt específico para filtros (recibiendo el perfil como contexto)
+#    y devolverá solo FiltrosInferidos + mensaje_validacion
+llm_solo_filtros = llm.with_structured_output(
+    ResultadoSoloFiltros, # <-- Nuevo modelo de salida Pydantic
+    # include_raw=True # Opcional
+)
+
+# 3. LLM para la Etapa de Economía (Sin cambios)
+# --- USA UN MODELO MÁS POTENTE PARA ECONOMÍA ---
+#print("INFO: Inicializando llm_economia_potente (gpt-4o)...")
+#llm_potente = init_chat_model("openai:gpt-4o", temperature=0.2) # O el ID correcto para gpt-4o
+llm_potente = init_chat_model("openai:gpt-4o-mini", temperature=0.2) # O el ID correcto para gpt-4o
+llm_economia = llm_potente.with_structured_output(ResultadoEconomia)
+
+#    Usará un prompt específico para economía y devolverá EconomiaUsuario + mensaje_validacion
+#llm_economia = llm.with_structured_output(ResultadoEconomia)
 
 
 

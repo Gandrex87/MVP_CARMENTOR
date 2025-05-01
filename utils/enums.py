@@ -2,7 +2,6 @@
 from enum import Enum
 
 #✅ Si luego agrego otros Enums (por ejemplo, para UsoVehiculo o NivelEstetica), este es el lugar ideal para añadirlos.
-
 # Enums para campos compatibles
 class TipoCarroceria(str, Enum):
     COMERCIAL = "COMERCIAL"
@@ -24,12 +23,20 @@ class TipoMecanica(str, Enum):
     FCEV = "FCEV"
     GLP = "GLP"
     GNV = "GNV"
-    HEVD = "HEVD"
-    HEVG = "HEVG"
-    MHEVD = "MHEVD"
-    MHEVG = "MHEVG"
-    PHEVD = "PHEVD"
-    PHEVG = "PHEVG"
-    REEV = "REEV"
+    HEVD = "HEVD"  # Híbrido Eléctrico Diesel
+    HEVG = "HEVG"  # Híbrido Eléctrico Gasolina
+    MHEVD = "MHEVD" # Mild Hybrid Diesel
+    MHEVG = "MHEVG" # Mild Hybrid Gasolina
+    PHEVD = "PHEVD" # Híbrido Enchufable Diesel
+    PHEVG = "PHEVG" # Híbrido Enchufable Gasolina
+    REEV = "REEV"   # Eléctrico de Autonomía Extendida
 
-
+class NivelAventura(str, Enum):
+    ninguna   = "ninguna"
+    ocasional = "ocasional"
+    extrema   = "extrema"
+    
+class Transmision(str, Enum):
+    AUTOMATICO = "automático"
+    MANUAL      = "manual"
+    AMBOS       = "ambos"

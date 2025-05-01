@@ -15,7 +15,6 @@ def normalizar_texto(texto: str) -> str:
     return unicodedata.normalize('NFKD', texto.lower()).encode('ascii', 'ignore').decode('utf-8')
 
 
-
 #Esta la uso en bigquery
 def normalize_text_sql(text: str) -> str:
     text = text.lower().replace('-', ' ')  # Minúsculas y reemplazo de guiones
@@ -23,3 +22,7 @@ def normalize_text_sql(text: str) -> str:
     text = re.sub(r'[^a-z0-9\s.]', '', text)  # Solo letras, números y espacios
     text = re.sub(r'\s+', ' ', text).strip()  # Espacios redundantes
     return text
+
+def is_yes(v):
+    return isinstance(v, str) and v.strip().lower() in ("sí","si")
+
