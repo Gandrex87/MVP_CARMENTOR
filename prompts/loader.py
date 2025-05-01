@@ -8,7 +8,7 @@ def load_prompt(filename: str) -> SystemMessage:
         return SystemMessage(content=f.read())
 
 # Ejemplo de uso:
-perfil_structured_sys_msg = load_prompt("perfil_structured_prompt.txt")
+# perfil_structured_sys_msg = load_prompt("perfil_structured_prompt.txt")
 
 
 # Cargar un prompt desde un archivo   
@@ -19,7 +19,7 @@ def cargar_prompt(nombre_archivo: str) -> str:
     with open(prompt_path, "r", encoding="utf-8") as f:
         return f.read()
 
-prompt_base = cargar_prompt("validacion_dinamica.txt")
+# prompt_base = cargar_prompt("validacion_dinamica.txt")
 
 
 

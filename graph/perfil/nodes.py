@@ -500,6 +500,8 @@ from utils.enums import NivelAventura # Ejemplo, si necesitas el Enum
 
 # --- Etapa 4: Finalización y Presentación ---
 
+# Tu código para finalizar_y_presentar_node
+
 def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Realiza los cálculos finales (RAG carrocerías, pesos) y formatea 
@@ -507,119 +509,130 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     """
     print("--- Ejecutando Nodo: finalizar_y_presentar_node ---")
     historial = state.get("messages", [])
-    # Asumimos que en este punto, todos estos objetos existen y están completos
     preferencias = state.get("preferencias_usuario")
     filtros = state.get("filtros_inferidos")
     economia = state.get("economia")
 
-    # Verificar pre-condiciones (por si acaso el grafo llega aquí incorrectamente)
+    # Verificar pre-condiciones
     if not preferencias or not filtros or not economia:
-         print("ERROR (Finalizar) ► Faltan datos esenciales (perfil/filtros/economia) para finalizar. Revisar flujo.")
-         # Devolver estado sin cambios o con error
-         ai_msg = AIMessage(content="Lo siento, parece que falta información para generar el resumen final.")
+         print("ERROR (Finalizar) ► Faltan datos esenciales...")
+         ai_msg = AIMessage(content="Lo siento, parece que falta información...")
          return {**state, "messages": historial + [ai_msg]}
          
-    # Trabajar con copias o asegurar que las funciones no modifiquen los originales si no deben
-    # Convertir a dict si las utilidades lo requieren, aunque es mejor adaptarlas a Pydantic si es posible
+    # Convertir a dict para acceso/paso a funciones (si es necesario)
     prefs_dict = preferencias.model_dump(mode='json')
-    filtros_dict = filtros.model_dump(mode='json')
+    # filtros_dict = filtros.model_dump(mode='json') # OJO: Usaremos filtros_actualizados más adelante
     econ_dict = economia.model_dump(mode='json')
     
-    # Copia de filtros para actualizarla con RAG si es necesario
-    filtros_actualizados = filtros.model_copy(deep=True)
-
-
-    # 1. Llamada RAG para Tipo de Carrocería (si no está ya)
-    if not filtros_actualizados.tipo_carroceria: # Asumiendo que tipo_carroceria es un campo en FiltrosInferidos
-        print("DEBUG (Finalizar) ► Llamando a RAG para obtener tipos de carrocería...")
+    # --- INICIO NUEVA LÓGICA MODO 1 ---
+    # Crear la copia aquí, ANTES del if/else, para que siempre exista
+    filtros_actualizados = filtros.model_copy(deep=True) # <--- Inicialización Clave
+    
+    print("DEBUG (Finalizar) ► Verificando si aplica lógica Modo 1...")
+    if economia.modo == 1:
+        print("DEBUG (Finalizar) ► Modo 1 detectado. Calculando recomendación...")
         try:
-            # Pasar diccionarios si la función los espera
-            tipos_carroceria_rec = get_recommended_carrocerias(prefs_dict, filtros_dict, k=4)
+            ingresos = economia.ingresos
+            ahorro = economia.ahorro
+            anos_posesion = economia.anos_posesion
+            
+            if ingresos is not None and ahorro is not None and anos_posesion is not None:
+                 # ... (Cálculos de t, umbrales, modo_adq_rec, etc.) ...
+                 t = min(anos_posesion, 8)
+                 ahorro_utilizable = ahorro * 0.75
+                 potencial_ahorro_plazo = ingresos * 0.1 * t
+                 # ... (if/else para modo_adq_rec, precio_max_rec, cuota_max_calc) ...
+                 if potencial_ahorro_plazo <= ahorro_utilizable:
+                     modo_adq_rec, precio_max_rec, cuota_max_calc = "Contado", potencial_ahorro_plazo, None
+                 else:
+                     modo_adq_rec, precio_max_rec, cuota_max_calc = "Financiado", None, (ingresos * 0.1) / 12
+                     
+                 update_dict = {
+                     "modo_adquisicion_recomendado": modo_adq_rec,
+                     "precio_max_contado_recomendado": precio_max_rec,
+                     "cuota_max_calculada": cuota_max_calc
+                 }
+                 # Actualizar la COPIA que creamos antes
+                 filtros_actualizados = filtros_actualizados.model_copy(update=update_dict) 
+                 print(f"DEBUG (Finalizar) ► Filtros actualizados con recomendación Modo 1: {filtros_actualizados}")
+            else:
+                 print("WARN (Finalizar) ► Faltan datos para cálculo Modo 1...")
+        except Exception as e_calc:
+            print(f"ERROR (Finalizar) ► Fallo durante cálculo de recomendación Modo 1: {e_calc}")
+            # En caso de error, filtros_actualizados mantiene la copia inicial sin los cálculos de Modo 1
+            
+    else:
+         print("DEBUG (Finalizar) ► Modo no es 1, omitiendo cálculo de recomendación.")
+    # --- FIN NUEVA LÓGICA MODO 1 ---
+    
+    # Convertir a dict los filtros actualizados si RAG los necesita así
+    filtros_dict_actualizado = filtros_actualizados.model_dump(mode='json')
+
+    # 1. Llamada RAG (usando filtros_actualizados o su dict)
+    if not filtros_actualizados.tipo_carroceria: 
+        print("DEBUG (Finalizar) ► Llamando a RAG...")
+        try:
+            # Pasar prefs_dict y el dict de filtros actualizado
+            tipos_carroceria_rec = get_recommended_carrocerias(prefs_dict, filtros_dict_actualizado, k=4) 
             print(f"DEBUG (Finalizar) ► RAG recomendó: {tipos_carroceria_rec}")
-            # Actualizar el objeto de filtros
-            # Asumiendo que el campo es Optional[List[str]] o similar
+            # Actualizar el objeto filtros_actualizados
             filtros_actualizados.tipo_carroceria = tipos_carroceria_rec 
         except Exception as e_rag:
-            print(f"ERROR (Finalizar) ► Fallo en RAG get_recommended_carrocerias: {e_rag}")
-            # Opcional: asignar un valor de error o lista vacía
-            filtros_actualizados.tipo_carroceria = ["Error al obtener recomendaciones"] 
-    else:
-        print("DEBUG (Finalizar) ► tipo_carroceria ya presente en filtros, RAG omitido.")
+            # ... (manejo error RAG) ...
+            filtros_actualizados.tipo_carroceria = ["Error RAG"] 
+    # ...
 
-
-    # 2. Cálculo de Pesos
+    # 2. Cálculo de Pesos (usando filtros_actualizados y preferencias)
     print("DEBUG (Finalizar) ► Calculando pesos...")
-    pesos_calculados = None # Valor por defecto
+    pesos_calculados = None 
     try:
-        # Obtener valores necesarios, con cuidado por si son None
-        # Usamos los valores del objeto Pydantic actualizado (filtros_actualizados)
+        # Extraer valores de filtros_actualizados y preferencias
         estetica_val = filtros_actualizados.estetica_min if filtros_actualizados.estetica_min is not None else 1.0
+        # ... (obtener premium_val, singular_val) ...
         premium_val = filtros_actualizados.premium_min if filtros_actualizados.premium_min is not None else 1.0
         singular_val = filtros_actualizados.singular_min if filtros_actualizados.singular_min is not None else 1.0
-        aventura_val = preferencias.aventura # Obtener el Enum NivelAventura
-
+        aventura_val = preferencias.aventura 
         raw = compute_raw_weights(
             estetica=estetica_val,
             premium=premium_val,
             singular=singular_val,
-            aventura_level=aventura_val # Pasar el Enum o su valor .value si la función lo prefiere
+            aventura_level=aventura_val 
         )
         pesos_calculados = normalize_weights(raw)
         print(f"DEBUG (Finalizar) ► Pesos calculados: {pesos_calculados}")
     except Exception as e_weights:
-        print(f"ERROR (Finalizar) ► Fallo calculando pesos: {e_weights}")
-        # pesos_calculados se quedará como None
+        # ... (manejo error pesos) ...
+        pass
 
-
-    # 3. Formateo de la Tabla Resumen Final
+    # 3. Formateo de la Tabla (usando filtros_actualizados)
     print("DEBUG (Finalizar) ► Formateando tabla final...")
-    tabla_final_md = "Error al generar el resumen." # Mensaje por defecto
+    tabla_final_md = "Error al generar el resumen." 
     try:
-        # Llamar a la función formateadora pasando los objetos Pydantic (o dicts si los requiere)
-        # ¡ASEGÚRATE que formatear_preferencias_en_tabla use .value para los Enums!
+        # Pasar los objetos Pydantic (la función formateadora maneja la conversión a dict si es necesario)
         tabla_final_md = formatear_preferencias_en_tabla(
-            preferencias=preferencias, # Pasa el objeto PerfilUsuario
-            filtros=filtros_actualizados, # Pasa FiltrosInferidos actualizado con RAG
-            economia=economia # Pasa el objeto EconomiaUsuario
+            preferencias=preferencias, 
+            filtros=filtros_actualizados, # <-- Pasar el objeto actualizado
+            economia=economia
         )
     except Exception as e_format:
-        print(f"ERROR (Finalizar) ► Fallo formateando la tabla: {e_format}")
+        # ... (manejo error formato) ...
+        pass
 
-    # 4. Crear y añadir el mensaje final
+    # 4. Crear y añadir mensaje final (como antes)
     final_ai_msg = AIMessage(content=tabla_final_md)
-    
-    # Evitar añadir exactamente el mismo resumen si algo causara un re-intento
+    # ... (lógica para añadir a historial_final) ...
     if historial and historial[-1].content == final_ai_msg.content:
-        print("DEBUG (Finalizar) ► Resumen final idéntico al último mensaje, no se añade.")
         historial_final = historial
     else:
         historial_final = historial + [final_ai_msg]
 
+
     # 5. Devolver el estado final completo
     return {
         **state,
-        "filtros_inferidos": filtros_actualizados, # Guardar filtros con tipo_carroceria
-        "pesos": pesos_calculados, # Guardar pesos calculados
-        "messages": historial_final # Añadir el resumen final
+        "filtros_inferidos": filtros_actualizados, # <-- Devolver el objeto actualizado
+        "pesos": pesos_calculados, 
+        "messages": historial_final 
     }
 
 # --- Fin Etapa 4 ---
-
-
-
-
-
-# --- Etapa 2: Inferencia de Filtros ---
-# def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict: ...
-# def validar_filtros_node(state: EstadoAnalisisPerfil) -> dict: ...
-
-# --- Etapa 3: Recopilación de Economía ---
-# def recopilar_economia_node(state: EstadoAnalisisPerfil) -> dict: ... # Renombrar y ajustar validar_economia_node
-# def validar_economia_node(state: EstadoAnalisisPerfil) -> dict: ... # Nuevo nodo solo para validar economía
-
-# --- Etapa 4: Finalización ---
-# def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict: ...
-
-# --- Mantener nodos antiguos comentados o eliminarlos ---
-# def analizar_perfil_usuario_node(state: EstadoAnalisisPerfil) -> dict: ... # Eliminar/Comentar este nodo antiguo
-# def validar_economia_node(...) -> dict: ... # El antiguo validar_economia hacía demasiado, será reemplazado

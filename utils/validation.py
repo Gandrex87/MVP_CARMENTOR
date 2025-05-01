@@ -85,11 +85,18 @@ def check_economia_completa(econ: Optional[EconomiaUsuario]) -> bool:
 
     if modo == 1:
         # Modo 1: Requiere ingresos Y ahorro
-        if econ.ingresos is not None and econ.ahorro is not None:
-            print("DEBUG (Validation Economía Manual) ► Modo 1 completo (ingresos y ahorro presentes).")
+        if econ.ingresos is not None \
+            and econ.ahorro is not None\
+            and econ.anos_posesion is not None: # <-- AÑADIDA ESTA CONDICIÓN:
+            print("DEBUG (Validation Economía Manual) ► Modo 1 completo (ingresos,ahorro y años_posesion presentes).")
             return True
         else:
-            print(f"DEBUG (Validation Economía Manual) ► Modo 1 INCOMPLETO (ingresos={econ.ingresos}, ahorro={econ.ahorro}).")
+            # Imprimir qué falta específicamente puede ayudar a depurar
+            missing = []
+            if econ.ingresos is None: missing.append("ingresos")
+            if econ.ahorro is None: missing.append("ahorro")
+            if econ.anos_posesion is None: missing.append("anos_posesion")
+            print(f"DEBUG (Validation Economía Manual) ► Modo 1 INCOMPLETO (faltan: {', '.join(missing)}).")
             return False
             
     elif modo == 2:

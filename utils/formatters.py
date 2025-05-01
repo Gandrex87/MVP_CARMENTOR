@@ -71,47 +71,70 @@ def formatear_preferencias_en_tabla(
         texto += f"| Premium mínima       | {filtros_dict.get('premium_min','No definido')} |\n"
         texto += f"| Singularidad mínima  | {filtros_dict.get('singular_min','No definido')} |\n"
 
-    # --- 3) Economía del usuario ---
-    if econ_dict:
-        texto += "\n💰 Economía del usuario:\n\n"
-        texto += "| Concepto           | Valor               |\n"
-        texto += "|--------------------|---------------------|\n"
-        
-        modo = econ_dict.get("modo") # Obtener el modo (debería ser 1 o 2)
-        modo_str = "Asesor Financiero" if modo == 1 else "Presupuesto Definido" if modo == 2 else "No definido"
-        texto += f"| Modo               | {modo_str} |\n"
+    # --- AÑADIR FILAS PARA RECOMENDACIÓN MODO 1 ---
+        modo_adq = filtros_dict.get("modo_adquisicion_recomendado")
+        if modo_adq: # Solo mostrar si se calculó
+             texto += f"| Modo Adquisición Rec. | {modo_adq} |\n"
+             if modo_adq == "Contado":
+                  precio_rec = filtros_dict.get("precio_max_contado_recomendado")
+                  precio_str = f"{precio_rec:,.0f} €".replace(",",".") if isinstance(precio_rec, float) else "N/A"
+                  texto += f"| Precio Máx. Contado Rec.| {precio_str} |\n"
+             elif modo_adq == "Financiado":
+                  cuota_calc = filtros_dict.get("cuota_max_calculada")
+                  cuota_str = f"{cuota_calc:,.0f} €/mes".replace(",",".") if isinstance(cuota_calc, float) else "N/A"
+                  texto += f"| Cuota Máx. Calculada    | {cuota_str} |\n"
+        # --- FIN FILAS AÑADIDAS --
 
-        # --- CORREGIR LÓGICA AQUÍ ---
-        if modo == 1: # Comparar con entero 1
+    # --- 3) Economía del usuario ---
+    # Dentro de formatear_preferencias_en_tabla en utils/formatters.py
+
+    # --- 3) Economía del usuario ---
+    if econ_dict: # Verifica si hay datos económicos
+        texto += "\n💰 Economía del usuario:\n\n"
+        texto += "| Concepto                | Valor               |\n" # Ajustar ancho si es necesario
+        texto += "|-------------------------|---------------------|\n"
+        
+        modo = econ_dict.get("modo") 
+        modo_str = "Asesor Financiero" if modo == 1 else "Presupuesto Definido" if modo == 2 else "No definido"
+        texto += f"| Modo                    | {modo_str} |\n"
+
+        # --- NUEVA LÍNEA AÑADIDA ---
+        anos = econ_dict.get("anos_posesion")
+        # Formatear si es un número, si no, indicar que no está definido
+        anos_str = f"{anos} años" if isinstance(anos, int) else "No especificado" 
+        texto += f"| Años Posesión Estimados | {anos_str} |\n" # <-- Fila añadida
+        # --- FIN LÍNEA AÑADIDA ---
+
+        # Resto de la lógica para Modo 1 o Modo 2 (como la tenías corregida)
+        if modo == 1: 
             ing = econ_dict.get("ingresos")
             ah  = econ_dict.get("ahorro")
-            # Formatear números o mostrar "No definido"
             ing_str = f"{ing:,.0f} €".replace(",",".") if isinstance(ing, (int, float)) else "No definido"
             ah_str  = f"{ah:,.0f} €".replace(",",".")  if isinstance(ah, (int, float)) else "No definido"
-            texto += f"| Ingresos anuales   | {ing_str} |\n" # Ajusta texto si son mensuales
-            texto += f"| Ahorro disponible  | {ah_str} |\n"
-        elif modo == 2: # Comparar con entero 2
-            sub = econ_dict.get("submodo") # Obtener submodo (debería ser 1 o 2)
+            # Podrías ajustar el label si ingresos son mensuales vs anuales
+            texto += f"| Ingresos (Aprox Anual)| {ing_str} |\n" 
+            texto += f"| Ahorro disponible       | {ah_str} |\n"
+        elif modo == 2: 
+            sub = econ_dict.get("submodo") 
             sub_str = "Pago Contado" if sub == 1 else "Cuotas Mensuales" if sub == 2 else "No definido"
-            texto += f"| Tipo de Pago       | {sub_str} |\n"
+            texto += f"| Tipo de Pago            | {sub_str} |\n"
 
-            if sub == 1: # Comparar con entero 1
+            if sub == 1: 
                 pago = econ_dict.get("pago_contado")
                 pago_str = f"{pago:,.0f} €".replace(",",".") if isinstance(pago, (int, float)) else "No definido"
-                texto += f"| Presupuesto Contado| {pago_str} |\n"
-            elif sub == 2: # Comparar con entero 2
+                texto += f"| Presupuesto Contado     | {pago_str} |\n"
+            elif sub == 2: 
                 cuota = econ_dict.get("cuota_max")
-                entrada = econ_dict.get("entrada") # Entrada es opcional
+                entrada = econ_dict.get("entrada") 
                 
                 cuota_str = f"{cuota:,.0f} €/mes".replace(",",".") if isinstance(cuota, (int, float)) else "No definido"
-                texto += f"| Cuota máxima       | {cuota_str} |\n"
+                texto += f"| Cuota máxima            | {cuota_str} |\n"
                 
                 if entrada is not None and isinstance(entrada, (int, float)):
                     ent_str = f"{entrada:,.0f} €".replace(",",".")
-                    texto += f"| Entrada inicial    | {ent_str} |\n"
-
-    # Puedes cambiar este mensaje final si lo deseas
-    # texto += "\n¿Hay algo que quieras ajustar o añadir?" 
+                    texto += f"| Entrada inicial         | {ent_str} |\n"
+                    
+    # 
     texto += "\n\nEspero que este resumen te sea útil."
 
-    return texto.strip() # Quitar espacios extra al final
+    return texto.strip()

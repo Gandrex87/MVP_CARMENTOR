@@ -31,8 +31,18 @@ class FiltrosInferidos(BaseModel):
     tipo_mecanica: Optional[List[TipoMecanica]] = Field(default=None, description="Lista de motorizaciones recomendadas")
     premium_min: Optional[float] = Field(default=None, description="Mínimo valor de premium recomendado (0.0 a 10.0)")
     singular_min: Optional[float] = Field(default=None, description="Mínimo valor de singularidad recomendado (0.0 a 10.0)")
-    tipo_carroceria: Optional[List[str]] = Field( # Usamos List[str] ya que RAG devolverá strings
-        default=None, description="Lista de tipos de carrocería recomendados por RAG (ej: ['SUV', 'COUPE'])"
+    tipo_carroceria: Optional[List[str]] = Field(default=None, description="Lista de tipos de carrocería recomendados por RAG (ej: ['SUV', 'COUPE'])")
+    modo_adquisicion_recomendado: Optional[Literal['Contado', 'Financiado']] = Field(
+        default=None,
+        description="Modo de compra recomendado (Contado/Financiado) basado en análisis Modo 1."
+    )
+    precio_max_contado_recomendado: Optional[float] = Field(
+        default=None,
+        description="Precio máximo recomendado si se aconseja comprar al contado (Modo 1)."
+    )
+    cuota_max_calculada: Optional[float] = Field(
+        default=None,
+        description="Cuota mensual máxima calculada si se aconseja financiar (Modo 1)."
     )
 
 #cuanta gana y aplicamos un % 60 /por porcentaje MODO 1 o 2 iNGRESO 
@@ -44,39 +54,12 @@ class EconomiaUsuario(BaseModel):
     pago_contado: Optional[float] = Field(default=None)
     cuota_max:    Optional[float] = Field(default=None)
     entrada:      Optional[float] = Field(default=None)
-
-    # @model_validator(mode="before")
-    # def check_economia(cls, values: dict) -> dict:
-    #     modo    = values.get("modo")
-    #     # si no se ha elegido modo, no validamos nada
-    #     if modo is None:
-    #         return values
-
-    #     # Modo 1 = Asesor financiero
-    #     if modo == 1:
-    #         if values.get("ingresos") is None:
-    #             raise ValueError("ingresos requerido para modo 1 (asesor financiero)")
-    #         if values.get("ahorro") is None:
-    #             raise ValueError("ahorro requerido para modo 1 (asesor financiero)")
-
-    #     # Modo 2 = Tú defines presupuesto
-    #     elif modo == 2:
-    #         sub = values.get("submodo")
-    #         if sub not in (1, 2):
-    #             raise ValueError("submodo debe ser 1 (contado) o 2 (cuotas) en modo 2")
-    #         if sub == 1 and values.get("pago_contado") is None:
-    #             raise ValueError("pago_contado requerido para submodo 1 (contado)")
-    #         if sub == 2 and values.get("cuota_max") is None:
-    #             raise ValueError("cuota_max requerido para submodo 2 (cuotas)")
-
-    #     return values
-
-    #model_config = {"frozen": True}
+    anos_posesion: Optional[int] = Field(default=None, description="Número estimado de años que el usuario planea conservar el vehículo." )
 
 
 # 🧠 Modelos de Salida (ResultadoEconomia, ResultadoSoloPerfil, ResultadoSoloFiltros): Estos modelos definen la salida esperada del LLM.
 class ResultadoEconomia(BaseModel):
-    economia:         EconomiaUsuario
+    economia: EconomiaUsuario = Field(description="Objeto que contiene TODA la información económica recopilada o actualizada.") 
     mensaje_validacion: str
     
 
