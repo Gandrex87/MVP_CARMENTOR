@@ -15,7 +15,6 @@ def normalizar_texto(texto: str) -> str:
     return unicodedata.normalize('NFKD', texto.lower()).encode('ascii', 'ignore').decode('utf-8')
 
 
-
 #Esta la uso en bigquery
 def normalize_text_sql(text: str) -> str:
     text = text.lower().replace('-', ' ')  # Minúsculas y reemplazo de guiones

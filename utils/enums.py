@@ -23,13 +23,13 @@ class TipoMecanica(str, Enum):
     FCEV = "FCEV"
     GLP = "GLP"
     GNV = "GNV"
-    HEVD = "HEVD"
-    HEVG = "HEVG"
-    MHEVD = "MHEVD"
-    MHEVG = "MHEVG"
-    PHEVD = "PHEVD"
-    PHEVG = "PHEVG"
-    REEV = "REEV"
+    HEVD = "HEVD"  # Híbrido Eléctrico Diesel
+    HEVG = "HEVG"  # Híbrido Eléctrico Gasolina
+    MHEVD = "MHEVD" # Mild Hybrid Diesel
+    MHEVG = "MHEVG" # Mild Hybrid Gasolina
+    PHEVD = "PHEVD" # Híbrido Enchufable Diesel
+    PHEVG = "PHEVG" # Híbrido Enchufable Gasolina
+    REEV = "REEV"   # Eléctrico de Autonomía Extendida
 
 class NivelAventura(str, Enum):
     ninguna   = "ninguna"

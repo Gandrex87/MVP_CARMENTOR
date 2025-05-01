@@ -1,7 +1,6 @@
 # utils/rag_carroceria.py
 import os
 from langchain.schema import Document
-#from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_openai import OpenAIEmbeddings 
 from langchain_community.vectorstores import FAISS
 from utils.rag_reader import cargar_carrocerias_desde_pdf
