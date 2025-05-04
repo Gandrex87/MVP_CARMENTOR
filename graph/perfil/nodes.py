@@ -593,10 +593,11 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
         singular_val = filtros_actualizados.singular_min if filtros_actualizados.singular_min is not None else 1.0
         aventura_val = preferencias.aventura 
         raw = compute_raw_weights(
+            preferencias=preferencias, # <--- Pasar preferencias
             estetica=estetica_val,
             premium=premium_val,
-            singular=singular_val,
-            aventura_level=aventura_val 
+            singular=singular_val
+            # aventura_level ya no se pasa, se obtiene de preferencias dentro de la función
         )
         pesos_calculados = normalize_weights(raw)
         print(f"DEBUG (Finalizar) ► Pesos calculados: {pesos_calculados}")

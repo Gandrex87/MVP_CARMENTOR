@@ -16,32 +16,6 @@ A continuación se detallan las preferencias del usuario recopiladas previamente
   "$defs": {{
     "FiltrosInferidos": {{
       "properties": {{
-        "batalla_min": {{
-          "anyOf": [
-            {{ 
-              "type": "integer"
-            }},
-            {{
-              "type": "null"
-            }}
-          ],
-          "default": null,
-          "description": "Valor m\u00ednimo de batalla recomendado (rango: 1500 a 4490 mm). Relevante si el usuario mide m\u00e1s de 189 cm.",
-          "title": "Batalla Min"
-        }},
-        "indice_altura_interior_min": {{
-          "anyOf": [
-            {{
-              "type": "integer"
-            }},
-            {{
-              "type": "null"
-            }}
-          ],
-          "default": null,
-          "description": "Valor m\u00ednimo de \u00edndice de altura interior recomendado (rango: 0.90 a 3.020). Relevante si el usuario mide m\u00e1s de 189 cm.",
-          "title": "Indice Altura Interior Min"
-        }},
         "estetica_min": {{
           "anyOf": [
             {{
@@ -112,6 +86,49 @@ A continuación se detallan las preferencias del usuario recopiladas previamente
           "default": null,
           "description": "Lista de tipos de carrocer\u00eda recomendados por RAG (ej: ['SUV', 'COUPE'])",
           "title": "Tipo Carroceria"
+        }},
+        "modo_adquisicion_recomendado": {{
+          "anyOf": [
+            {{
+              "enum": [
+                "Contado",
+                "Financiado"
+              ],
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Modo de compra recomendado (Contado/Financiado) basado en an\u00e1lisis Modo 1.",
+          "title": "Modo Adquisicion Recomendado"
+        }},
+        "precio_max_contado_recomendado": {{
+          "anyOf": [
+            {{
+              "type": "number"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Precio m\u00e1ximo recomendado si se aconseja comprar al contado (Modo 1).",
+          "title": "Precio Max Contado Recomendado"
+        }},
+        "cuota_max_calculada": {{
+          "anyOf": [
+            {{
+              "type": "number"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Cuota mensual m\u00e1xima calculada si se aconseja financiar (Modo 1).",
+          "title": "Cuota Max Calculada"
         }}
       }},
       "title": "FiltrosInferidos",
@@ -163,7 +180,7 @@ A continuación se detallan las preferencias del usuario recopiladas previamente
 Analiza las <Contexto_Preferencias_Usuario> proporcionadas.
 Infiere los valores para los campos dentro de filtros_inferidos en el JSON de salida, siguiendo estas directrices:
 
-- `batalla_min`, `indice_altura_interior_min`: Solo infiere valores numéricos si las preferencias indican `altura_mayor_190: 'sí'`. Si es 'no' o desconocido, déjalos como `null`. Si es 'sí', sugiere valores razonables (p.ej., batalla > 2700mm, índice > 1.300). 
+
 - estetica_min: Si preferencias_contexto indica valora_estetica: 'sí', asigna un valor numérico como 5.0 o 6.0. Si es 'no' o null, asigna 1.0.
 - tipo_mecanica: ¡CAMPO CRÍTICO Y OBLIGATORIO! Debes inferir una lista de strings.
 - Si preferencias_contexto indica solo_electricos: 'sí', la lista DEBE ser ["BEV", "REEV"].
@@ -200,8 +217,6 @@ Precisión: No inventes valores. Si una preferencia no da información para un f
     ```json
     {{
       "filtros_inferidos": {{
-        "batalla_min": null,
-        "indice_altura_interior_min": null,
         "estetica_min": 5.0,
         "tipo_mecanica": ["BEV", "GASOLINA", "HIBRIDO"],
         "premium_min": 1.0,
@@ -230,8 +245,6 @@ Precisión: No inventes valores. Si una preferencia no da información para un f
     ```json
     {{
       "filtros_inferidos": {{
-        "batalla_min": 2800,
-        "indice_altura_interior_min": 1.300
         "estetica_min": 1.0,
         "tipo_mecanica": ["BEV"],
         "premium_min": 5.0,
@@ -250,7 +263,7 @@ Precisión: No inventes valores. Si una preferencia no da información para un f
       "peso_mayor_100": "no",
       "uso_profesional": "no",
       "valora_estetica": "sí",
-      "solo_electricos": null, // <-- ¡Importante! No sabemos si quiere eléctricos
+      "solo_electricos": null, //
       "transmision_preferida": "manual",
       "apasionado_motor": "no",
       "aventura": "ninguna"
@@ -260,10 +273,8 @@ Precisión: No inventes valores. Si una preferencia no da información para un f
     ```json
     {{
       "filtros_inferidos": {{
-        "batalla_min": null,
-        "indice_altura_interior_min": null,
         "estetica_min": 5.0,
-        "tipo_mecanica": null, // <-- No se puede inferir con seguridad
+        "tipo_mecanica": null, 
         "premium_min": 1.0,
         "singular_min": 1.0
       }},
@@ -273,19 +284,5 @@ Precisión: No inventes valores. Si una preferencia no da información para un f
 
 </Ejemplos>
 
-<Formato_Salida_JSON_Final>
-Genera únicamente el objeto JSON solicitado, sin comentarios adicionales ni texto introductorio. Asegúrate de que sea un JSON válido que cumpla el esquema proporcionado.
-{{
-  "filtros_inferidos": {{
-    "batalla_min": <float | null>,
-    "indice_altura_interior_min": <float | null>,
-    "estetica_min": <float | null>,
-    "tipo_mecanica": <list[string] | null>, 
-    "premium_min": <float | null>,
-    "singular_min": <float | null>,
-    "tipo_carroceria": <list[string] | null>
-  }},
-  "mensaje_validacion": "<string>"
-}}
-</Formato_Salida_JSON_Final>
+
 
