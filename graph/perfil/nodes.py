@@ -9,6 +9,7 @@ from utils.validation import check_perfil_usuario_completeness , check_filtros_c
 from utils.formatters import formatear_preferencias_en_tabla
 from utils.weights import compute_raw_weights, normalize_weights
 from utils.rag_carroceria import get_recommended_carrocerias
+from utils.bigquery_tools import buscar_coches_bq 
 
 
 # En graph/nodes.py
@@ -497,7 +498,7 @@ from graph.perfil.state import EstadoAnalisisPerfil, PerfilUsuario, FiltrosInfer
 from utils.enums import NivelAventura # Ejemplo, si necesitas el Enum
 
 
-
+import traceback 
 # --- Etapa 4: Finalización y Presentación ---
 
 # Tu código para finalizar_y_presentar_node
@@ -512,6 +513,7 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     preferencias = state.get("preferencias_usuario")
     filtros = state.get("filtros_inferidos")
     economia = state.get("economia")
+    pesos_calculados = None 
 
     # Verificar pre-condiciones
     if not preferencias or not filtros or not economia:
@@ -569,15 +571,15 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     filtros_dict_actualizado = filtros_actualizados.model_dump(mode='json')
 
     # 1. Llamada RAG (usando filtros_actualizados o su dict)
-    if not filtros_actualizados.tipo_carroceria: 
-        print("DEBUG (Finalizar) ► Llamando a RAG...")
-        try:
+    # if not filtros_actualizados.tipo_carroceria: 
+    #     print("DEBUG (Finalizar) ► Llamando a RAG...")
+    try:
             # Pasar prefs_dict y el dict de filtros actualizado
-            tipos_carroceria_rec = get_recommended_carrocerias(prefs_dict, filtros_dict_actualizado, k=4) 
+            tipos_carroceria_rec = get_recommended_carrocerias(prefs_dict, filtros_dict_actualizado, k=3) 
             print(f"DEBUG (Finalizar) ► RAG recomendó: {tipos_carroceria_rec}")
             # Actualizar el objeto filtros_actualizados
             filtros_actualizados.tipo_carroceria = tipos_carroceria_rec 
-        except Exception as e_rag:
+    except Exception as e_rag:
             # ... (manejo error RAG) ...
             filtros_actualizados.tipo_carroceria = ["Error RAG"] 
     # ...
@@ -600,10 +602,13 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
             # aventura_level ya no se pasa, se obtiene de preferencias dentro de la función
         )
         pesos_calculados = normalize_weights(raw)
-        print(f"DEBUG (Finalizar) ► Pesos calculados: {pesos_calculados}")
+        print(f"DEBUG (Finalizar) ► Pesos calculados: {pesos_calculados}") 
     except Exception as e_weights:
-        # ... (manejo error pesos) ...
-        pass
+        print(f"ERROR (Finalizar) ► Fallo calculando pesos: {e_weights}")
+        # --- AÑADIR ESTO PARA VER EL ERROR COMPLETO ---
+        print("--- TRACEBACK ERROR PESOS ---")
+        traceback.print_exc()
+        print("-----------------------------")
 
     # 3. Formateo de la Tabla (usando filtros_actualizados)
     print("DEBUG (Finalizar) ► Formateando tabla final...")
@@ -630,10 +635,88 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
 
     # 5. Devolver el estado final completo
     return {
-        **state,
-        "filtros_inferidos": filtros_actualizados, # <-- Devolver el objeto actualizado
-        "pesos": pesos_calculados, 
-        "messages": historial_final 
-    }
+    **state,
+    "filtros_inferidos": filtros_actualizados, 
+    "pesos": pesos_calculados, 
+    "messages": historial_final,
+    "coches_recomendados": None # Inicializar/resetear por si acaso
+}
 
 # --- Fin Etapa 4 ---
+
+
+# --- NUEVO NODO BÚSQUEDA FINAL ---
+def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Usa los filtros y pesos finales del estado para buscar coches en BQ
+    y presenta los resultados.
+    """
+    print("--- Ejecutando Nodo: buscar_coches_finales_node ---")
+    historial = state.get("messages", [])
+    filtros_finales = state.get("filtros_inferidos")
+    pesos_finales = state.get("pesos")
+    economia = state.get("economia") # Necesario para construir dict de filtros BQ
+
+    coches_encontrados = [] # Valor por defecto
+    mensaje_final = "No pude realizar la búsqueda en este momento." # Msg error default
+
+    if filtros_finales and pesos_finales:
+        # Preparar el diccionario de filtros para la función BQ
+        # (Incluyendo campos económicos relevantes si modo es 2)
+        filtros_para_bq = {}
+        filtros_para_bq.update(filtros_finales.model_dump(mode='json', exclude_none=True))
+        if economia and economia.modo == 2:
+            filtros_para_bq['modo'] = 2
+            filtros_para_bq['submodo'] = economia.submodo
+            if economia.submodo == 1:
+                 filtros_para_bq['pago_contado'] = economia.pago_contado
+            elif economia.submodo == 2:
+                 filtros_para_bq['cuota_max'] = economia.cuota_max
+
+        # DEFINIR cuántos resultados pedir (ej: 5 o 7)
+        k_coches = 5 
+
+        print(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
+        try:
+            coches_encontrados = buscar_coches_bq(
+                filtros=filtros_para_bq, 
+                pesos=pesos_finales, 
+                k=k_coches
+            )
+
+            # Formatear la respuesta para el usuario
+            if coches_encontrados:
+                mensaje_final = f"¡Listo! Basado en todo lo que hablamos, aquí tienes {len(coches_encontrados)} coche(s) que podrían interesarte:\n\n"
+                # Formato simple: Nombre (Marca) - Precio - Score
+                for i, coche in enumerate(coches_encontrados):
+                    nombre = coche.get('nombre', 'Nombre Desconocido')
+                    marca = coche.get('marca', '')
+                    precio = coche.get('precio_compra_contado')
+                    score = coche.get('score_total', 0.0)
+                    precio_str = f"{precio:,.0f}€".replace(",",".") if isinstance(precio, (int, float)) else "Precio N/A"
+                    mensaje_final += f"{i+1}. **{nombre}** ({marca}) - {precio_str} (Score: {score:.2f})\n"
+                mensaje_final += "\n¿Qué te parecen estas opciones?"
+            else:
+                mensaje_final = "He aplicado todos tus filtros, pero no encontré coches que coincidan exactamente en este momento. ¿Quizás quieras ajustar algún criterio?"
+
+        except Exception as e_bq:
+            print(f"ERROR (Buscar BQ) ► Falló la ejecución de buscar_coches_bq: {e_bq}")
+            mensaje_final = f"Lo siento, tuve un problema al buscar en la base de datos de coches: {e_bq}"
+    else:
+        print("ERROR (Buscar BQ) ► Faltan filtros o pesos finales en el estado.")
+        mensaje_final = "Lo siento, falta información interna para realizar la búsqueda final."
+
+    # Crear y añadir el mensaje con los resultados o el error
+    final_ai_msg = AIMessage(content=mensaje_final)
+    # Evitar duplicados
+    if historial and historial[-1].content == final_ai_msg.content:
+        historial_final = historial
+    else:
+        historial_final = historial + [final_ai_msg]
+
+    # Devolver estado final con coches y mensaje
+    return {
+        **state,
+        "coches_recomendados": coches_encontrados, 
+        "messages": historial_final
+    }

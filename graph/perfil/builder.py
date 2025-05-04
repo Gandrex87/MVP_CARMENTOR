@@ -5,7 +5,7 @@ from graph.perfil.state import EstadoAnalisisPerfil # Ajusta la ruta si es neces
 from graph.perfil.nodes import (recopilar_preferencias_node,validar_preferencias_node,
     inferir_filtros_node,validar_filtros_node,recopilar_economia_node,
     validar_economia_node, finalizar_y_presentar_node, preguntar_preferencias_node, 
-    preguntar_filtros_node, preguntar_economia_node)
+    preguntar_filtros_node, preguntar_economia_node,buscar_coches_finales_node)
 from .memory import get_memory 
 from graph.perfil.condition import ruta_decision_economia, ruta_decision_filtros, ruta_decision_perfil
 
@@ -25,6 +25,7 @@ def build_sequential_agent_graph():
     workflow.add_node("validar_economia", validar_economia_node)
     workflow.add_node("preguntar_economia", preguntar_economia_node) # <-- Nuevo
     workflow.add_node("finalizar_y_presentar", finalizar_y_presentar_node)
+    workflow.add_node("buscar_coches_finales", buscar_coches_finales_node) # <-- Nuevo
 
     # 2. Definir punto de entrada (sigue siendo el mismo)
     #workflow.add_edge(START, "recopilar_preferencias")
@@ -73,11 +74,11 @@ def build_sequential_agent_graph():
             "pasar_a_finalizar": "finalizar_y_presentar" 
         }
     )
-    # El nodo que pregunta economía, también TERMINA la ejecución de este invoke
-    workflow.add_edge("preguntar_economia", END) # <-- ¡Importante!
-
+    workflow.add_edge("preguntar_economia", END)
     # Etapa 4: Finalización (Como antes)
-    workflow.add_edge("finalizar_y_presentar", END) 
+    workflow.add_edge("finalizar_y_presentar", "buscar_coches_finales") 
+    # Después de buscar en BQ, terminar
+    workflow.add_edge("buscar_coches_finales", END) 
 
     # 4. Compilar
     print("INFO ► Compilando el grafo...")

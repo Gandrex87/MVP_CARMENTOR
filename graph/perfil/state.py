@@ -83,4 +83,5 @@ class EstadoAnalisisPerfil(TypedDict):
     mensaje_validacion: Optional[str]
     pesos:              Optional[dict]  # soft‑weights normalizados
     pregunta_pendiente: Optional[str] # Para guardar la pregunta entre nodos
+    coches_recomendados: Optional[List[dict[str, any]]] # Lista de diccionarios de coches
 
