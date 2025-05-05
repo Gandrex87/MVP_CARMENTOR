@@ -13,7 +13,6 @@ from .conversion import is_yes
 # --- Helper interno para simplificar comprobaciones ---
 def _es_nulo_o_vacio(valor):
     """Comprueba si el valor es None, string vacío o lista vacía."""
-    # Comprobamos también si es float 0.0 como en la función original? Quizás no sea necesario.
     return valor is None or valor == "" or valor == []
 
 # --- NUEVA Función de Post-procesamiento para PerfilUsuario ---

@@ -2,21 +2,15 @@
 # Situación Actual: Tu función finalizar_y_presentar_node ahora calcula y guarda en el estado filtros_inferidos uno de estos dos escenarios para el Modo 1:
 # modo_adquisicion_recomendado = "Contado" y un valor en precio_max_contado_recomendado.
 # modo_adquisicion_recomendado = "Financiado" y un valor en cuota_max_calculada.
-import logging
-from typing import Optional, List, Dict, Any 
-from google.cloud import bigquery
-from .enums import Transmision, TipoMecanica 
-from graph.perfil.state import FiltrosInferidos # Ajusta ruta
 # En utils/bigquery_search.py
 
-import logging
+# import logging
+# logging.basicConfig(level=logging.DEBUG) 
 from typing import Optional, List, Dict, Any 
 from google.cloud import bigquery
-# Importar Enums/Modelos si se usan en type hints
-from .enums import Transmision, TipoMecanica 
 from graph.perfil.state import FiltrosInferidos 
 
-logging.basicConfig(level=logging.DEBUG) 
+
 FiltrosDict = Dict[str, Any] 
 PesosDict = Dict[str, float]
 
@@ -30,7 +24,7 @@ def buscar_coches_bq(
     con Min-Max Scaling aplicado a las características numéricas en SQL.
     """
     if not filtros or not pesos:
-        logging.warning("Faltan filtros o pesos para la búsqueda en BigQuery.")
+        #logging.warning("Faltan filtros o pesos para la búsqueda en BigQuery.")
         return []
         
     # Asegurar valores por defecto 0.0 para pesos si no vienen
@@ -49,7 +43,7 @@ def buscar_coches_bq(
     try:
         client = bigquery.Client() 
     except Exception as e_auth:
-        logging.error(f"Error al inicializar cliente BigQuery: {e_auth}")
+       # logging.error(f"Error al inicializar cliente BigQuery: {e_auth}")
         return []
 
     # --- Construcción de la Query ---
@@ -227,8 +221,8 @@ def buscar_coches_bq(
     # --- Ejecución (igual que antes) ---
     # ... (logging, prints, try/except para client.query) ...
     log_params = [(p.name, getattr(p, 'value', getattr(p, 'values', None))) for p in params]
-    logging.debug("🔎 BigQuery SQL:\n%s", sql)
-    logging.debug("🔎 BigQuery params: %s", log_params)
+    #logging.debug("🔎 BigQuery SQL:\n%s", sql)
+    #logging.debug("🔎 BigQuery params: %s", log_params)
     print("--- 🧠 SQL Query ---\n", sql) 
     print("\n--- 📦 Parameters ---\n", log_params) 
 
@@ -236,8 +230,8 @@ def buscar_coches_bq(
         job_config = bigquery.QueryJobConfig(query_parameters=params)
         query_job = client.query(sql, job_config=job_config)
         df = query_job.result().to_dataframe() 
-        logging.info(f"✅ BigQuery query ejecutada, {len(df)} resultados obtenidos.")
+       # logging.info(f"✅ BigQuery query ejecutada, {len(df)} resultados obtenidos.")
         return df.to_dict(orient="records")
     except Exception as e:
-        logging.error(f"❌ Error al ejecutar la query en BigQuery: {e}")
+        #logging.error(f"❌ Error al ejecutar la query en BigQuery: {e}")
         return []

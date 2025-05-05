@@ -14,7 +14,7 @@ def build_sequential_agent_graph():
     workflow = StateGraph(EstadoAnalisisPerfil)
 
     # 1. Añadir todos los nodos (incluyendo el nuevo de economía)
-    print("INFO ► Añadiendo nodos al grafo...")
+    #print("INFO ► Añadiendo nodos al grafo...")
     workflow.add_node("recopilar_preferencias", recopilar_preferencias_node)
     workflow.add_node("validar_preferencias", validar_preferencias_node)
     workflow.add_node("preguntar_preferencias", preguntar_preferencias_node) # <-- Nuevo

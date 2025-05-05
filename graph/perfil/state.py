@@ -63,10 +63,19 @@ class ResultadoEconomia(BaseModel):
     mensaje_validacion: str
     
 
+# --- Definición MODIFICADA ---
 class ResultadoSoloPerfil(BaseModel):
     """Salida esperada del LLM enfocado solo en el perfil del usuario."""
-    preferencias_usuario: PerfilUsuario
-    mensaje_validacion: str = Field(description="Pregunta de seguimiento CLARA y CORTA si falta información ESENCIAL para completar el PerfilUsuario, o un mensaje de confirmación si el perfil está completo.")
+    preferencias_usuario: PerfilUsuario = Field(
+        description="Objeto con las preferencias del usuario actualizadas o inferidas."
+        )
+    tipo_mensaje: Literal["PREGUNTA", "CONFIRMACION", "ERROR"] = Field(
+        description="Clasificación del mensaje: 'PREGUNTA' si se necesita más info de perfil, 'CONFIRMACION' si el perfil parece completo o se confirma un dato, 'ERROR' si hubo un problema irresoluble."
+    )
+    contenido_mensaje: str = Field(
+        description="El texto real del mensaje: la pregunta específica, la confirmación, o el detalle del error."
+    )
+# --- Fin Modificación ---
 
 class ResultadoSoloFiltros(BaseModel):
     """Salida esperada del LLM enfocado solo en inferir filtros técnicos."""
