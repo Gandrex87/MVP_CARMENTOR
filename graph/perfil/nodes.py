@@ -1,104 +1,123 @@
 
 from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from pydantic import ValidationError # Importar para manejo de errores si es necesario
-from .state import EstadoAnalisisPerfil, ResultadoSoloPerfil , ResultadoSoloFiltros,EconomiaUsuario, ResultadoEconomia,PerfilUsuario
-from config.llm import llm_solo_perfil, llm_solo_filtros, llm_economia
-from prompts.loader import system_prompt_perfil, system_prompt_filtros_template, prompt_economia_structured_sys_msg
+from .state import (EstadoAnalisisPerfil, 
+                    PerfilUsuario, ResultadoSoloPerfil , 
+                    FiltrosInferidos, ResultadoSoloFiltros,
+                    EconomiaUsuario,ResultadoEconomia ,
+                    InfoPasajeros, ResultadoPasajeros)
+from config.llm import llm_solo_perfil, llm_solo_filtros, llm_economia, llm_pasajeros
+from prompts.loader import system_prompt_perfil, system_prompt_filtros_template, prompt_economia_structured_sys_msg, system_prompt_pasajeros
 from utils.postprocessing import aplicar_postprocesamiento_perfil, aplicar_postprocesamiento_filtros
-from utils.validation import check_perfil_usuario_completeness , check_filtros_completos, check_economia_completa
+from utils.validation import check_perfil_usuario_completeness , check_filtros_completos, check_economia_completa, check_pasajeros_completo
 from utils.formatters import formatear_preferencias_en_tabla
 from utils.weights import compute_raw_weights, normalize_weights
 from utils.rag_carroceria import get_recommended_carrocerias
-
+from utils.bigquery_tools import buscar_coches_bq 
+import traceback 
+import pandas as pd
 
 # En graph/nodes.py
 # nodes.py (Empezando refactorización)
 
 
 # --- Etapa 1: Recopilación de Preferencias del Usuario ---
+
 def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Procesa la entrada del usuario, llama a llm_solo_perfil para extraer/actualizar
-    preferencias_usuario y añade el mensaje de validación/confirmación.
+    Procesa entrada humana, llama a llm_solo_perfil, actualiza preferencias_usuario,
+    y guarda el contenido del mensaje devuelto en 'pregunta_pendiente'.
     """
     print("--- Ejecutando Nodo: recopilar_preferencias_node ---")
     historial = state.get("messages", [])
-    # Obtener el objeto PerfilUsuario actual del estado (puede ser None si es la primera vez)
     preferencias_actuales = state.get("preferencias_usuario") 
 
-    # 1. Comprobar si el último mensaje es de la IA (para evitar procesar preguntas de la IA)
+    # 1. Comprobar si el último mensaje es de la IA
     if historial and isinstance(historial[-1], AIMessage):
-        # Si el último mensaje es de la IA, este nodo no debe llamar al LLM.
-        # Simplemente devolvemos el estado esperando la respuesta humana.
         print("DEBUG (Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
-        return {**state} 
+        return {**state, "pregunta_pendiente": None} # Limpiar pregunta pendiente
 
     print("DEBUG (Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
     
+    # Inicializar variables que se usarán después del try/except
+    preferencias_post = preferencias_actuales # Usar el actual como fallback inicial
+    contenido_msg_llm = None # Mensaje a guardar para el siguiente nodo
+    
     # 2. Llamar al LLM enfocado en el perfil
     try:
-        # Asegúrate que system_prompt_perfil esté definido y cargado correctamente.
-        # Debe instruir al LLM para que rellene ResultadoSoloPerfil.
+        # LLM ahora devuelve ResultadoSoloPerfil (con tipo_mensaje y contenido_mensaje)
         response: ResultadoSoloPerfil = llm_solo_perfil.invoke(
             [system_prompt_perfil, *historial],
-            config={"configurable": {"tags": ["llm_solo_perfil"]}} # Tag para LangSmith/debugging
+            config={"configurable": {"tags": ["llm_solo_perfil"]}} 
         )
         print(f"DEBUG (Perfil) ► Respuesta llm_solo_perfil: {response}")
 
-        # Extraer los datos parseados por Pydantic
-        preferencias_nuevas = response.preferencias_usuario
-        mensaje_validacion = response.mensaje_validacion
+        # --- CAMBIO: Extraer de la nueva estructura ---
+        preferencias_nuevas = response.preferencias_usuario 
+        tipo_msg_llm = response.tipo_mensaje # Puedes usarlo para logging o lógica futura si quieres
+        contenido_msg_llm = response.contenido_mensaje # Este es el texto que guardaremos
 
+        # 3. Aplicar post-procesamiento
+        try:
+            resultado_post_proc = aplicar_postprocesamiento_perfil(preferencias_nuevas)
+            if resultado_post_proc is not None:
+                preferencias_post = resultado_post_proc
+            else:
+                 print("WARN (Perfil) ► aplicar_postprocesamiento_perfil devolvió None.")
+                 preferencias_post = preferencias_nuevas # Fallback
+            print(f"DEBUG (Perfil) ► Preferencias TRAS post-procesamiento: {preferencias_post}")
+        except Exception as e_post:
+            print(f"ERROR (Perfil) ► Fallo en postprocesamiento de perfil: {e_post}")
+            preferencias_post = preferencias_nuevas # Fallback
+
+    # Manejo de errores de la llamada LLM
     except ValidationError as e_val:
-        # Error si el LLM devuelve un JSON que no coincide con ResultadoSoloPerfil
         print(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val}")
-        ai_msg = AIMessage(content=f"Hubo un problema al entender tus preferencias. ¿Podrías reformular? (Detalle: {e_val})")
-        return {**state, "messages": historial + [ai_msg]}
+        contenido_msg_llm = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {e_val}"
+        # Mantener preferencias anteriores si falla validación
+        preferencias_post = preferencias_actuales 
     except Exception as e:
-        # Otros errores (ej. API de OpenAI)
-        print(f"ERROR (Perfil) ► Fallo al invocar llm_solo_perfil: {e}")
-        ai_msg = AIMessage(content=f"Lo siento, tuve un problema técnico al procesar tus preferencias.")
-        return {**state, "messages": historial + [ai_msg]}
+        print(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil: {e}")
+        print("--- TRACEBACK FALLO LLM PERFIL ---")
+        traceback.print_exc() # Imprimir traceback para depurar
+        print("--------------------------------")
+        contenido_msg_llm = "Lo siento, tuve un problema técnico al procesar tus preferencias."
+        # Mantener preferencias anteriores
+        preferencias_post = preferencias_actuales 
 
-    # 3. (Opcional) Aplicar post-procesamiento específico del perfil
-    #    Si tienes reglas que refinan SÓLO PerfilUsuario, aplícalas aquí.
-    try:
-        # Ejemplo: preferencias_post = aplicar_postprocesamiento_perfil(preferencias_nuevas)
-        #preferencias_post = preferencias_nuevas # Por ahora, usamos la salida directa del LLM
-        preferencias_post = aplicar_postprocesamiento_perfil(preferencias_nuevas)
+    # 4. Actualizar el estado 'preferencias_usuario' (fusionando)
+    preferencias_actualizadas = preferencias_post # Usar resultado post-proc o el fallback
+    if preferencias_actuales and preferencias_post: 
+        try:
+            if hasattr(preferencias_post, "model_dump"):
+                # Usar exclude_none=True para evitar que Nones del LLM borren datos existentes
+                update_data = preferencias_post.model_dump(exclude_unset=True, exclude_none=True) 
+                if update_data: # Solo actualizar si hay algo que actualizar
+                     preferencias_actualizadas = preferencias_actuales.model_copy(update=update_data)
+                else: # Si post-proc no devolvió nada útil, mantener el actual
+                     preferencias_actualizadas = preferencias_actuales
+            else:
+                 preferencias_actualizadas = preferencias_post 
+        except Exception as e_merge:
+             print(f"ERROR (Perfil) ► Fallo al fusionar preferencias: {e_merge}")
+             preferencias_actualizadas = preferencias_actuales 
 
-        print(f"DEBUG (Perfil) ► Preferencias tras post-procesamiento (si aplica): {preferencias_post}")
-    except Exception as e_post:
-        print(f"ERROR (Perfil) ► Fallo en postprocesamiento de perfil: {e_post}")
-        preferencias_post = preferencias_nuevas # Fallback
-
-    # 4. Actualizar el estado 'preferencias_usuario'   
-    if preferencias_actuales:
-         # Si ya existía un perfil, lo actualizamos
-         update_data = preferencias_post.model_dump(exclude_unset=True) # Obtener solo campos presentes en la respuesta
-         preferencias_actualizadas = preferencias_actuales.model_copy(update=update_data)
-    else:
-         # Si no existía, usamos el nuevo directamente
-         preferencias_actualizadas = preferencias_post
-    
     print(f"DEBUG (Perfil) ► Estado preferencias_usuario actualizado: {preferencias_actualizadas}")
-
-    # 5. Añadir mensaje de validación/confirmación del LLM al historial
-    #    Este mensaje puede ser una pregunta si falta algo, o una confirmación.
-    #ai_msg = AIMessage(content=mensaje_validacion)
+    
+    # 5. Guardar la pregunta/confirmación pendiente para el siguiente nodo
     pregunta_para_siguiente_nodo = None
-    if mensaje_validacion and mensaje_validacion.strip():
-        pregunta_para_siguiente_nodo = mensaje_validacion.strip()
-        print(f"DEBUG (Perfil) ► Guardando pregunta pendiente: {pregunta_para_siguiente_nodo}")
+    if contenido_msg_llm and contenido_msg_llm.strip():
+        pregunta_para_siguiente_nodo = contenido_msg_llm.strip()
+        print(f"DEBUG (Perfil) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
     else:
-        print(f"DEBUG (Perfil) ► No hay pregunta de validación pendiente.")
+        print(f"DEBUG (Perfil) ► No hay mensaje pendiente.")
         
-    # Devolver estado actualizado CON la pregunta pendiente
+    # 6. Devolver estado actualizado (SIN modificar messages, CON pregunta_pendiente)
     return {
         **state,
         "preferencias_usuario": preferencias_actualizadas,
-        # 'messages' NO se modifica aquí con la respuesta de la IA
-        "pregunta_pendiente": pregunta_para_siguiente_nodo 
+        # "messages": historial_con_nuevo_mensaje, # <-- NO se actualiza aquí
+        "pregunta_pendiente": pregunta_para_siguiente_nodo # <-- Se guarda el CONTENIDO del mensaje
     }
 
 
@@ -125,94 +144,285 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
 from typing import Literal, Optional
 def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     """Genera una pregunta específica basada en el primer campo obligatorio que falta."""
-    if prefs is None: # Si no hay perfil, pedir algo básico
+    if prefs is None: 
         return "¿Podrías contarme un poco sobre qué buscas o para qué usarás el coche?"
-
     # Revisa los campos en orden de prioridad deseado para preguntar
     if prefs.altura_mayor_190 is None: return "¿Mides más de 1.90 m?"
     if prefs.peso_mayor_100 is None: return "¿Pesas más de 100 kg?"
     if prefs.uso_profesional is None: return "¿Uso personal o profesional?"
-    if prefs.valora_estetica is None: return "¿Valoras la estética de un coche o no es relevante para ti?"
+    if prefs.valora_estetica is None: return "¿Valoras la estética?"
     if prefs.solo_electricos is None: return "¿Quieres solo coches eléctricos?"
     if prefs.transmision_preferida is None: return "¿Qué tipo de transmisión prefieres?\n  1) Automático\n  2) Manual\n  3) Ambos"
     if prefs.apasionado_motor is None: return "¿Eres un apasionado del motor?"
-    if prefs.aventura is None: return "Hablando de aventura, ¿con cuál de estas afirmaciones te identificas más?\n  1) No pisas nada que no sea asfalto (ninguna)\n  2) Salidas fuera de asfalto ocasionales (ocasional)\n  3) Circular en condiciones duras con total garantía (extrema)" # Usar template aventura
-    
-    # Si llegamos aquí, algo raro pasa (check_... debería haber dado True)
-    return "¿Podrías darme algún detalle más sobre tus preferencias?"
+    if prefs.aventura is None: return "Hablando de aventura, ¿con cuál de estas afirmaciones te identificas más?\n  1) No pisas nada que no sea asfalto (ninguna)\n  2) Salidas fuera de asfalto ocasionales (ocasional)\n  3) Circular en condiciones duras con total garantía (extrema)" 
+    return "¿Podrías darme algún detalle más sobre tus preferencias?" # Fallback muy genérico
 
-
-# --- NUEVO NODO PARA PREGUNTAR (ETAPA 1) ---
 def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Añade la pregunta de seguimiento correcta al historial.
-    Verifica si el perfil está realmente completo antes de añadir un mensaje 
-    de confirmación/transición. Si no lo está, asegura que se añada una pregunta real.
+    Añade el mensaje pendiente O genera una pregunta fallback si es necesario,
+    y lo añade como AIMessage al historial. Limpia la pregunta pendiente.
     """
     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
-    pregunta_guardada = state.get("pregunta_pendiente")
+    mensaje_pendiente = state.get("pregunta_pendiente") # Mensaje del nodo anterior (LLM)
     preferencias = state.get("preferencias_usuario")
     historial_actual = state.get("messages", [])
+    historial_nuevo = list(historial_actual) 
     
-    mensaje_a_enviar = None # El mensaje que finalmente añadiremos
+    mensaje_a_enviar = None 
 
-    # 1. Comprobar si el perfil está REALMENTE completo AHORA
-    perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
+    # ¿Tenemos un mensaje válido del nodo anterior?
+    if mensaje_pendiente and mensaje_pendiente.strip():
+        # Sí, usar el mensaje del LLM (sea pregunta o confirmación errónea por ahora)
+        # La lógica para ignorar confirmaciones erróneas si el perfil está incompleto
+        # demostró ser compleja de mantener con el estado actual de tipo_mensaje/contenido.
+        # Simplificamos: Si hay mensaje, lo usamos. Si causa un bucle, el problema está en el LLM/prompt.
+        # Consideraremos añadir la lógica de override más compleja si esto sigue fallando.
+        print(f"DEBUG (Preguntar Perfil) ► Usando mensaje pendiente: {mensaje_pendiente}")
+        mensaje_a_enviar = mensaje_pendiente
+    else:
+        # No había mensaje pendiente del nodo anterior O estaba vacío.
+        # PERO sabemos que este nodo se ejecuta SOLO si la condición determinó
+        # que el perfil está INCOMPLETO. Por lo tanto, NECESITAMOS una pregunta.
+        print("WARN (Preguntar Perfil) ► Nodo ejecutado para preguntar, pero no había mensaje pendiente válido. Generando pregunta fallback.")
+        try:
+            # Generar la pregunta sobre el primer campo faltante
+            mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias) 
+        except Exception as e_fallback:
+            print(f"ERROR (Preguntar Perfil) ► Error generando pregunta fallback: {e_fallback}")
+            mensaje_a_enviar = "¿Podrías darme más detalles sobre tus preferencias?" # Fallback muy genérico
 
-    if not perfil_esta_completo:
-        print("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO según checker.")
-        # El perfil NO está completo, DEBEMOS hacer una pregunta.
-        # ¿Tenemos una pregunta guardada?
-        if pregunta_guardada and pregunta_guardada.strip():
-            # ¿La pregunta guardada PARECE una confirmación por error?
-            # (Podemos usar heurísticas simples como startswith)
-            if pregunta_guardada.startswith("¡Perfecto!") or \
-               pregunta_guardada.startswith("¡Genial!") or \
-               pregunta_guardada.startswith("Ok, he definido") or \
-               "¿Pasamos a" in pregunta_guardada:
-                print(f"WARN (Preguntar Perfil) ► Pregunta guardada ('{pregunta_guardada}') parece confirmación, pero perfil incompleto. IGNORANDO y generando pregunta específica.")
-                # Ignoramos la pregunta guardada y generamos una nueva basada en lo que falta
-                mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
-            else:
-                # La pregunta guardada parece una pregunta real, la usamos.
-                 print(f"DEBUG (Preguntar Perfil) ► Usando pregunta guardada: {pregunta_guardada}")
-                 mensaje_a_enviar = pregunta_guardada
-        else:
-            # No había pregunta guardada, generamos una nueva.
-            print("DEBUG (Preguntar Perfil) ► No había pregunta guardada, generando pregunta específica.")
-            mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
-            
-    else: # El perfil SÍ está completo
-        print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
-        # Usamos el mensaje guardado (que debería ser de confirmación/transición)
-        if pregunta_guardada and pregunta_guardada.strip():
-             print(f"DEBUG (Preguntar Perfil) ► Usando mensaje de confirmación guardado: {pregunta_guardada}")
-             mensaje_a_enviar = pregunta_guardada
-        else:
-             # Si por alguna razón no había mensaje, ponemos uno por defecto
-             print("WARN (Preguntar Perfil) ► Perfil completo pero no había mensaje pendiente. Usando confirmación genérica.")
-             mensaje_a_enviar = "¡Entendido! Ya tenemos tu perfil. ¿Continuamos?"
-
-    # Añadir el mensaje decidido al historial (evitando duplicados)
-    historial_nuevo = historial_actual
+    # Añadir el mensaje decidido al historial
     if mensaje_a_enviar and mensaje_a_enviar.strip():
         ai_msg = AIMessage(content=mensaje_a_enviar)
         if not historial_actual or historial_actual[-1].content != ai_msg.content:
-            historial_nuevo = historial_actual + [ai_msg]
-            print(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}")
+            historial_nuevo.append(ai_msg)
+            print(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}") 
         else:
              print("DEBUG (Preguntar Perfil) ► Mensaje final duplicado, no se añade.")
     else:
-         print("WARN (Preguntar Perfil) ► No se determinó ningún mensaje a enviar.")
-
+         # Esto solo pasaría si _obtener_siguiente_pregunta_perfil falla catastróficamente
+         print("ERROR (Preguntar Perfil) ► No se determinó ningún mensaje a enviar a pesar de necesitar pregunta.")
+         ai_msg = AIMessage(content="No estoy seguro de qué preguntar ahora. ¿Puedes darme más detalles?")
+         historial_nuevo.append(ai_msg)
 
     # Devolver estado: historial actualizado y pregunta_pendiente reseteada
     return {
         **state,
-        "messages": historial_nuevo,
-        "pregunta_pendiente": None # Siempre limpiar la pregunta pendiente
+        "messages": historial_nuevo, 
+        "pregunta_pendiente": None # Siempre limpiar
     }
 
+
+# --- NUEVA ETAPA: PASAJEROS ---
+
+def recopilar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Procesa entrada humana, llama a llm_pasajeros, actualiza info_pasajeros,
+    y guarda el contenido del mensaje devuelto en 'pregunta_pendiente'.
+    Es el nodo principal del bucle de pasajeros.
+    """
+    print("--- Ejecutando Nodo: recopilar_info_pasajeros_node ---")
+    historial = state.get("messages", [])
+    pasajeros_actuales = state.get("info_pasajeros") # Puede ser None o InfoPasajeros
+
+    # Guarda AIMessage (igual que en perfil)
+    if historial and isinstance(historial[-1], AIMessage):
+        print("DEBUG (Pasajeros) ► Último mensaje es AIMessage, omitiendo llamada a llm_pasajeros.")
+        return {**state, "pregunta_pendiente": None} 
+
+    print("DEBUG (Pasajeros) ► Último mensaje es HumanMessage o inicio de etapa, llamando a llm_pasajeros...")
+    
+    pasajeros_actualizados = pasajeros_actuales # Usar como fallback
+    contenido_msg_llm = None
+
+    try:
+        # Llama al LLM específico de pasajeros
+        response: ResultadoPasajeros = llm_pasajeros.invoke(
+            [system_prompt_pasajeros, *historial],
+            config={"configurable": {"tags": ["llm_pasajeros"]}} 
+        )
+        print(f"DEBUG (Pasajeros) ► Respuesta llm_pasajeros: {response}")
+
+        pasajeros_nuevos = response.info_pasajeros 
+        tipo_msg_llm = response.tipo_mensaje 
+        contenido_msg_llm = response.contenido_mensaje
+        
+        print(f"DEBUG (Pasajeros) ► Tipo='{tipo_msg_llm}', Contenido='{contenido_msg_llm}'")
+        print(f"DEBUG (Pasajeros) ► Info Pasajeros LLM: {pasajeros_nuevos}")
+
+        # Actualizar el estado 'info_pasajeros' (fusión simple)
+        if pasajeros_actuales and pasajeros_nuevos:
+            try:
+                update_data = pasajeros_nuevos.model_dump(exclude_unset=True, exclude_none=True)
+                if update_data:
+                    pasajeros_actualizados = pasajeros_actuales.model_copy(update=update_data)
+                # else: No hacer nada si no hay datos nuevos
+            except Exception as e_merge:
+                print(f"ERROR (Pasajeros) ► Fallo al fusionar info_pasajeros: {e_merge}")
+                pasajeros_actualizados = pasajeros_actuales # Mantener anterior
+        elif pasajeros_nuevos:
+             pasajeros_actualizados = pasajeros_nuevos # Usar el nuevo si no había antes
+        # Si ambos son None o pasajeros_nuevos es None, pasajeros_actualizados mantiene su valor inicial
+
+    except ValidationError as e_val:
+        print(f"ERROR (Pasajeros) ► Error de Validación Pydantic en llm_pasajeros: {e_val}")
+        contenido_msg_llm = f"Hubo un problema al entender la información sobre pasajeros: {e_val}. ¿Podrías repetirlo?"
+    except Exception as e:
+        print(f"ERROR (Pasajeros) ► Fallo general al invocar llm_pasajeros: {e}")
+        traceback.print_exc()
+        contenido_msg_llm = "Lo siento, tuve un problema técnico procesando la información de pasajeros."
+
+    print(f"DEBUG (Pasajeros) ► Estado info_pasajeros actualizado: {pasajeros_actualizados}")
+    
+    # Guardar la pregunta/confirmación pendiente
+    pregunta_para_siguiente_nodo = None
+    if contenido_msg_llm and contenido_msg_llm.strip():
+        pregunta_para_siguiente_nodo = contenido_msg_llm.strip()
+        print(f"DEBUG (Pasajeros) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
+    else:
+        print(f"DEBUG (Pasajeros) ► No hay mensaje pendiente.")
+        
+    return {
+        **state,
+        "info_pasajeros": pasajeros_actualizados, # Guardar info actualizada
+        "pregunta_pendiente": pregunta_para_siguiente_nodo 
+    }
+
+def validar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
+    """Nodo simple que comprueba si la información de pasajeros está completa."""
+    print("--- Ejecutando Nodo: validar_info_pasajeros_node ---")
+    info_pasajeros = state.get("info_pasajeros")
+    # Llama a la función de utilidad (que crearemos en el siguiente paso)
+    if check_pasajeros_completo(info_pasajeros):
+        print("DEBUG (Pasajeros) ► Validación: Info Pasajeros considerada COMPLETA.")
+    else:
+        print("DEBUG (Pasajeros) ► Validación: Info Pasajeros considerada INCOMPLETA.")
+    # No modifica el estado, solo valida para la condición
+    return {**state}
+
+def _obtener_siguiente_pregunta_pasajeros(info: Optional[InfoPasajeros]) -> str:
+    """Genera una pregunta fallback específica para pasajeros si falta algo."""
+    if info is None or info.frecuencia is None:
+        # Pregunta inicial si ni siquiera sabemos la frecuencia
+        return "Cuéntame, ¿sueles viajar con pasajeros habitualmente en el coche, Llevas pasajeros a menudo?"
+    elif info.frecuencia != "nunca":
+        # Si lleva pasajeros pero falta X o Z
+        if info.num_ninos_silla is None and info.num_otros_pasajeros is None:
+            return "¿Cuántas personas suelen ser en total (adultos/niños)? ¿Algún niño necesita sillita?"
+        elif info.num_ninos_silla is None:
+            return f"Entendido, llevas {info.num_otros_pasajeros} otros pasajeros. ¿Alguno de ellos es un niño que necesite sillita de seguridad?"
+        elif info.num_otros_pasajeros is None:
+             return f"Entendido, llevas {info.num_ninos_silla} niño(s) con sillita. ¿Suelen ir más pasajeros (adultos u otros niños)?"
+    # Si frecuencia es 'nunca' o si ya tiene X y Z, no debería llegar aquí si la lógica es correcta
+    return "¿Necesitas algo más relacionado con los pasajeros?" # Fallback muy genérico
+
+def preguntar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Toma el mensaje pendiente de pasajeros O genera una pregunta fallback si es necesario,
+    y lo añade como AIMessage al historial. Limpia la pregunta pendiente.
+    """
+    print("--- Ejecutando Nodo: preguntar_info_pasajeros_node ---")
+    mensaje_pendiente = state.get("pregunta_pendiente")
+    info_pasajeros = state.get("info_pasajeros") # Necesario para el fallback
+    historial_actual = state.get("messages", [])
+    historial_nuevo = list(historial_actual) 
+    
+    mensaje_a_enviar = None 
+
+    # Usamos el mensaje pendiente si existe Y NO es vacío
+    if mensaje_pendiente and mensaje_pendiente.strip():
+         # En esta versión, confiamos en que el LLM genera una pregunta válida si tipo_mensaje era PREGUNTA
+         # No añadimos la lógica compleja de detectar confirmaciones erróneas por ahora.
+         print(f"DEBUG (Preguntar Pasajeros) ► Usando mensaje pendiente: {mensaje_pendiente}")
+         mensaje_a_enviar = mensaje_pendiente
+    else:
+        # No había mensaje pendiente válido, PERO este nodo se ejecuta porque la info está incompleta.
+        print("WARN (Preguntar Pasajeros) ► No había mensaje pendiente válido. Generando pregunta fallback.")
+        try:
+            mensaje_a_enviar = _obtener_siguiente_pregunta_pasajeros(info_pasajeros)
+        except Exception as e_fallback:
+            print(f"ERROR (Preguntar Pasajeros) ► Error generando pregunta fallback: {e_fallback}")
+            mensaje_a_enviar = "¿Podrías darme más detalles sobre los pasajeros?"
+
+    # Añadir el mensaje decidido al historial
+    if mensaje_a_enviar and mensaje_a_enviar.strip():
+        ai_msg = AIMessage(content=mensaje_a_enviar)
+        if not historial_actual or historial_actual[-1].content != ai_msg.content:
+            historial_nuevo.append(ai_msg)
+            print(f"DEBUG (Preguntar Pasajeros) ► Mensaje final añadido: {mensaje_a_enviar}") 
+        else:
+             print("DEBUG (Preguntar Pasajeros) ► Mensaje final duplicado.")
+    else:
+         print("ERROR (Preguntar Pasajeros) ► No se determinó ningún mensaje a enviar.")
+         ai_msg = AIMessage(content="No estoy seguro de qué preguntar sobre pasajeros. ¿Continuamos?")
+         historial_nuevo.append(ai_msg)
+
+    return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
+
+def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Calcula filtros/indicadores basados en la información de pasajeros completa
+    y los actualiza en el estado.
+    Calcula: plazas_min, penalizar_puertas_bajas, priorizar_ancho.
+    """
+    print("--- Ejecutando Nodo: aplicar_filtros_pasajeros_node ---")
+    info_pasajeros = state.get("info_pasajeros")
+    # Obtener filtros existentes o inicializar si es la primera vez que se crean
+    filtros_actuales = state.get("filtros_inferidos") or FiltrosInferidos() 
+
+    # Valores por defecto para los nuevos campos/flags
+    plazas_calc = None
+    penalizar_p = False # Por defecto no penalizar
+    priorizar_a = False # Por defecto no priorizar
+
+    # Verificar que info_pasajeros exista (el grafo no debería llegar aquí si no, pero por seguridad)
+    if not info_pasajeros:
+        print("ERROR (Aplicar Filtros Pasajeros) ► No hay información de pasajeros en el estado.")
+        # Devolver el estado sin cambios en los filtros derivados
+        return {
+            **state, 
+            "filtros_inferidos": filtros_actuales, 
+            "penalizar_puertas_bajas": penalizar_p, 
+            "priorizar_ancho": priorizar_a
+        }
+
+    # Extraer datos (usar 0 si son None, ya que check_pasajeros_completo los validó si frecuencia != 'nunca')
+    frecuencia = info_pasajeros.frecuencia
+    X = info_pasajeros.num_ninos_silla or 0
+    Z = info_pasajeros.num_otros_pasajeros or 0
+
+    print(f"DEBUG (Aplicar Filtros Pasajeros) ► Info recibida: freq='{frecuencia}', X={X}, Z={Z}")
+
+    # Aplicar reglas de negocio
+    if frecuencia and frecuencia != "nunca":
+        # Calcular plazas mínimas
+        plazas_calc = X + Z + 1
+        print(f"DEBUG (Aplicar Filtros Pasajeros) ► Calculado plazas_min = {plazas_calc}")
+        
+        # Regla Priorizar Ancho (si Z>=2 para ocasional o frecuente)
+        if Z >= 2:
+            priorizar_a = True
+            print("DEBUG (Aplicar Filtros Pasajeros) ► Indicador priorizar_ancho = True")
+            
+        # Regla Penalizar Puertas Bajas (solo si frecuente y X>=1)
+        if frecuencia == "frecuente" and X >= 1:
+            penalizar_p = True
+            print("DEBUG (Aplicar Filtros Pasajeros) ► Indicador penalizar_puertas_bajas = True")
+
+    # Actualizar el objeto filtros_inferidos SOLO con plazas_min
+    update_filtros_dict = {"plazas_min": plazas_calc}
+    filtros_actualizados = filtros_actuales.model_copy(update=update_filtros_dict)
+    print(f"DEBUG (Aplicar Filtros Pasajeros) ► Filtros actualizados: {filtros_actualizados}")
+
+    # Devolver el estado completo actualizado
+    return {
+        **state,
+        "filtros_inferidos": filtros_actualizados, # Guardar filtros con plazas_min
+        "penalizar_puertas_bajas": penalizar_p,  # Guardar flag en estado principal
+        "priorizar_ancho": priorizar_a           # Guardar flag en estado principal
+    }
+
+# --- Fin Nueva Etapa Pasajeros ---
 # --- Fin Etapa 1 ---
 
 # --- Etapa 2: Inferencia y Validación de Filtros Técnicos ---
@@ -322,7 +532,7 @@ def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     pregunta_para_siguiente_nodo = None
     if mensaje_validacion and mensaje_validacion.strip():
         pregunta_para_siguiente_nodo = mensaje_validacion.strip()
-        print(f"DEBUG (Filtros) ► Guardando pregunta pendiente: {pregunta_para_siguiente_nodo}")
+        #print(f"DEBUG (Filtros) ► Guardando pregunta pendiente: {pregunta_para_siguiente_nodo}")
     else:
         print(f"DEBUG (Filtros) ► No hay pregunta de validación pendiente.")
         
@@ -487,16 +697,6 @@ def validar_economia_node(state: EstadoAnalisisPerfil) -> dict:
 
 # nodes.py (Continuación... añadiendo Etapa 4)
 
-# --- Importaciones Adicionales Necesarias ---
-# Asegúrate de importar estas funciones de tus utilidades
-from utils.rag_carroceria import get_recommended_carrocerias
-from utils.weights import compute_raw_weights, normalize_weights
-from utils.formatters import formatear_preferencias_en_tabla
-# También los modelos/enums si los necesitas directamente
-from graph.perfil.state import EstadoAnalisisPerfil, PerfilUsuario, FiltrosInferidos, EconomiaUsuario
-from utils.enums import NivelAventura # Ejemplo, si necesitas el Enum
-
-
 
 # --- Etapa 4: Finalización y Presentación ---
 
@@ -504,14 +704,15 @@ from utils.enums import NivelAventura # Ejemplo, si necesitas el Enum
 
 def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Realiza los cálculos finales (RAG carrocerías, pesos) y formatea 
-    la tabla resumen final una vez toda la información está completa.
+    Realiza los cálculos finales (RAG carrocerías, pesos) y formatea la tabla resumen final una vez toda la información está completa.
     """
     print("--- Ejecutando Nodo: finalizar_y_presentar_node ---")
     historial = state.get("messages", [])
     preferencias = state.get("preferencias_usuario")
     filtros = state.get("filtros_inferidos")
     economia = state.get("economia")
+    priorizar_ancho_flag = state.get("priorizar_ancho", False) # Obtener del estado, con un default
+    pesos_calculados = None 
 
     # Verificar pre-condiciones
     if not preferencias or not filtros or not economia:
@@ -523,8 +724,7 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     prefs_dict = preferencias.model_dump(mode='json')
     # filtros_dict = filtros.model_dump(mode='json') # OJO: Usaremos filtros_actualizados más adelante
     econ_dict = economia.model_dump(mode='json')
-    
-    # --- INICIO NUEVA LÓGICA MODO 1 ---
+
     # Crear la copia aquí, ANTES del if/else, para que siempre exista
     filtros_actualizados = filtros.model_copy(deep=True) # <--- Inicialización Clave
     
@@ -563,21 +763,20 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
             
     else:
          print("DEBUG (Finalizar) ► Modo no es 1, omitiendo cálculo de recomendación.")
-    # --- FIN NUEVA LÓGICA MODO 1 ---
-    
+     
     # Convertir a dict los filtros actualizados si RAG los necesita así
     filtros_dict_actualizado = filtros_actualizados.model_dump(mode='json')
 
     # 1. Llamada RAG (usando filtros_actualizados o su dict)
-    if not filtros_actualizados.tipo_carroceria: 
-        print("DEBUG (Finalizar) ► Llamando a RAG...")
-        try:
+    # if not filtros_actualizados.tipo_carroceria: 
+    #     print("DEBUG (Finalizar) ► Llamando a RAG...")
+    try:
             # Pasar prefs_dict y el dict de filtros actualizado
-            tipos_carroceria_rec = get_recommended_carrocerias(prefs_dict, filtros_dict_actualizado, k=4) 
+            tipos_carroceria_rec = get_recommended_carrocerias(prefs_dict, filtros_dict_actualizado, k=3) 
             print(f"DEBUG (Finalizar) ► RAG recomendó: {tipos_carroceria_rec}")
             # Actualizar el objeto filtros_actualizados
             filtros_actualizados.tipo_carroceria = tipos_carroceria_rec 
-        except Exception as e_rag:
+    except Exception as e_rag:
             # ... (manejo error RAG) ...
             filtros_actualizados.tipo_carroceria = ["Error RAG"] 
     # ...
@@ -593,16 +792,21 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
         singular_val = filtros_actualizados.singular_min if filtros_actualizados.singular_min is not None else 1.0
         aventura_val = preferencias.aventura 
         raw = compute_raw_weights(
+            preferencias=preferencias, # <--- Pasar preferencias
             estetica=estetica_val,
             premium=premium_val,
             singular=singular_val,
-            aventura_level=aventura_val 
+            priorizar_ancho=priorizar_ancho_flag  # <--- AÑADE ESTA LÍNEA
+            # aventura_level ya no se pasa, se obtiene de preferencias dentro de la función
         )
         pesos_calculados = normalize_weights(raw)
-        print(f"DEBUG (Finalizar) ► Pesos calculados: {pesos_calculados}")
+        print(f"DEBUG (Finalizar) ► Pesos calculados: {pesos_calculados}") 
     except Exception as e_weights:
-        # ... (manejo error pesos) ...
-        pass
+        print(f"ERROR (Finalizar) ► Fallo calculando pesos: {e_weights}")
+        # --- AÑADIR ESTO PARA VER EL ERROR COMPLETO ---
+        print("--- TRACEBACK ERROR PESOS ---")
+        traceback.print_exc()
+        print("-----------------------------")
 
     # 3. Formateo de la Tabla (usando filtros_actualizados)
     print("DEBUG (Finalizar) ► Formateando tabla final...")
@@ -614,6 +818,10 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
             filtros=filtros_actualizados, # <-- Pasar el objeto actualizado
             economia=economia
         )
+        # --- ¡AÑADIR ESTE PRINT AQUÍ! ---
+        print("\n--- TABLA RESUMEN GENERADA (DEBUG) ---")
+        print(tabla_final_md)
+        print("--------------------------------------\n")
     except Exception as e_format:
         # ... (manejo error formato) ...
         pass
@@ -629,10 +837,126 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
 
     # 5. Devolver el estado final completo
     return {
-        **state,
-        "filtros_inferidos": filtros_actualizados, # <-- Devolver el objeto actualizado
-        "pesos": pesos_calculados, 
-        "messages": historial_final 
-    }
+    **state,
+    "filtros_inferidos": filtros_actualizados, 
+    "pesos": pesos_calculados, 
+    "messages": historial_final,
+    "coches_recomendados": None # Inicializar/resetear por si acaso
+}
 
 # --- Fin Etapa 4 ---
+
+
+# --- NUEVO NODO BÚSQUEDA FINAL ---
+def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Usa los filtros y pesos finales del estado para buscar coches en BQ
+    y presenta los resultados.
+    """
+    print("--- Ejecutando Nodo: buscar_coches_finales_node ---")
+    historial = state.get("messages", [])
+    filtros_finales = state.get("filtros_inferidos")
+    pesos_finales = state.get("pesos")
+    economia = state.get("economia") # Necesario para construir dict de filtros BQ
+    # --- OBTENER FLAGS DEL ESTADO PRINCIPAL ---
+    penalizar_puertas_flag = state.get("penalizar_puertas_bajas", False) # Obtener flag, default False
+
+    coches_encontrados = [] # Valor por defecto
+    mensaje_final = "No pude realizar la búsqueda en este momento." # Msg error default
+
+    if filtros_finales and pesos_finales:
+        # Preparar el diccionario de filtros para la función BQ
+        # (Incluyendo campos económicos relevantes si modo es 2)
+        filtros_para_bq = {}
+        filtros_para_bq.update(filtros_finales.model_dump(mode='json', exclude_none=True))
+        if economia and economia.modo == 2:
+            filtros_para_bq['modo'] = 2
+            filtros_para_bq['submodo'] = economia.submodo
+            if economia.submodo == 1:
+                 filtros_para_bq['pago_contado'] = economia.pago_contado
+            elif economia.submodo == 2:
+                 filtros_para_bq['cuota_max'] = economia.cuota_max
+    # --- AÑADIR EL FLAG DE PENALIZACIÓN DE PUERTAS ---
+        filtros_para_bq['penalizar_puertas_bajas'] = penalizar_puertas_flag
+
+        # DEFINIR cuántos resultados pedir (ej: 5 o 7)
+        k_coches = 5 
+        print(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
+        print(f"DEBUG (Buscar BQ) ► Filtros para BQ: {filtros_para_bq}") # Log útil
+        print(f"DEBUG (Buscar BQ) ► Pesos para BQ: {pesos_finales}") # Log útil
+        try:
+            coches_encontrados = buscar_coches_bq(
+                filtros=filtros_para_bq, 
+                pesos=pesos_finales, 
+                k=k_coches
+            )
+
+            # --- MODIFICACIÓN PARA FORMATEAR COMO TABLA MARKDOWN ---
+            if coches_encontrados:
+                mensaje_final = f"¡Listo! Basado en todo lo que hablamos, aquí tienes {len(coches_encontrados)} coche(s) que podrían interesarte:\n\n"
+                
+                try:
+                    df_coches = pd.DataFrame(coches_encontrados)
+                    
+                    # Columnas que quieres mostrar y en qué orden
+                    columnas_deseadas = [
+                        'nombre', 'precio_compra_contado', 'tipo_carroceria', 'tipo_mecanica', 'plazas', 'puertas',  
+                        'traccion', 'reductoras','score_total',
+                    ]
+                    
+                    # Seleccionar solo las columnas que existen en el DataFrame y están en la lista deseada
+                    columnas_a_mostrar = [col for col in columnas_deseadas if col in df_coches.columns]
+                    
+                    if columnas_a_mostrar:
+                        # Formatear columnas numéricas si es necesario (ej: precio, score)
+                        if 'precio_compra_contado' in df_coches.columns:
+                            df_coches['precio_compra_contado'] = df_coches['precio_compra_contado'].apply(
+                                lambda x: f"{x:,.0f}€".replace(",",".") if isinstance(x, (int, float)) else "N/A"
+                            )
+                        if 'score_total' in df_coches.columns:
+                             df_coches['score_total'] = df_coches['score_total'].apply(
+                                 lambda x: f"{x:.3f}" if isinstance(x, float) else x # Score con 3 decimales
+                             )
+                        
+                        # Convertir a Markdown
+                        tabla_coches_md = df_coches[columnas_a_mostrar].to_markdown(index=False)
+                        mensaje_final += tabla_coches_md
+                    else:
+                        mensaje_final += "No se pudieron formatear los detalles de los coches."
+                        
+                except Exception as e_format_coches:
+                    print(f"ERROR (Buscar BQ) ► Falló el formateo de la tabla de coches: {e_format_coches}")
+                    mensaje_final += "Hubo un problema al mostrar los detalles de los coches. Aquí están en formato simple:\n"
+                    # Fallback al formato simple si falla la tabla
+                    for i, coche in enumerate(coches_encontrados):
+                        nombre = coche.get('nombre', 'N/D')
+                        precio = coche.get('precio_compra_contado')
+                        precio_str = f"{precio:,.0f}€".replace(",",".") if isinstance(precio, (int, float)) else "N/A"
+                        mensaje_final += f"{i+1}. {nombre} - {precio_str}\n"
+
+                mensaje_final += "\n\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles o hacemos otra búsqueda?"
+            else:
+                mensaje_final = "He aplicado todos tus filtros, pero no encontré coches que coincidan exactamente en este momento. ¿Quizás quieras ajustar algún criterio?"
+            # --- FIN MODIFICACIÓN ---
+
+        except Exception as e_bq:
+            print(f"ERROR (Buscar BQ) ► Falló la ejecución de buscar_coches_bq: {e_bq}")
+            mensaje_final = f"Lo siento, tuve un problema al buscar en la base de datos de coches: {e_bq}"
+    else:
+        print("ERROR (Buscar BQ) ► Faltan filtros o pesos finales en el estado.")
+        mensaje_final = "Lo siento, falta información interna para realizar la búsqueda final."
+
+    # Crear y añadir el mensaje con los resultados o el error
+    final_ai_msg = AIMessage(content=mensaje_final)
+    # Evitar duplicados
+    if historial and historial[-1].content == final_ai_msg.content:
+        historial_final = historial
+    else:
+        historial_final = historial + [final_ai_msg]
+
+    # Devolver estado final con coches y mensaje
+    return {
+        **state,
+        "coches_recomendados": coches_encontrados, 
+        "messages": historial_final
+    }

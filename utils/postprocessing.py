@@ -13,7 +13,6 @@ from .conversion import is_yes
 # --- Helper interno para simplificar comprobaciones ---
 def _es_nulo_o_vacio(valor):
     """Comprueba si el valor es None, string vacío o lista vacía."""
-    # Comprobamos también si es float 0.0 como en la función original? Quizás no sea necesario.
     return valor is None or valor == "" or valor == []
 
 # --- NUEVA Función de Post-procesamiento para PerfilUsuario ---
@@ -124,11 +123,11 @@ def aplicar_postprocesamiento_filtros(
     resultado_is_yes = is_yes(valora_estetica_val)
     print(f"DEBUG PostProc Filtros: Resultado de is_yes(valora_estetica_val) = {resultado_is_yes}")
     
-    # Aplicamos la regla siempre para asegurar el valor correcto (1.0 o 5.0)
+    # Aplicamos la regla siempre para asegurar el valor correcto :
     if is_yes(valora_estetica_val):
-        if filtros_actualizado.estetica_min != 5.0: # Aplicar solo si es diferente
+        if filtros_actualizado.estetica_min != 6.0: # Aplicar solo si es diferente
             print("DEBUG (PostProc Filtros) ► Aplicando regla: valora_estetica='sí' -> estetica_min=5.0")
-            filtros_actualizado.estetica_min = 5.0
+            filtros_actualizado.estetica_min = 6.0
             cambios_realizados = True
     else: # Cubre 'no' y None
         if filtros_actualizado.estetica_min != 1.0:
@@ -144,10 +143,10 @@ def aplicar_postprocesamiento_filtros(
     
     # Aplicamos la regla siempre
     if is_yes(apasionado_motor_val):
-        if filtros_actualizado.premium_min != 5.0 or filtros_actualizado.singular_min != 5.0:
+        if filtros_actualizado.premium_min != 6.0 or filtros_actualizado.singular_min != 5.0:
             print("DEBUG (PostProc Filtros) ► Aplicando regla: apasionado_motor='sí' -> premium/singular_min=5.0")
-            filtros_actualizado.premium_min = 5.0
-            filtros_actualizado.singular_min = 5.0
+            filtros_actualizado.premium_min = 6.0
+            filtros_actualizado.singular_min = 6.0
             cambios_realizados = True
     else: # Cubre 'no' y None
         if filtros_actualizado.premium_min != 1.0 or filtros_actualizado.singular_min != 1.0:

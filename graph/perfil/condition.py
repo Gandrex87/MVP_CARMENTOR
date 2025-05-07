@@ -1,6 +1,20 @@
 # En graph/condition.py
 from .state import EstadoAnalisisPerfil # o donde esté tu TypedDict
-from utils.validation import check_perfil_usuario_completeness, check_filtros_completos, check_economia_completa
+from utils.validation import check_perfil_usuario_completeness, check_filtros_completos, check_economia_completa, check_pasajeros_completo
+from typing import Literal
+
+def ruta_decision_pasajeros(state: EstadoAnalisisPerfil) -> Literal["aplicar_filtros", "necesita_pregunta_pasajero"]:
+    """Decide si la info de pasajeros está completa."""
+    print("--- Evaluando Condición: ruta_decision_pasajeros ---")
+    info = state.get("info_pasajeros")
+    if check_pasajeros_completo(info):
+        print("DEBUG (Condición Pasajeros) ► COMPLETO. Aplicando filtros derivados.")
+        return "aplicar_filtros"
+    else:
+        print("DEBUG (Condición Pasajeros) ► INCOMPLETO. Se necesita pregunta.")
+        return "necesita_pregunta_pasajero"
+
+
 def ruta_post_preferencias(state: EstadoAnalisisPerfil) -> str:
     """Decide la ruta después de validar las preferencias."""
 
@@ -39,7 +53,7 @@ def ruta_decision_perfil(state: EstadoAnalisisPerfil) -> str:
     if check_perfil_usuario_completeness(preferencias):
         print("DEBUG (Condición Perfil) ► Perfil COMPLETO. Avanzando a filtros.")
         # String que mapearemos a inferir_filtros_node
-        return "pasar_a_filtros" 
+        return "pasar_a_pasajeros" # <-- Nueva clave de salida
     else:
         print("DEBUG (Condición Perfil) ► Perfil INCOMPLETO. Se necesita pregunta.")
         # String que mapearemos al nuevo nodo preguntar_preferencias_node
@@ -72,3 +86,54 @@ def ruta_decision_economia(state: EstadoAnalisisPerfil) -> str:
         print("DEBUG (Condición Economía) ► Economía INCOMPLETA. Se necesita pregunta.")
         # Clave para ir al nuevo nodo que pregunta
         return "necesita_pregunta_economia"
+
+
+# --- Punto de Entrada Condicional CORREGIDO ---
+# --- NUEVO NODO ROUTER (Muy simple) ---
+def route_based_on_state_node(state: EstadoAnalisisPerfil) -> dict:
+    """Nodo intermedio que no hace nada, solo permite la bifurcación inicial."""
+    print("--- Ejecutando Nodo: route_based_on_state_node ---")
+    # No modifica el estado, solo lo pasa
+    return {**state}
+
+
+def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
+    """Decide a qué etapa saltar al inicio de una invocación."""
+    print("\n--- DEBUG: Evaluating Routing Decision ---") 
+    preferencias = state.get("preferencias_usuario")
+    info_pasajeros = state.get("info_pasajeros")
+    filtros = state.get("filtros_inferidos")
+    economia = state.get("economia")
+    pesos = state.get("pesos")
+    coches = state.get("coches_recomendados")
+    
+    # Prints de depuración (opcional mantenerlos)
+    print(f"DEBUG Router: Prefs OK? {check_perfil_usuario_completeness(preferencias)}")
+    print(f"DEBUG Router: Pasajeros OK? {check_pasajeros_completo(info_pasajeros)}")
+    print(f"DEBUG Router: Filtros OK? {check_filtros_completos(filtros)}")
+    print(f"DEBUG Router: Economía OK? {check_economia_completa(economia)}")
+    print(f"DEBUG Router: Pesos Calculados? {pesos is not None}")
+    print(f"DEBUG Router: Coches Buscados? {coches is not None}")
+
+    # Lógica de enrutamiento en orden
+    if not check_perfil_usuario_completeness(preferencias):
+        print("DEBUG Router: Decisión -> recopilar_preferencias")
+        return "recopilar_preferencias" 
+    elif not check_pasajeros_completo(info_pasajeros):
+        print("DEBUG Router: Decisión -> recopilar_info_pasajeros")
+        return "recopilar_info_pasajeros"
+    elif not check_filtros_completos(filtros):
+        print("DEBUG Router: Decisión -> inferir_filtros")
+        return "inferir_filtros"
+    elif not check_economia_completa(economia):
+         print("DEBUG Router: Decisión -> recopilar_economia")
+         return "recopilar_economia" 
+    elif pesos is None: 
+        print("DEBUG Router: Decisión -> finalizar_y_presentar")
+        return "finalizar_y_presentar"
+    elif coches is None: 
+        print("DEBUG Router: Decisión -> buscar_coches_finales")
+        return "buscar_coches_finales"
+    else:
+        print("DEBUG Router: Decisión -> Conversación Completa. Reiniciando (recopilar_preferencias).")
+        return "recopilar_preferencias" # Reiniciar

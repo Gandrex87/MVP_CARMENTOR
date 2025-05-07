@@ -16,6 +16,7 @@ langchain-openai
 # Data Handling
 python-dotenv
 pandas
+tabulate
 Pillow
 matplotlib
 tavily-python

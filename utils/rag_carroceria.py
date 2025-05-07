@@ -9,7 +9,7 @@ from utils.conversion import is_yes
 
 # Mapa de sinónimos por nivel de aventura
 AVENTURA_SYNONYMS = {
-    "ninguna":   ["ciudad", "urbano", "asfalto", "niños", "familia"],
+    "ninguna":   ["ciudad", "urbano", "asfalto", "bajo consumo", "carretera"],
     "ocasional": ["campo", "ligero fuera de asfalto", "excursiones", "familia", 'uso_profesional'],
     "extrema":   ["off-road", "terrenos difíciles", "extrema","tracción 4x4"]
 }
@@ -71,7 +71,7 @@ def get_recommended_carrocerias(preferencias: dict, filtros: dict, k: int = 4) -
         nivel = str(raw_av or "").strip().lower()
 
     if nivel in AVENTURA_SYNONYMS:
-        partes.append(f"aventura {nivel}")
+        #partes.append(f"{nivel}")
         partes.extend(AVENTURA_SYNONYMS[nivel])
     #DEBUG
     print(f"Query partes: {partes}")

@@ -37,3 +37,5 @@ system_prompt_filtros_template = cargar_prompt("system_prompt_filtros_template.t
 system_prompt_perfil= cargar_prompt("system_prompt_perfil.txt")
 
 prompt_economia_structured_sys_msg = cargar_prompt("prompt_economia_structured.txt")
+
+system_prompt_pasajeros = cargar_prompt("system_prompt_pasajeros.txt")
