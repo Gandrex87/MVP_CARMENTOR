@@ -24,6 +24,24 @@ class PerfilUsuario(BaseModel):
     class ConfigDict:
         use_enum_values = True
 
+# --- NUEVO MODELO PARA INFO DE PASAJEROS ---
+class InfoPasajeros(BaseModel):
+    frecuencia: Optional[Literal["nunca", "ocasional", "frecuente"]] = Field(
+        default=None,
+        description="Frecuencia con la que viajan otros pasajeros."
+    )
+    num_ninos_silla: Optional[int] = Field(
+        default=None, 
+        description="Número de niños que necesitan silla de seguridad (X)."
+    )
+    num_otros_pasajeros: Optional[int] = Field(
+        default=None, 
+        description="Número de adultos u otros pasajeros sin silla (Z)."
+    )
+    # Podrías añadir un campo de completitud si quieres validarlo aquí
+    # class ConfigDict:
+    #     validate_assignment = True # Para validar al asignar si añades @validator
+
 class FiltrosInferidos(BaseModel):
     #batalla_min: Optional[float] = Field(default=None, description="Valor mínimo de batalla recomendado (rango: 1500.0 a 4490.0 mm). Relevante si el usuario mide más de 189 cm.")
     #indice_altura_interior_min: Optional[float] = Field(default=None, description="Valor mínimo de índice de altura interior recomendado (rango: 0.90 a 3.020). Relevante si el usuario mide más de 189 cm.")
@@ -44,7 +62,8 @@ class FiltrosInferidos(BaseModel):
         default=None,
         description="Cuota mensual máxima calculada si se aconseja financiar (Modo 1)."
     )
-
+    plazas_min: Optional[int] = Field(default=None, description="Número mínimo de plazas recomendadas (conductor + pasajeros).")
+   
 #cuanta gana y aplicamos un % 60 /por porcentaje MODO 1 o 2 iNGRESO 
 class EconomiaUsuario(BaseModel):
     modo:         Optional[Literal[1, 2]] = Field(default=None) # Añadir Field(default=None) por si acaso
@@ -63,7 +82,7 @@ class ResultadoEconomia(BaseModel):
     mensaje_validacion: str
     
 
-# --- Definición MODIFICADA ---
+
 class ResultadoSoloPerfil(BaseModel):
     """Salida esperada del LLM enfocado solo en el perfil del usuario."""
     preferencias_usuario: PerfilUsuario = Field(
@@ -75,8 +94,17 @@ class ResultadoSoloPerfil(BaseModel):
     contenido_mensaje: str = Field(
         description="El texto real del mensaje: la pregunta específica, la confirmación, o el detalle del error."
     )
-# --- Fin Modificación ---
 
+# --- NUEVO MODELO DE SALIDA PARA LLM DE PASAJEROS ---
+class ResultadoPasajeros(BaseModel):
+    """Salida esperada del LLM enfocado en recopilar info de pasajeros."""
+    info_pasajeros: InfoPasajeros = Field(
+        description="Objeto con la información de pasajeros actualizada o inferida."
+    )
+    tipo_mensaje: Literal["PREGUNTA", "CONFIRMACION", "ERROR"] = Field(...) # Hacer obligatorio
+    contenido_mensaje: str = Field(...) # Hacer obligatorio
+
+    
 class ResultadoSoloFiltros(BaseModel):
     """Salida esperada del LLM enfocado solo en inferir filtros técnicos."""
     filtros_inferidos: FiltrosInferidos
@@ -93,4 +121,8 @@ class EstadoAnalisisPerfil(TypedDict):
     pesos:              Optional[dict]  # soft‑weights normalizados
     pregunta_pendiente: Optional[str] # Para guardar la pregunta entre nodos
     coches_recomendados: Optional[List[dict[str, any]]] # Lista de diccionarios de coches
+    info_pasajeros: Optional[InfoPasajeros] # Añadimos el nuevo objeto al estado principal
+    penalizar_puertas_bajas: Optional[bool] 
+    priorizar_ancho: Optional[bool]
+
 

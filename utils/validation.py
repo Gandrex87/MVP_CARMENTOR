@@ -1,7 +1,7 @@
 # En utils/validation.py (o donde prefieras)
 from typing import Optional
 from pydantic import ValidationError
-from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario # Ajusta ruta
+from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario, InfoPasajeros
 
 # --- Función de Validación de Perfil (Definida anteriormente) ---
 def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
@@ -24,7 +24,7 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     print("DEBUG (Validation Perfil) ► Todos los campos obligatorios del perfil están presentes.")
     return True
 
-# --- NUEVA Función de Validación de Filtros ---
+# --- Función de Validación de Filtros ---
 def check_filtros_completos(filtros: Optional[FiltrosInferidos]) -> bool:
     """
     Verifica si un objeto FiltrosInferidos tiene los campos esenciales 
@@ -58,11 +58,8 @@ def check_filtros_completos(filtros: Optional[FiltrosInferidos]) -> bool:
     print("DEBUG (Validation Filtros) ► Todos los campos obligatorios de filtros ('tipo_mecanica') están presentes y válidos.")
     return True
 
-# En utils/validation.py
+# --- función de Validación de Economía ---
 
-# --- NUEVA Función de Validación de Economía ---
-
-# --- VERSIÓN REESCRITA de check_economia_completa ---
 def check_economia_completa(econ: Optional[EconomiaUsuario]) -> bool:
     """
     Verifica si un objeto EconomiaUsuario está lógicamente completo
@@ -130,3 +127,49 @@ def check_economia_completa(econ: Optional[EconomiaUsuario]) -> bool:
 
     # Fallback por si alguna lógica no se cubrió (no debería llegar aquí)
     return False 
+
+
+# --- Función de Validación de Pasajeros ---
+def check_pasajeros_completo(info: Optional[InfoPasajeros]) -> bool:
+    """
+    Verifica si la información sobre pasajeros está completa.
+    - Si frecuencia es 'nunca', se considera completo.
+    - Si frecuencia es 'ocasional' o 'frecuente', requiere tener valores 
+      (incluso 0) para num_ninos_silla y num_otros_pasajeros.
+    - Si falta frecuencia, no está completo.
+    """
+    print("--- DEBUG CHECK PASAJEROS ---")
+    print(f"Input info pasajeros: {info}")
+    
+    if info is None:
+        print("DEBUG (Validation Pasajeros) ► Objeto InfoPasajeros es None.")
+        return False # No hay objeto, no está completo
+
+    frecuencia = info.frecuencia
+    num_ninos_silla = info.num_ninos_silla
+    num_otros_pasajeros = info.num_otros_pasajeros
+
+    if frecuencia is None:
+        print("DEBUG (Validation Pasajeros) ► info.frecuencia es None.")
+        return False # Si no sabemos la frecuencia, no está completo
+
+    if frecuencia == "nunca":
+        # Si nunca lleva pasajeros, no necesitamos saber cuántos niños/otros.
+        print("DEBUG (Validation Pasajeros) ► Frecuencia es 'nunca'. Considerado COMPLETO.")
+        return True 
+    elif frecuencia in ["ocasional", "frecuente"]:
+        # Si lleva pasajeros ocasional o frecuentemente, necesitamos saber cuántos.
+        # Comprobamos que ambos campos numéricos NO sean None.
+        if num_ninos_silla is not None and num_otros_pasajeros is not None:
+            print(f"DEBUG (Validation Pasajeros) ► Frecuencia='{frecuencia}'. Niños silla y otros pasajeros tienen valor. Considerado COMPLETO.")
+            return True
+        else:
+            missing = []
+            if num_ninos_silla is None: missing.append("num_ninos_silla")
+            if num_otros_pasajeros is None: missing.append("num_otros_pasajeros")
+            print(f"DEBUG (Validation Pasajeros) ► Frecuencia='{frecuencia}'. Faltan datos: {', '.join(missing)}. Considerado INCOMPLETO.")
+            return False
+    else:
+        # Caso inesperado para frecuencia (no debería ocurrir con Literal)
+        print(f"WARN (Validation Pasajeros) ► Valor de frecuencia inesperado: '{frecuencia}'. Considerado INCOMPLETO.")
+        return False

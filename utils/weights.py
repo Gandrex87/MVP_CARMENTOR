@@ -26,7 +26,8 @@ def compute_raw_weights(
     preferencias: Optional[PerfilUsuario], # <-- Cambiar Type Hint a PerfilUsuario
     estetica: Optional[float], 
     premium: Optional[float], 
-    singular: Optional[float]
+    singular: Optional[float],
+    priorizar_ancho: Optional[bool] # <-- NUEVO ARGUMENTO BOOLEANO
     ) -> Dict[str, float]: 
     """
     Calcula pesos crudos. Accede a preferencias usando notación de punto.
@@ -66,7 +67,18 @@ def compute_raw_weights(
         print("DEBUG (Weights) ► Usuario NO alto. Asignando pesos bajos a batalla/índice.")
         raw["batalla"] = 0.5 # Ejemplo
         raw["indice_altura_interior"] = 0.5 # Ejemplo
-    
+    # --- NUEVA LÓGICA PARA PESO DE ANCHO ---
+    # 4️⃣ Añadir peso para 'ancho' basado en 'priorizar_ancho'
+    if priorizar_ancho: # Si el flag que viene del estado es True
+        # Asignar un peso crudo ALTO a la anchura
+        # ¡Ajusta este valor! Debe ser significativo comparado con otros (ej: aventura, estetica)
+        raw["ancho"] = 6.0  # Ejemplo de peso alto
+        print(f"DEBUG (Weights) ► Priorizar Ancho=True. Asignando peso crudo alto a ancho: {raw['ancho']}")
+    else:
+        # Asignar un peso crudo BAJO (o cero) si no se prioriza
+        raw["ancho"] = 0.5  # Ejemplo de peso muy bajo pero no cero
+        print(f"DEBUG (Weights) ► Priorizar Ancho=False/None. Asignando peso crudo bajo a ancho: {raw['ancho']}")
+    # --- FIN NUEVA LÓGICA ---
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}
     
     print(f"DEBUG (Weights) ► Pesos Crudos FINALES: {raw_float}")

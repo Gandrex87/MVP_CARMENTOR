@@ -1,6 +1,6 @@
 # instanciación del modelo, init_chat_model, y configuración de structured_llm.
 from langchain.chat_models import init_chat_model
-from graph.perfil.state import ResultadoSoloPerfil, ResultadoSoloFiltros, ResultadoEconomia # Ajusta la ruta de importación
+from graph.perfil.state import ResultadoSoloPerfil, ResultadoSoloFiltros, ResultadoEconomia, ResultadoPasajeros# Ajusta la ruta de importación
 from dotenv import load_dotenv
 
 
@@ -31,8 +31,12 @@ llm_solo_filtros = llm.with_structured_output(ResultadoSoloFiltros)
 llm_potente = init_chat_model("openai:gpt-4o-mini", temperature=0.1) # O el ID correcto para gpt-4o
 llm_economia = llm_potente.with_structured_output(ResultadoEconomia)
 
-# Usará un prompt específico para economía y devolverá EconomiaUsuario + mensaje_validacion
-#llm_economia = llm.with_structured_output(ResultadoEconomia)
+# --- NUEVA CONFIGURACIÓN LLM PARA PASAJEROS ---
+# 4. LLM para la Etapa de Información de Pasajeros
+#    Usará el prompt system_prompt_pasajeros.txt y devolverá ResultadoPasajeros
+llm_pasajeros = llm.with_structured_output(ResultadoPasajeros)
+# --- FIN NUEVA CONFIGURACIÓN ---
+
 
 
 

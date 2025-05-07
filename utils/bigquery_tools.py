@@ -4,234 +4,212 @@
 # modo_adquisicion_recomendado = "Financiado" y un valor en cuota_max_calculada.
 # En utils/bigquery_search.py
 
-# import logging
-# logging.basicConfig(level=logging.DEBUG) 
-from typing import Optional, List, Dict, Any 
+
+import logging
+import traceback
+from typing import Optional, List, Dict, Any
 from google.cloud import bigquery
-from graph.perfil.state import FiltrosInferidos 
 
-
+# Definiciones de tipo (pueden estar al inicio del módulo)
 FiltrosDict = Dict[str, Any] 
 PesosDict = Dict[str, float]
 
-def buscar_coches_bq(
-    filtros: Optional[FiltrosDict], 
-    pesos: Optional[PesosDict],   # Recibe pesos NORMALIZADOS
-    k: int = 5
+# Constantes (asegúrate de que estén definidas y sean correctas)
+MIN_MAX_RANGES = {
+    "estetica": (1.0, 10.0),
+    "premium": (1.0, 10.0),
+    "singular": (1.0, 10.0),
+    "altura_libre_suelo": (79.0, 314.0), 
+    "batalla": (1650.0, 4035.0),        
+    "indice_altura_interior": (0.9, 2.7), 
+    "ancho": (1410.0, 2164.0)          
+}
+PENALTY_PUERTAS_BAJAS = -0.15 
+
+def buscar_coches_bq( # Renombrada para claridad
+    filtros: Optional[FiltrosDict],
+    pesos: Optional[PesosDict], 
+    k: int = 7
 ) -> list[dict]:
-    """
-    Busca coches en BigQuery aplicando filtros y ordenando por score ponderado
-    con Min-Max Scaling aplicado a las características numéricas en SQL.
-    """
-    if not filtros or not pesos:
-        #logging.warning("Faltan filtros o pesos para la búsqueda en BigQuery.")
-        return []
-        
-    # Asegurar valores por defecto 0.0 para pesos si no vienen
-    # Se asume que el dict 'pesos' contiene todas las claves necesarias después de compute/normalize
-    pesos_completos = {
-        "estetica": pesos.get("estetica", 0.0),
-        "premium": pesos.get("premium", 0.0),
-        "singular": pesos.get("singular", 0.0),
-        "altura_libre_suelo": pesos.get("altura_libre_suelo", 0.0),
-        "batalla": pesos.get("batalla", 0.0), # <-- Nuevo Peso
-        "indice_altura_interior": pesos.get("indice_altura_interior", 0.0), # <-- Nuevo Peso
-        "traccion": pesos.get("traccion", 0.0),
-        "reductoras": pesos.get("reductoras", 0.0),
-    }
+    
+    if not filtros: filtros = {}
+    if not pesos: pesos = {} # Necesario para .get()
 
     try:
-        client = bigquery.Client() 
+        client = bigquery.Client()
     except Exception as e_auth:
-       # logging.error(f"Error al inicializar cliente BigQuery: {e_auth}")
+        logging.error(f"Error al inicializar cliente BigQuery: {e_auth}")
         return []
 
-    # --- Construcción de la Query ---
-    sql = """
-    SELECT
-      -- Columnas que quieres devolver ...
-      nombre, ID, marca, modelo, cambio_automatico, tipo_mecanica, 
-      tipo_carroceria, indice_altura_interior, batalla, estetica, premium, 
-      singular, altura_libre_suelo, traccion, reductoras, precio_compra_contado,
-      
-      -- --- INICIO CÁLCULO SCORE CON MIN-MAX SCALING ---
-      (
-        -- Estética (Rango Asumido: 1-10)
-        COALESCE(SAFE_DIVIDE(COALESCE(estetica, 1.0) - 1.0, 10.0 - 1.0), 0) * @peso_estetica 
-        
-        -- Premium (Rango Asumido: 1-10)
-        + COALESCE(SAFE_DIVIDE(COALESCE(premium, 1.0) - 1.0, 10.0 - 1.0), 0) * @peso_premium
-        
-        -- Singular (Rango Asumido: 1-10)
-        + COALESCE(SAFE_DIVIDE(COALESCE(singular, 1.0) - 1.0, 10.0 - 1.0), 0) * @peso_singular
-        
-        -- Altura Libre Suelo (Ej: 67.0 - 438.0) <-- ¡USA TUS VALORES!
-        + COALESCE(SAFE_DIVIDE(COALESCE(altura_libre_suelo, 67.0) - 67.0, 438.0 - 67.0), 0) * @peso_altura
-        
-        -- Batalla (Ej: 1650.0 -4078) <-- ¡USA TUS VALORES!
-        + COALESCE(SAFE_DIVIDE(COALESCE(batalla, 1650.0) - 1650.0, 4078.0 - 1650.0), 0) * @peso_batalla 
-        
-        -- Índice Altura Interior (Ej: 0.9 - 2.7) <-- ¡PENDIENTE CAMBIAR ESTE VALOR,VALIDAR TEO!
-        + COALESCE(SAFE_DIVIDE(COALESCE(indice_altura_interior, 0.9) - 0.9, 2.7 - 0.9), 0) * @peso_indice_altura
-        
-        -- Tracción (Mapeo 0-1, se mantiene igual)
-        + CASE WHEN traccion = 'ALL' THEN 1.0 WHEN traccion = 'RWD' THEN 0.5 ELSE 0.0 END * @peso_traccion
-        
-        -- Reductoras (Mapeo 0-1, se mantiene igual)
-        + (CASE WHEN COALESCE(reductoras, FALSE) THEN 1.0 ELSE 0.0 END) * @peso_reductoras
-        
-      ) AS score_total
-      -- --- FIN CÁLCULO SCORE ---
-      
-    FROM `thecarmentor-mvp2.web_cars.match_coches_pruebas` -- Reemplaza con tu tabla
+    # Desempaquetar Min/Max (todos necesarios para la CTE ScaledData)
+    min_est, max_est = MIN_MAX_RANGES["estetica"]
+    min_prem, max_prem = MIN_MAX_RANGES["premium"]
+    min_sing, max_sing = MIN_MAX_RANGES["singular"]
+    min_alt, max_alt = MIN_MAX_RANGES["altura_libre_suelo"]
+    min_bat, max_bat = MIN_MAX_RANGES["batalla"]
+    min_ind, max_ind = MIN_MAX_RANGES["indice_altura_interior"]
+    min_anc, max_anc = MIN_MAX_RANGES["ancho"]
+
+    # --- Parámetros Iniciales (solo pesos para el score y flags) ---
+    params = [
+        # Añadiremos los @peso_... dinámicamente según los score_calculation_terms
+        bigquery.ScalarQueryParameter("penalizar_puertas", "BOOL", bool(filtros.get("penalizar_puertas_bajas", False))),
+        bigquery.ScalarQueryParameter("k", "INT64", k) # Parámetro k siempre se necesita
+    ]
+    
+    score_calculation_terms = []
+
+    # # --- SECCIÓN PARA PRUEBA PASO A PASO DEL SCORE ---
+    # # Descomenta un bloque a la vez para probar
+    
+    # 1. Solo Estética
+    score_calculation_terms.append(f"estetica_scaled * @peso_estetica")
+    params.append(bigquery.ScalarQueryParameter("peso_estetica", "FLOAT64", float(pesos.get("estetica",0.0))))
+
+    #2. Añadir Premium
+    score_calculation_terms.append(f"premium_scaled * @peso_premium")
+    params.append(bigquery.ScalarQueryParameter("peso_premium", "FLOAT64", float(pesos.get("premium",0.0))))
+    
+    #3. Añadir Singular
+    score_calculation_terms.append(f"singular_scaled * @peso_singular")
+    params.append(bigquery.ScalarQueryParameter("peso_singular", "FLOAT64", float(pesos.get("singular",0.0))))
+
+    # 4. Añadir Altura Libre Suelo
+    score_calculation_terms.append(f"altura_scaled * @peso_altura")
+    params.append(bigquery.ScalarQueryParameter("peso_altura", "FLOAT64", float(pesos.get("altura_libre_suelo",0.0))))
+    
+    # 5. Añadir Batalla
+    score_calculation_terms.append(f"batalla_scaled * @peso_batalla")
+    params.append(bigquery.ScalarQueryParameter("peso_batalla", "FLOAT64", float(pesos.get("batalla",0.0))))
+
+    # 6. Añadir Índice Altura Interior
+    score_calculation_terms.append(f"indice_altura_scaled * @peso_indice_altura")
+    params.append(bigquery.ScalarQueryParameter("peso_indice_altura", "FLOAT64", float(pesos.get("indice_altura_interior",0.0))))
+    
+    # 7. Añadir Ancho
+    score_calculation_terms.append(f"ancho_scaled * @peso_ancho")
+    params.append(bigquery.ScalarQueryParameter("peso_ancho", "FLOAT64", float(pesos.get("ancho",0.0))))
+
+    # 8. Añadir Tracción
+    score_calculation_terms.append(f"traccion_scaled * @peso_traccion")
+    params.append(bigquery.ScalarQueryParameter("peso_traccion", "FLOAT64", float(pesos.get("traccion",0.0))))
+
+    # 9. Añadir Reductoras
+    score_calculation_terms.append(f"reductoras_scaled * @peso_reductoras")
+    params.append(bigquery.ScalarQueryParameter("peso_reductoras", "FLOAT64", float(pesos.get("reductoras",0.0))))
+
+    # 10. Penalización por puertas (siempre se añade el término, el parámetro @penalizar_puertas controla su efecto)
+    score_calculation_terms.append("puertas_penalty")
+    # El parámetro @penalizar_puertas ya se añadió al inicio
+    # # --- FIN SECCIÓN PASO A PASO ---
+
+
+    # Construir la parte del SELECT para las características escaladas en CTE
+    scaled_features_sql = f"""
+        COALESCE(SAFE_DIVIDE(COALESCE(estetica, {min_est}) - {min_est}, NULLIF({max_est} - {min_est}, 0)), 0) AS estetica_scaled,
+        COALESCE(SAFE_DIVIDE(COALESCE(premium, {min_prem}) - {min_prem}, NULLIF({max_prem} - {min_prem}, 0)), 0) AS premium_scaled,
+        COALESCE(SAFE_DIVIDE(COALESCE(singular, {min_sing}) - {min_sing}, NULLIF({max_sing} - {min_sing}, 0)), 0) AS singular_scaled,
+        COALESCE(SAFE_DIVIDE(COALESCE(altura_libre_suelo, {min_alt}) - {min_alt}, NULLIF({max_alt} - {min_alt}, 0)), 0) AS altura_scaled,
+        COALESCE(SAFE_DIVIDE(COALESCE(batalla, {min_bat}) - {min_bat}, NULLIF({max_bat} - {min_bat}, 0)), 0) AS batalla_scaled,
+        COALESCE(SAFE_DIVIDE(COALESCE(indice_altura_interior, {min_ind}) - {min_ind}, NULLIF({max_ind} - {min_ind}, 0)), 0) AS indice_altura_scaled,
+        COALESCE(SAFE_DIVIDE(COALESCE(ancho, {min_anc}) - {min_anc}, NULLIF({max_anc} - {min_anc}, 0)), 0) AS ancho_scaled,
+        CASE WHEN traccion = 'ALL' THEN 1.0 WHEN traccion = 'RWD' THEN 0.5 ELSE 0.0 END AS traccion_scaled,
+        (CASE WHEN COALESCE(reductoras, FALSE) THEN 1.0 ELSE 0.0 END) AS reductoras_scaled,
+        (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END) AS puertas_penalty
+    """
+
+    # Construir la parte del cálculo del score total
+    score_total_sql = " + ".join(score_calculation_terms)
+    if not score_calculation_terms: # Si todos los términos están comentados
+        score_total_sql = "0" # Score default para que SQL no falle
+
+    sql = f"""
+    WITH ScaledData AS (
+        SELECT
+            *,
+            {scaled_features_sql}
+        FROM
+            `thecarmentor-mvp2.web_cars.match_coches_pruebas`
+    )
+    SELECT 
+      nombre, precio_compra_contado, tipo_carroceria, tipo_mecanica, 
+      premium, singular, estetica, plazas, puertas, ancho, altura_libre_suelo, batalla, indice_altura_interior,
+      traccion, reductoras,
+      ( {score_total_sql} ) AS score_total
+    FROM ScaledData
     WHERE 1=1 
     """
 
-    # Lista para parámetros (Añadir nuevos pesos)
-    params = [
-        bigquery.ScalarQueryParameter("peso_estetica",   "FLOAT64", pesos_completos["estetica"]),
-        bigquery.ScalarQueryParameter("peso_premium",    "FLOAT64", pesos_completos["premium"]),
-        bigquery.ScalarQueryParameter("peso_singular",   "FLOAT64", pesos_completos["singular"]),
-        bigquery.ScalarQueryParameter("peso_altura",     "FLOAT64", pesos_completos["altura_libre_suelo"]),
-        bigquery.ScalarQueryParameter("peso_batalla",    "FLOAT64", pesos_completos["batalla"]), # <-- Nuevo
-        bigquery.ScalarQueryParameter("peso_indice_altura","FLOAT64", pesos_completos["indice_altura_interior"]), # <-- Nuevo
-        bigquery.ScalarQueryParameter("peso_traccion",   "FLOAT64", pesos_completos["traccion"]),
-        bigquery.ScalarQueryParameter("peso_reductoras", "FLOAT64", pesos_completos["reductoras"]),
-    ]
+    # --- Aplicar Filtros Dinámicamente al WHERE ---
+    sql_where_clauses = []
 
-    # --- Aplicar Filtros Dinámicamente ---
-    
-    # Transmisión (igual que antes)
+    # Transmisión
     transmision_val = filtros.get("transmision_preferida")
     if isinstance(transmision_val, str):
-        # ... (lógica para añadir AND cambio_automatico = TRUE/FALSE) ...
-        transmision_lower = transmision_val.lower()
-        if transmision_lower == 'automático':
-            sql += "\n      AND cambio_automatico = TRUE"
-        elif transmision_lower == 'manual':
-            sql += "\n      AND cambio_automatico = FALSE"
+        if transmision_val.lower() == 'automático': sql_where_clauses.append("cambio_automatico = TRUE")
+        elif transmision_val.lower() == 'manual': sql_where_clauses.append("cambio_automatico = FALSE")
 
-
-    # Filtros Numéricos Mínimos 
-    # --- ¡CAMBIO! Quitar batalla_min e indice_altura_interior_min de aquí ---
+    # Filtros numéricos mínimos
     numeric_filters_map = {
-        # "batalla_min": ("batalla", "FLOAT64"), # <-- ELIMINADO
-        # "indice_altura_interior_min": ("indice_altura_interior", "FLOAT64"), # <-- ELIMINADO
         "estetica_min": ("estetica", "FLOAT64"),
         "premium_min": ("premium", "FLOAT64"),
         "singular_min": ("singular", "FLOAT64"),
     }
-    # -----------------------------------------------------------------------
     for key, (column, dtype) in numeric_filters_map.items():
         value = filtros.get(key)
         if value is not None:
-            param_name = key 
-            # Usar COALESCE en BQ es seguro para >=, pero opcional si la columna no tiene NULLs
-            sql += f"\n      AND COALESCE({column}, 0) >= @{param_name}" 
-            params.append(bigquery.ScalarQueryParameter(param_name, dtype, float(value)))
+            sql_where_clauses.append(f"COALESCE({column}, 0) >= @{key}") 
+            params.append(bigquery.ScalarQueryParameter(key, dtype, float(value)))
+    
+    # Plazas mínimas
+    plazas_min_val = filtros.get("plazas_min")
+    if plazas_min_val is not None and isinstance(plazas_min_val, int) and plazas_min_val > 0:
+        sql_where_clauses.append(f"plazas >= @plazas_min") 
+        params.append(bigquery.ScalarQueryParameter("plazas_min", "INT64", plazas_min_val))
 
-    # Tipo Mecanica (igual que antes)
+    # Tipos de mecánica
     tipos_mecanica_str = filtros.get("tipo_mecanica")
     if isinstance(tipos_mecanica_str, list) and tipos_mecanica_str:
-        # ... (añadir AND ... IN UNNEST(@tipos_mecanica) y el parámetro) ...
-        sql += "\n      AND tipo_mecanica IN UNNEST(@tipos_mecanica)"
+        sql_where_clauses.append(f"tipo_mecanica IN UNNEST(@tipos_mecanica)")
         params.append(bigquery.ArrayQueryParameter("tipos_mecanica", "STRING", tipos_mecanica_str))
 
-
-    # Tipo Carroceria (igual que antes)
+    # Tipos de carrocería
     tipos_carroceria = filtros.get("tipo_carroceria")
     if isinstance(tipos_carroceria, list) and tipos_carroceria:
-        # ... (añadir AND ... IN UNNEST(@tipos_carroceria) y el parámetro) ...
-        sql += "\n      AND tipo_carroceria IN UNNEST(@tipos_carroceria)"
+        sql_where_clauses.append(f"tipo_carroceria IN UNNEST(@tipos_carroceria)")
         params.append(bigquery.ArrayQueryParameter("tipos_carroceria", "STRING", tipos_carroceria))
 
+    # Filtro Económico (Este es el bloque corregido de antes)
+    modo_adq_rec = filtros.get("modo_adquisicion_recomendado")
+    precio_a_filtrar = filtros.get("precio_max_contado_recomendado") if modo_adq_rec == "Contado" else filtros.get("pago_contado")
+    cuota_a_filtrar = filtros.get("cuota_max_calculada") if modo_adq_rec == "Financiado" else filtros.get("cuota_max")
 
-    # Filtro Económico Condicional (igual que antes)
-     # --- Filtro Económico Condicional (REVISADO Y AMPLIADO) ---
-    print("DEBUG (BQ Search) ► Aplicando Filtro Económico Condicional...")
-    
-    modo_adq_rec = filtros.get("modo_adquisicion_recomendado") # Recomendación de Modo 1
-    
-    # Variables para el filtro final
-    aplicar_filtro_precio = False
-    valor_precio_max = None
-    aplicar_filtro_cuota = False
-    valor_cuota_max = None
+    if precio_a_filtrar is not None:
+        sql_where_clauses.append(f"COALESCE(precio_compra_contado, 999999999) <= @precio_maximo")
+        params.append(bigquery.ScalarQueryParameter("precio_maximo", "FLOAT64", float(precio_a_filtrar))) 
+    elif cuota_a_filtrar is not None:
+        sql_where_clauses.append(f"COALESCE(precio_compra_contado, 0) * 1.35 / 96.0 <= @cuota_maxima") 
+        params.append(bigquery.ScalarQueryParameter("cuota_maxima", "FLOAT64", float(cuota_a_filtrar)))
 
-    if modo_adq_rec == "Contado":
-        # Caso 1: Modo 1 recomendó Contado
-        precio_max_rec = filtros.get("precio_max_contado_recomendado")
-        if precio_max_rec is not None:
-            print(f"DEBUG (BQ Search) ► Detectado Modo 1 Rec. Contado. Límite Precio: {precio_max_rec}")
-            aplicar_filtro_precio = True
-            valor_precio_max = precio_max_rec
-            
-    elif modo_adq_rec == "Financiado":
-        # Caso 2: Modo 1 recomendó Financiado
-        cuota_max_calc = filtros.get("cuota_max_calculada")
-        if cuota_max_calc is not None:
-            print(f"DEBUG (BQ Search) ► Detectado Modo 1 Rec. Financiado. Límite Cuota: {cuota_max_calc}")
-            aplicar_filtro_cuota = True
-            valor_cuota_max = cuota_max_calc
-            
-    else:
-        # Caso 3: No es recomendación de Modo 1 (podría ser Modo 2 directo)
-        # Leemos modo y submodo directamente de los filtros (deben estar presentes)
-        modo_directo = filtros.get("modo")
-        submodo_directo = filtros.get("submodo")
-        print(f"DEBUG (BQ Search) ► No hay Rec. Modo 1. Verificando Modo directo: modo={modo_directo}, submodo={submodo_directo}")
+    # Añadir todas las cláusulas WHERE al SQL
+    if sql_where_clauses:
+        sql += "\n      AND " + "\n      AND ".join(sql_where_clauses)
 
-        if modo_directo == 2: # Es Modo 2 definido por usuario
-            if submodo_directo == 1:
-                # Modo 2, Submodo 1: Usar pago_contado del usuario como límite de precio
-                pago_contado_directo = filtros.get("pago_contado")
-                if pago_contado_directo is not None:
-                    print(f"DEBUG (BQ Search) ► Detectado Modo 2 Contado. Límite Precio: {pago_contado_directo}")
-                    aplicar_filtro_precio = True
-                    valor_precio_max = pago_contado_directo
-            elif submodo_directo == 2:
-                # Modo 2, Submodo 2: Usar cuota_max del usuario como límite de cuota
-                cuota_max_directa = filtros.get("cuota_max")
-                if cuota_max_directa is not None:
-                    print(f"DEBUG (BQ Search) ► Detectado Modo 2 Cuotas. Límite Cuota: {cuota_max_directa}")
-                    aplicar_filtro_cuota = True
-                    valor_cuota_max = cuota_max_directa
-
-    # Ahora APLICAR el filtro SQL que corresponda (solo uno debería activarse)
-    if aplicar_filtro_precio and valor_precio_max is not None:
-        print(f"DEBUG (BQ Search) ► Añadiendo SQL: Precio Contado <= {valor_precio_max}")
-        sql += "\n      AND COALESCE(precio_compra_contado, 999999999) <= @precio_maximo"
-        params.append(bigquery.ScalarQueryParameter("precio_maximo", "FLOAT64", float(valor_precio_max)))
-    elif aplicar_filtro_cuota and valor_cuota_max is not None:
-        print(f"DEBUG (BQ Search) ► Añadiendo SQL: Cuota Estimada <= {valor_cuota_max}")
-        sql += "\n      AND COALESCE(precio_compra_contado, 0) * 1.35 / 96.0 <= @cuota_maxima" # OJO: Nombre param @cuota_maxima
-        params.append(bigquery.ScalarQueryParameter("cuota_maxima", "FLOAT64", float(valor_cuota_max))) # OJO: Nombre param
-    else:
-        print("DEBUG (BQ Search) ► No se aplicará filtro económico específico (ni precio ni cuota).")
-
-    # --- Orden y Límite (igual que antes) ---
-    # Orden y Límite (igual que antes)
-    sql += "\n    ORDER BY score_total DESC"
-    # --- AÑADIR DESEMPATE --- (Opcional pero recomendado)
-    sql += ", precio_compra_contado ASC" 
-    # -----------------------
+    # Orden y Límite
+    sql += "\n    ORDER BY score_total DESC, precio_compra_contado ASC" 
     sql += "\n    LIMIT @k"
-    params.append(bigquery.ScalarQueryParameter("k", "INT64", k))
-
-    # --- Ejecución (igual que antes) ---
-    # ... (logging, prints, try/except para client.query) ...
-    log_params = [(p.name, getattr(p, 'value', getattr(p, 'values', None))) for p in params]
-    #logging.debug("🔎 BigQuery SQL:\n%s", sql)
-    #logging.debug("🔎 BigQuery params: %s", log_params)
-    print("--- 🧠 SQL Query ---\n", sql) 
-    print("\n--- 📦 Parameters ---\n", log_params) 
+    # El parámetro @k ya se añadió al inicio junto con @penalizar_puertas
+    
+    print("--- 🧠 SQL Query (Paso a Paso) ---\n", sql) 
+    print("\n--- 📦 Parameters (Paso a Paso) ---\n", [(p.name, getattr(p, 'value', getattr(p, 'values', None))) for p in params]) 
 
     try:
         job_config = bigquery.QueryJobConfig(query_parameters=params)
         query_job = client.query(sql, job_config=job_config)
         df = query_job.result().to_dataframe() 
-       # logging.info(f"✅ BigQuery query ejecutada, {len(df)} resultados obtenidos.")
+        logging.info(f"✅ (Paso a Paso) BigQuery query ejecutada, {len(df)} resultados obtenidos.")
         return df.to_dict(orient="records")
     except Exception as e:
-        #logging.error(f"❌ Error al ejecutar la query en BigQuery: {e}")
+        logging.error(f"❌ (Paso a Paso) Error al ejecutar la query en BigQuery: {e}")
+        traceback.print_exc()
         return []
