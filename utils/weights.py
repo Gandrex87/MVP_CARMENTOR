@@ -24,64 +24,86 @@ AVENTURA_RAW = {
 # --- Función compute_raw_weights CORREGIDA ---
 def compute_raw_weights(
     preferencias: Optional[PerfilUsuario], # <-- Cambiar Type Hint a PerfilUsuario
-    estetica: Optional[float], 
-    premium: Optional[float], 
-    singular: Optional[float],
+    estetica_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.estetica_min)
+    premium_min_val: Optional[float],       # Renombrado para claridad (viene de filtros.premium_min)
+    singular_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.singular_min)
     priorizar_ancho: Optional[bool] # <-- NUEVO ARGUMENTO BOOLEANO
     ) -> Dict[str, float]: 
     """
     Calcula pesos crudos. Accede a preferencias usando notación de punto.
     """
+    
+    raw = {} # Inicializar el diccionario de pesos crudos
     # Usar 0.0 como fallback si los valores de filtro son None
     raw = {
-        "estetica": float(estetica or 0.0),
-        "premium":  float(premium or 0.0),
-        "singular": float(singular or 0.0)
+        "estetica": float(estetica_min_val or 0.0),
+        "premium":  float(premium_min_val or 0.0),
+        "singular": float(singular_min_val or 0.0)
     }
     print(f"DEBUG (Weights) ► Pesos crudos iniciales (est/prem/sing): {raw}")
 
     # Pesos de Aventura
-    key_aventura = "ninguna" # Default
-    if preferencias and preferencias.aventura: # <-- Acceso con punto y verificar que no sea None
-        aventura_level_val = preferencias.aventura # <-- Acceso con punto
-        if hasattr(aventura_level_val, "value"): 
-            key_aventura = aventura_level_val.value 
+    aventura_level_str = None
+    if preferencias: # Verificar si el diccionario preferencias existe
+        aventura_level_input = preferencias.get("aventura") # <-- USO DE .get()
+        if hasattr(aventura_level_input, "value"): # Por si acaso llega el Enum
+            aventura_level_str = aventura_level_input.value
+        elif aventura_level_input is not None:
+            aventura_level_str = str(aventura_level_input).strip().lower()
         else:
-            key_aventura = str(aventura_level_val).strip().lower()
-            
-    aventura_weights = AVENTURA_RAW.get(key_aventura, AVENTURA_RAW["ninguna"])
-    raw["altura_libre_suelo"] = float(aventura_weights.get("altura_libre_suelo", 0.0))
-    raw["traccion"] = float(aventura_weights.get("traccion", 0.0))
-    raw["reductoras"] = float(aventura_weights.get("reductoras", 0.0))
+            aventura_level_str = "ninguna" # Default si aventura es None en el dict
+    else: # Si preferencias es None
+        aventura_level_str = "ninguna" # Default
+        
+    aventura_weights_map = AVENTURA_RAW.get(aventura_level_str, AVENTURA_RAW["ninguna"])
+    raw["altura_libre_suelo"] = float(aventura_weights_map.get("altura_libre_suelo", 0.0))
+    raw["traccion"] = float(aventura_weights_map.get("traccion", 0.0))
+    raw["reductoras"] = float(aventura_weights_map.get("reductoras", 0.0))
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir aventura: {raw}")
 
+    #
     # Pesos basados en altura_mayor_190
-    altura_pref_val = preferencias.altura_mayor_190 if preferencias else None # <-- Acceso con punto
+    altura_pref_val = preferencias.get("altura_mayor_190") if preferencias else None # <-- USO DE .get()
     if is_yes(altura_pref_val):
-        # ¡Valores ejemplo!Podemos ajustar según importancia
-        print("DEBUG (Weights) ► Usuario alto. Asignando pesos altos a batalla/índice.")
-        raw["batalla"] = 6.0 # Ejemplo
-        raw["indice_altura_interior"] = 5.0 # Ejemplo
+        print("DEBUG (Weights) ► Usuario alto. Asignando pesos a batalla/índice.")
+        raw["batalla"] = 5.0 
+        raw["indice_altura_interior"] = 5.0 
     else:
-         # ¡Valores de ejemplo! Ajusta según importancia (quizás 0.0 si no importan nada?)
         print("DEBUG (Weights) ► Usuario NO alto. Asignando pesos bajos a batalla/índice.")
-        raw["batalla"] = 0.5 # Ejemplo
-        raw["indice_altura_interior"] = 0.5 # Ejemplo
-    # --- NUEVA LÓGICA PARA PESO DE ANCHO ---
-    # 4️⃣ Añadir peso para 'ancho' basado en 'priorizar_ancho'
-    if priorizar_ancho: # Si el flag que viene del estado es True
-        # Asignar un peso crudo ALTO a la anchura
-        # ¡Ajusta este valor! Debe ser significativo comparado con otros (ej: aventura, estetica)
-        raw["ancho"] = 6.0  # Ejemplo de peso alto
+        raw["batalla"] = 1.0 
+        raw["indice_altura_interior"] = 1.0 
+    print(f"DEBUG (Weights) ► Pesos crudos tras añadir dims por altura: {raw}")
+
+    # Peso para 'ancho' basado en 'priorizar_ancho'
+    if priorizar_ancho: 
+        raw["ancho"] = 5.0  
         print(f"DEBUG (Weights) ► Priorizar Ancho=True. Asignando peso crudo alto a ancho: {raw['ancho']}")
     else:
-        # Asignar un peso crudo BAJO (o cero) si no se prioriza
-        raw["ancho"] = 0.5  # Ejemplo de peso muy bajo pero no cero
+        raw["ancho"] = 1.0  
         print(f"DEBUG (Weights) ► Priorizar Ancho=False/None. Asignando peso crudo bajo a ancho: {raw['ancho']}")
-    # --- FIN NUEVA LÓGICA ---
+   
+    # --- NUEVA LÓGICA PARA RATINGS DIRECTOS 0-10 ---
+    # 5. Añadir pesos crudos directamente de los ratings del usuario    
+    # Añadir pesos crudos directamente de los ratings del usuario
+    if preferencias: # Verificar si el diccionario preferencias existe
+        raw["rating_fiabilidad_durabilidad"] = float(preferencias.get("rating_fiabilidad_durabilidad") or 0.0)
+        raw["rating_seguridad"] = float(preferencias.get("rating_seguridad") or 0.0)
+        raw["rating_comodidad"] = float(preferencias.get("rating_comodidad") or 0.0)
+        raw["rating_impacto_ambiental"] = float(preferencias.get("rating_impacto_ambiental") or 0.0)
+        #raw["rating_costes_uso"] = float(preferencias.get("rating_costes_uso") or 0.0)
+        raw["rating_tecnologia_conectividad"] = float(preferencias.get("rating_tecnologia_conectividad") or 0.0)
+    else: # Si preferencias es None, poner defaults para los ratings
+        raw["rating_fiabilidad_durabilidad"] = 0.0
+        raw["rating_seguridad"] = 0.0
+        raw["rating_comodidad"] = 0.0
+        raw["rating_impacto_ambiental"] = 0.0
+        #raw["rating_costes_uso"] = 0.0
+        raw["rating_tecnologia_conectividad"] = 0.0
+  
+    print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}
     
-    print(f"DEBUG (Weights) ► Pesos Crudos FINALES: {raw_float}")
+    #print(f"DEBUG (Weights) ► Pesos Crudos FINALES: {raw_float}")
     return raw_float
 
 

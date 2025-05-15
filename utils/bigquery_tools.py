@@ -7,14 +7,14 @@
 
 import logging
 import traceback
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any , Tuple
 from google.cloud import bigquery
 
 # Definiciones de tipo (pueden estar al inicio del módulo)
 FiltrosDict = Dict[str, Any] 
 PesosDict = Dict[str, float]
 
-# Constantes (asegúrate de que estén definidas y sean correctas)
+# Definir aquí los rangos mínimos y máximos para cada característica
 MIN_MAX_RANGES = {
     "estetica": (1.0, 10.0),
     "premium": (1.0, 10.0),
@@ -22,15 +22,28 @@ MIN_MAX_RANGES = {
     "altura_libre_suelo": (79.0, 314.0), 
     "batalla": (1650.0, 4035.0),        
     "indice_altura_interior": (0.9, 2.7), 
-    "ancho": (1410.0, 2164.0)          
+    "ancho": (1410.0, 2164.0),
+    "fiabilidad": (1.0, 10.0), # Asumiendo una escala de 1-10 para fiabilidad en BQ
+    "durabilidad": (1.0, 10.0), # Asumiendo una escala de 1-10 para durabilidad en BQ
+    "seguridad": (1.0, 10.0),   # Asumiendo una escala de 1-10 para seguridad en BQ
+    "comodidad": (1.0, 10.0),   # Asumiendo una escala de 1-10 para comodidad en BQ
+    "tecnologia": (1.0, 10.0),  # Asumiendo una escala de 1-10 para tecnologia en BQ
+    "acceso_low_cost": (1.0, 10.0), # Asume una escala, donde más alto = más low_cost
+    "deportividad": (1.0, 10.0),    # Asume una escala, donde más alto = más deportivo
 }
-PENALTY_PUERTAS_BAJAS = -0.15 
+PENALTY_PUERTAS_BAJAS = -0.15
+# --- NUEVAS PENALIZACIONES (AJUSTA ESTOS VALORES) ---
+PENALTY_LOW_COST_POR_COMODIDAD = -0.20 # Cuánto restar si es muy low-cost y se quiere confort
+PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.15 # Cuánto restar si es muy deportivo y se quiere confort
+# --- UMBRALES PARA PENALIZACIÓN (AJUSTA ESTOS VALORES, 0-1 después de escalar) ---
+UMBRAL_LOW_COST_PENALIZABLE = 0.7 # Penalizar si acceso_low_cost_scaled >= 0.7
+UMBRAL_DEPORTIVIDAD_PENALIZABLE = 0.7 # Penalizar si deportividad_scaled >= 0.7
 
 def buscar_coches_bq( # Renombrada para claridad
     filtros: Optional[FiltrosDict],
     pesos: Optional[PesosDict], 
     k: int = 7
-) -> list[dict]:
+) -> Tuple[List[Dict[str, Any]], str, List[Dict[str, Any]]]: #Devuelve: una tupla con (lista de coches, string SQL, lista de parámetros formateados).
     
     if not filtros: filtros = {}
     if not pesos: pesos = {} # Necesario para .get()
@@ -41,6 +54,31 @@ def buscar_coches_bq( # Renombrada para claridad
         logging.error(f"Error al inicializar cliente BigQuery: {e_auth}")
         return []
 
+    # Pesos completos (incluyendo los nuevos ratings)
+    pesos_completos = {
+        "estetica": pesos.get("estetica", 0.0),
+        "premium": pesos.get("premium", 0.0),
+        "singular": pesos.get("singular", 0.0),
+        "altura_libre_suelo": pesos.get("altura_libre_suelo", 0.0),
+        "batalla": pesos.get("batalla", 0.0),
+        "indice_altura_interior": pesos.get("indice_altura_interior", 0.0),
+        "ancho": pesos.get("ancho", 0.0),
+        "traccion": pesos.get("traccion", 0.0),
+        "reductoras": pesos.get("reductoras", 0.0),
+        # --- NUEVOS PESOS DE RATINGS (claves deben coincidir con compute_raw_weights) ---
+        "rating_fiabilidad_durabilidad": pesos.get("rating_fiabilidad_durabilidad", 0.0),
+        "rating_seguridad": pesos.get("rating_seguridad", 0.0),
+        "rating_comodidad": pesos.get("rating_comodidad", 0.0),
+        "rating_impacto_ambiental": pesos.get("rating_impacto_ambiental", 0.0), # Para después
+       # "rating_costes_uso": pesos.get("rating_costes_uso", 0.0),             # Para después
+        "rating_tecnologia_conectividad": pesos.get("rating_tecnologia_conectividad", 0.0), # Para después
+    }
+    
+    # Flags de penalización (vienen en el dict 'filtros') --- FLAGS (DEBEN VENIR EN EL DICT 'filtros') ---
+    penalizar_puertas_val = bool(filtros.get("penalizar_puertas_bajas", False))
+    flag_penalizar_low_cost_comod = bool(filtros.get("flag_penalizar_low_cost_comodidad", False))
+    flag_penalizar_deportividad_comod = bool(filtros.get("flag_penalizar_deportividad_comodidad", False))
+
     # Desempaquetar Min/Max (todos necesarios para la CTE ScaledData)
     min_est, max_est = MIN_MAX_RANGES["estetica"]
     min_prem, max_prem = MIN_MAX_RANGES["premium"]
@@ -49,97 +87,99 @@ def buscar_coches_bq( # Renombrada para claridad
     min_bat, max_bat = MIN_MAX_RANGES["batalla"]
     min_ind, max_ind = MIN_MAX_RANGES["indice_altura_interior"]
     min_anc, max_anc = MIN_MAX_RANGES["ancho"]
-
-    # --- Parámetros Iniciales (solo pesos para el score y flags) ---
-    params = [
-        # Añadiremos los @peso_... dinámicamente según los score_calculation_terms
-        bigquery.ScalarQueryParameter("penalizar_puertas", "BOOL", bool(filtros.get("penalizar_puertas_bajas", False))),
-        bigquery.ScalarQueryParameter("k", "INT64", k) # Parámetro k siempre se necesita
-    ]
-    
-    score_calculation_terms = []
-
-    # # --- SECCIÓN PARA PRUEBA PASO A PASO DEL SCORE ---
-    # # Descomenta un bloque a la vez para probar
-    
-    # 1. Solo Estética
-    score_calculation_terms.append(f"estetica_scaled * @peso_estetica")
-    params.append(bigquery.ScalarQueryParameter("peso_estetica", "FLOAT64", float(pesos.get("estetica",0.0))))
-
-    #2. Añadir Premium
-    score_calculation_terms.append(f"premium_scaled * @peso_premium")
-    params.append(bigquery.ScalarQueryParameter("peso_premium", "FLOAT64", float(pesos.get("premium",0.0))))
-    
-    #3. Añadir Singular
-    score_calculation_terms.append(f"singular_scaled * @peso_singular")
-    params.append(bigquery.ScalarQueryParameter("peso_singular", "FLOAT64", float(pesos.get("singular",0.0))))
-
-    # 4. Añadir Altura Libre Suelo
-    score_calculation_terms.append(f"altura_scaled * @peso_altura")
-    params.append(bigquery.ScalarQueryParameter("peso_altura", "FLOAT64", float(pesos.get("altura_libre_suelo",0.0))))
-    
-    # 5. Añadir Batalla
-    score_calculation_terms.append(f"batalla_scaled * @peso_batalla")
-    params.append(bigquery.ScalarQueryParameter("peso_batalla", "FLOAT64", float(pesos.get("batalla",0.0))))
-
-    # 6. Añadir Índice Altura Interior
-    score_calculation_terms.append(f"indice_altura_scaled * @peso_indice_altura")
-    params.append(bigquery.ScalarQueryParameter("peso_indice_altura", "FLOAT64", float(pesos.get("indice_altura_interior",0.0))))
-    
-    # 7. Añadir Ancho
-    score_calculation_terms.append(f"ancho_scaled * @peso_ancho")
-    params.append(bigquery.ScalarQueryParameter("peso_ancho", "FLOAT64", float(pesos.get("ancho",0.0))))
-
-    # 8. Añadir Tracción
-    score_calculation_terms.append(f"traccion_scaled * @peso_traccion")
-    params.append(bigquery.ScalarQueryParameter("peso_traccion", "FLOAT64", float(pesos.get("traccion",0.0))))
-
-    # 9. Añadir Reductoras
-    score_calculation_terms.append(f"reductoras_scaled * @peso_reductoras")
-    params.append(bigquery.ScalarQueryParameter("peso_reductoras", "FLOAT64", float(pesos.get("reductoras",0.0))))
-
-    # 10. Penalización por puertas (siempre se añade el término, el parámetro @penalizar_puertas controla su efecto)
-    score_calculation_terms.append("puertas_penalty")
-    # El parámetro @penalizar_puertas ya se añadió al inicio
-    # # --- FIN SECCIÓN PASO A PASO ---
-
-
-    # Construir la parte del SELECT para las características escaladas en CTE
-    scaled_features_sql = f"""
-        COALESCE(SAFE_DIVIDE(COALESCE(estetica, {min_est}) - {min_est}, NULLIF({max_est} - {min_est}, 0)), 0) AS estetica_scaled,
-        COALESCE(SAFE_DIVIDE(COALESCE(premium, {min_prem}) - {min_prem}, NULLIF({max_prem} - {min_prem}, 0)), 0) AS premium_scaled,
-        COALESCE(SAFE_DIVIDE(COALESCE(singular, {min_sing}) - {min_sing}, NULLIF({max_sing} - {min_sing}, 0)), 0) AS singular_scaled,
-        COALESCE(SAFE_DIVIDE(COALESCE(altura_libre_suelo, {min_alt}) - {min_alt}, NULLIF({max_alt} - {min_alt}, 0)), 0) AS altura_scaled,
-        COALESCE(SAFE_DIVIDE(COALESCE(batalla, {min_bat}) - {min_bat}, NULLIF({max_bat} - {min_bat}, 0)), 0) AS batalla_scaled,
-        COALESCE(SAFE_DIVIDE(COALESCE(indice_altura_interior, {min_ind}) - {min_ind}, NULLIF({max_ind} - {min_ind}, 0)), 0) AS indice_altura_scaled,
-        COALESCE(SAFE_DIVIDE(COALESCE(ancho, {min_anc}) - {min_anc}, NULLIF({max_anc} - {min_anc}, 0)), 0) AS ancho_scaled,
-        CASE WHEN traccion = 'ALL' THEN 1.0 WHEN traccion = 'RWD' THEN 0.5 ELSE 0.0 END AS traccion_scaled,
-        (CASE WHEN COALESCE(reductoras, FALSE) THEN 1.0 ELSE 0.0 END) AS reductoras_scaled,
-        (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END) AS puertas_penalty
-    """
-
-    # Construir la parte del cálculo del score total
-    score_total_sql = " + ".join(score_calculation_terms)
-    if not score_calculation_terms: # Si todos los términos están comentados
-        score_total_sql = "0" # Score default para que SQL no falle
+    min_fiab, max_fiab = MIN_MAX_RANGES["fiabilidad"]
+    min_durab, max_durab = MIN_MAX_RANGES["durabilidad"]
+    min_seg, max_seg = MIN_MAX_RANGES["seguridad"]
+    min_comod, max_comod = MIN_MAX_RANGES["comodidad"]
+    min_tec, max_tec = MIN_MAX_RANGES["tecnologia"] 
+    min_acc_lc, max_acc_lc = MIN_MAX_RANGES["acceso_low_cost"] # Necesario para penalización
+    min_depor, max_depor = MIN_MAX_RANGES["deportividad"]    # Necesario para penalización
 
     sql = f"""
     WITH ScaledData AS (
         SELECT
             *,
-            {scaled_features_sql}
+            COALESCE(SAFE_DIVIDE(COALESCE(estetica, {min_est}) - {min_est}, NULLIF({max_est} - {min_est}, 0)), 0) AS estetica_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(premium, {min_prem}) - {min_prem}, NULLIF({max_prem} - {min_prem}, 0)), 0) AS premium_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(singular, {min_sing}) - {min_sing}, NULLIF({max_sing} - {min_sing}, 0)), 0) AS singular_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(altura_libre_suelo, {min_alt}) - {min_alt}, NULLIF({max_alt} - {min_alt}, 0)), 0) AS altura_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(batalla, {min_bat}) - {min_bat}, NULLIF({max_bat} - {min_bat}, 0)), 0) AS batalla_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(indice_altura_interior, {min_ind}) - {min_ind}, NULLIF({max_ind} - {min_ind}, 0)), 0) AS indice_altura_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(ancho, {min_anc}) - {min_anc}, NULLIF({max_anc} - {min_anc}, 0)), 0) AS ancho_scaled,
+            -- CAMPOS ESCALADOS PARA NUEVOS RATINGS --
+            COALESCE(SAFE_DIVIDE(COALESCE(fiabilidad, {min_fiab}) - {min_fiab}, NULLIF({max_fiab} - {min_fiab}, 0)), 0) AS fiabilidad_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(durabilidad, {min_durab}) - {min_durab}, NULLIF({max_durab} - {min_durab}, 0)), 0) AS durabilidad_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(seguridad, {min_seg}) - {min_seg}, NULLIF({max_seg} - {min_seg}, 0)), 0) AS seguridad_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(comodidad, {min_comod}) - {min_comod}, NULLIF({max_comod} - {min_comod}, 0)), 0) AS comodidad_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(tecnologia, {min_tec}) - {min_tec}, NULLIF({max_tec} - {min_tec}, 0)), 0) AS tecnologia_scaled, -- <-- Nuevo escalado
+            -- CAMPOS ESCALADOS PARA PENALIZACIONES --
+            COALESCE(SAFE_DIVIDE(COALESCE(acceso_low_cost, {min_acc_lc}) - {min_acc_lc}, NULLIF({max_acc_lc} - {min_acc_lc}, 0)), 0) AS acceso_low_cost_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(deportividad, {min_depor}) - {min_depor}, NULLIF({max_depor} - {min_depor}, 0)), 0) AS deportividad_scaled,
+            -- Mapeos existentes --
+            CASE WHEN traccion = 'ALL' THEN 1.0 WHEN traccion = 'RWD' THEN 0.5 ELSE 0.0 END AS traccion_scaled,
+            (CASE WHEN COALESCE(reductoras, FALSE) THEN 1.0 ELSE 0.0 END) AS reductoras_scaled,
+            (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END) AS puertas_penalty
         FROM
             `thecarmentor-mvp2.web_cars.match_coches_pruebas`
     )
-    SELECT 
-      nombre, precio_compra_contado, tipo_carroceria, tipo_mecanica, 
-      premium, singular, estetica, plazas, puertas, ancho, altura_libre_suelo, batalla, indice_altura_interior,
-      traccion, reductoras,
-      ( {score_total_sql} ) AS score_total
+    SELECT
+      -- Añade las nuevas columnas BQ si quieres ver sus valores originales fiabilidad, durabilidad, seguridad, comodidad, acceso_low_cost, deportividad, tecnologia (para después)
+      nombre, ID, marca, modelo, cambio_automatico, tipo_mecanica, tipo_carroceria, 
+      indice_altura_interior, batalla, estetica, premium, singular, altura_libre_suelo, 
+      ancho, traccion, reductoras, puertas, plazas, precio_compra_contado,
+      
+      ( 
+        estetica_scaled * @peso_estetica 
+        + premium_scaled * @peso_premium
+        + singular_scaled * @peso_singular
+        + altura_scaled * @peso_altura
+        + batalla_scaled * @peso_batalla 
+        + indice_altura_scaled * @peso_indice_altura
+        + ancho_scaled * @peso_ancho 
+        + traccion_scaled * @peso_traccion
+        + reductoras_scaled * @peso_reductoras
+        + puertas_penalty
+        -- NUEVOS TÉRMINOS DE SCORE PARA RATINGS --
+        + fiabilidad_scaled * @peso_rating_fiabilidad_durabilidad  
+        + durabilidad_scaled * @peso_rating_fiabilidad_durabilidad -- Usando el mismo peso para ambas
+        + seguridad_scaled * @peso_rating_seguridad               
+        + comodidad_scaled * @peso_rating_comodidad
+        + fiabilidad_scaled * @peso_rating_impacto_ambiental  -- P4 (Impacto Ambiental) usa fiabilidad_scaled
+        + durabilidad_scaled * @peso_rating_impacto_ambiental -- P4 (Impacto Ambiental) usa durabilidad_scaled (si así lo defines)
+        + tecnologia_scaled * @peso_rating_tecnologia_conectividad -- P6
+        -- PENALIZACIONES POR COMODIDAD --
+        + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
+        + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND deportividad_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
+        -- FIN NUEVOS TÉRMINOS Y PENALIZACIONES --
+      ) AS score_total
     FROM ScaledData
     WHERE 1=1 
     """
-
+    
+    
+    # --- Parámetros Iniciales (solo pesos para el score y flags) ---
+    params = [
+        bigquery.ScalarQueryParameter("peso_estetica",   "FLOAT64", pesos_completos["estetica"]),
+        bigquery.ScalarQueryParameter("peso_premium", "FLOAT64", pesos_completos["premium"]),
+        bigquery.ScalarQueryParameter("peso_singular", "FLOAT64", pesos_completos["singular"]),
+        bigquery.ScalarQueryParameter("peso_altura", "FLOAT64", pesos_completos["altura_libre_suelo"]),
+        bigquery.ScalarQueryParameter("peso_batalla", "FLOAT64", pesos_completos["batalla"]),
+        bigquery.ScalarQueryParameter("peso_indice_altura", "FLOAT64", pesos_completos["indice_altura_interior"]),
+        bigquery.ScalarQueryParameter("peso_ancho", "FLOAT64", pesos_completos["ancho"]),
+        bigquery.ScalarQueryParameter("peso_traccion", "FLOAT64", pesos_completos["traccion"]),
+        bigquery.ScalarQueryParameter("peso_reductoras", "FLOAT64", pesos_completos["reductoras"]),
+        bigquery.ScalarQueryParameter("penalizar_puertas", "BOOL", penalizar_puertas_val),
+        # --- NUEVOS PARÁMETROS DE PESO Y FLAGS ---
+        bigquery.ScalarQueryParameter("peso_rating_fiabilidad_durabilidad", "FLOAT64", pesos_completos["rating_fiabilidad_durabilidad"]),
+        bigquery.ScalarQueryParameter("peso_rating_seguridad", "FLOAT64", pesos_completos["rating_seguridad"]),
+        bigquery.ScalarQueryParameter("peso_rating_comodidad", "FLOAT64", pesos_completos["rating_comodidad"]),
+        bigquery.ScalarQueryParameter("peso_rating_impacto_ambiental", "FLOAT64", pesos_completos["rating_impacto_ambiental"]), # <-- Nuevo
+        bigquery.ScalarQueryParameter("peso_rating_tecnologia_conectividad", "FLOAT64", pesos_completos["rating_tecnologia_conectividad"]), # <-- Nuevo
+        bigquery.ScalarQueryParameter("flag_penalizar_low_cost_comodidad", "BOOL", flag_penalizar_low_cost_comod),
+        bigquery.ScalarQueryParameter("flag_penalizar_deportividad_comodidad", "BOOL", flag_penalizar_deportividad_comod),
+        # --- FIN NUEVOS PARÁMETROS ---
+        bigquery.ScalarQueryParameter("k", "INT64", k)
+    ]
     # --- Aplicar Filtros Dinámicamente al WHERE ---
     sql_where_clauses = []
 
@@ -154,6 +194,10 @@ def buscar_coches_bq( # Renombrada para claridad
         "estetica_min": ("estetica", "FLOAT64"),
         "premium_min": ("premium", "FLOAT64"),
         "singular_min": ("singular", "FLOAT64"),
+        # Dejamos solo los que SÍ deben ser filtros duros si existen, 
+        # o mantenemos el mapa vacío si no hay otros filtros numéricos duros.
+        # Si tuvieras otros como "potencia_min_cv", irían aquí.
+        # Por ahora, este mapa podría quedar vacío o no existir si no hay otros filtros numéricos.
     }
     for key, (column, dtype) in numeric_filters_map.items():
         value = filtros.get(key)
@@ -200,6 +244,23 @@ def buscar_coches_bq( # Renombrada para claridad
     sql += "\n    LIMIT @k"
     # El parámetro @k ya se añadió al inicio junto con @penalizar_puertas
     
+    log_params_for_logging = [] 
+    if params: # Asegurarse de que params no sea None o vacío
+        for p in params:
+            param_name = p.name
+            param_value = getattr(p, 'value', getattr(p, 'values', None)) # Para Scalar y Array params
+            
+            param_type_str = "UNKNOWN" # Default
+            if isinstance(p, bigquery.ScalarQueryParameter):
+                param_type_str = p.type_ # Atributo correcto para el tipo escalar
+            elif isinstance(p, bigquery.ArrayQueryParameter):
+                param_type_str = f"ARRAY<{p.array_type}>" # Atributo correcto para el tipo de array
+
+            log_params_for_logging.append({
+                "name": param_name, 
+                "value": param_value, 
+                "type": param_type_str # Usar el tipo corregido
+            })
     print("--- 🧠 SQL Query (Paso a Paso) ---\n", sql) 
     print("\n--- 📦 Parameters (Paso a Paso) ---\n", [(p.name, getattr(p, 'value', getattr(p, 'values', None))) for p in params]) 
 
@@ -208,8 +269,33 @@ def buscar_coches_bq( # Renombrada para claridad
         query_job = client.query(sql, job_config=job_config)
         df = query_job.result().to_dataframe() 
         logging.info(f"✅ (Paso a Paso) BigQuery query ejecutada, {len(df)} resultados obtenidos.")
-        return df.to_dict(orient="records")
+        #return df.to_dict(orient="records")
+        return df.to_dict(orient="records"), sql, log_params_for_logging
     except Exception as e:
         logging.error(f"❌ (Paso a Paso) Error al ejecutar la query en BigQuery: {e}")
         traceback.print_exc()
-        return []
+        return [], sql, log_params_for_logging # Devolver SQL y params incluso si falla
+    
+#RESUMEN   
+# MIN_MAX_RANGES: Debes añadir los rangos para fiabilidad, durabilidad, seguridad, comodidad, tecnologia y, crucialmente, para acceso_low_cost y deportividad (o como se llamen tus columnas BQ que representan esos conceptos).
+# Nuevas Constantes: Definí PENALTY_LOW_COST_POR_COMODIDAD, PENALTY_DEPORTIVIDAD_POR_COMODIDAD, UMBRAL_LOW_COST_PENALIZABLE, UMBRAL_DEPORTIVIDAD_PENALIZABLE. Ajusta estos valores según necesites.
+# pesos_completos: Ahora extrae los pesos para los nuevos ratings (ej: pesos.get("rating_fiabilidad_durabilidad", 0.0)).
+# Nuevos Flags: Obtiene flag_penalizar_low_cost_comodidad y flag_penalizar_deportividad_comodidad del diccionario filtros.
+# Desempaquetar Min/Max: Se desempaquetan los Min/Max para las nuevas columnas BQ.
+# CTE ScaledData:
+# Se añaden las líneas para calcular fiabilidad_scaled, durabilidad_scaled, seguridad_scaled, comodidad_scaled.
+# Se añaden las líneas para calcular acceso_low_cost_scaled y deportividad_scaled.
+# La penalización por puertas se mantiene.
+# SELECT Final: Se añaden las columnas originales (fiabilidad, durabilidad, etc., y acceso_low_cost, deportividad) para que puedas ver sus valores.
+# Cálculo score_total:
+# Se añaden los términos para fiabilidad/durabilidad, seguridad y comodidad, multiplicados por sus respectivos @peso_rating_....
+# Se añaden los dos nuevos CASE WHEN para las penalizaciones, usando los @flag_..., los umbrales y los valores de penalización.
+# params: Se añaden los nuevos ScalarQueryParameter para los @peso_rating_... y los @flag_....
+# Filtros WHERE: La lógica de filtros WHERE (transmisión, estetica_min, etc.) se mantiene como estaba.
+# Recordatorios Antes de Probar:
+
+# Actualiza MIN_MAX_RANGES con los rangos correctos para TODAS las columnas numéricas que escalas.
+# Asegúrate de que tu tabla BQ tenga columnas llamadas fiabilidad, durabilidad, seguridad, comodidad, acceso_low_cost, deportividad (o los nombres que uses, y ajústalos en el SQL).
+# Verifica que finalizar_y_presentar_node esté pasando los nuevos pesos (ej: rating_fiabilidad_durabilidad) en el diccionario pesos y los nuevos flags (ej: flag_penalizar_low_cost_comodidad) en el diccionario filtros a esta función buscar_coches_bq.
+# Este es un cambio sustancial en el score. ¡Pruébalo con cuidado y observa cómo cambian los rankings!
+

@@ -1,7 +1,8 @@
+#utils/rag_reader.py
 import re
 import pdfplumber
-import warnings
-warnings.filterwarnings("ignore", message="CropBox missing from /Page")
+#import warnings
+#warnings.filterwarnings("ignore", message="CropBox missing from /Page")
 
 
 def cargar_carrocerias_desde_pdf(ruta_pdf: str) -> list[dict]:
@@ -54,5 +55,5 @@ def cargar_carrocerias_desde_pdf(ruta_pdf: str) -> list[dict]:
 
 
 # Uso:
-#DATA = cargar_carrocerias_desde_pdf("./utils/tipos_carroceria.pdf")
-#print(DATA) comentarlo para que no lo muestre al grafo.
+# DATA = cargar_carrocerias_desde_pdf("./tipos_carrocería.pdf")
+# print(DATA) #comentarlo para que no lo muestre al grafo.

@@ -224,7 +224,7 @@ Eres un asistente experto en finanzas automotrices. Tu objetivo es recopilar inf
         "entrada": null,
         "anos_posesion": null
       }},
-      "mensaje_validacion": "De acuerdo, tú defines el presupuesto. Que opción prefieres?\n 1)Tienes pensado pagar el coche al contado\n  2) prefieres financiarlo en cuotas mensuales" // Pregunta por el submodo
+      "mensaje_validacion": "De acuerdo, tú defines el presupuesto. Que opción prefieres?\n 1) Tienes pensado pagar el coche al contado\n 2) prefieres financiarlo en cuotas mensuales" // Pregunta por el submodo
     }}
     ```
 Ejemplo 4:

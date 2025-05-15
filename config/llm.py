@@ -16,7 +16,7 @@ llm_validacion = init_chat_model("openai:gpt-4o-mini", temperature=0.4)
 
 # 1. LLM para la Etapa de Perfil del Usuario
 # Usará un prompt específico para perfil y devolverá solo PerfilUsuario + mensaje_validacion
-llm_solo_perfil = llm.with_structured_output(ResultadoSoloPerfil)
+llm_solo_perfil = llm.with_structured_output(ResultadoSoloPerfil , method="function_calling")
 
   
 # 2. LLM para la Etapa de Inferencia de Filtros
@@ -29,7 +29,7 @@ llm_solo_filtros = llm.with_structured_output(ResultadoSoloFiltros)
 #print("INFO: Inicializando llm_economia_potente (gpt-4o)...")
 #llm_potente = init_chat_model("openai:gpt-4o", temperature=0.2) # O el ID correcto para gpt-4o
 llm_potente = init_chat_model("openai:gpt-4o-mini", temperature=0.1) # O el ID correcto para gpt-4o
-llm_economia = llm_potente.with_structured_output(ResultadoEconomia)
+llm_economia = llm_potente.with_structured_output(ResultadoEconomia, method="function_calling")
 
 # --- NUEVA CONFIGURACIÓN LLM PARA PASAJEROS ---
 # 4. LLM para la Etapa de Información de Pasajeros
