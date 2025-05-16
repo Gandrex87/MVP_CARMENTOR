@@ -81,6 +81,13 @@ def compute_raw_weights(
     else:
         raw["ancho"] = 1.0  
         print(f"DEBUG (Weights) ► Priorizar Ancho=False/None. Asignando peso crudo bajo a ancho: {raw['ancho']}")
+        
+    # --- NUEVO PESO CRUDO PARA DEPRECIACIÓN ---
+    if is_yes(preferencias.get("prioriza_baja_depreciacion")):
+        raw["devaluacion"] = 5.0 # Si 'sí', peso crudo de 5.0
+    else: # 'no' o None
+        raw["devaluacion"] = 1.0 # Si 'no' o no especificado, peso crudo de 1.0
+    print(f"DEBUG (Weights) ► Peso crudo para devaluacion (basado en prioriza_baja_depreciacion='{preferencias.get('prioriza_baja_depreciacion')}'): {raw['devaluacion']}")
    
     # --- NUEVA LÓGICA PARA RATINGS DIRECTOS 0-10 ---
     # 5. Añadir pesos crudos directamente de los ratings del usuario    
@@ -99,6 +106,7 @@ def compute_raw_weights(
         raw["rating_impacto_ambiental"] = 0.0
         #raw["rating_costes_uso"] = 0.0
         raw["rating_tecnologia_conectividad"] = 0.0
+        
   
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}

@@ -54,6 +54,11 @@ def formatear_preferencias_en_tabla(
     if dise_exclusivo_val is not None:
         dise_exclusivo_str = "Sí (Exclusivo)" if is_yes(dise_exclusivo_val) else "No (Discreto)"
     
+    baja_depr_val = prefs_dict.get("prioriza_baja_depreciacion")
+    baja_depr_str = "No especificado"
+    if baja_depr_val is not None:
+        baja_depr_str = "Sí" if is_yes(baja_depr_val) else "No"
+    
     # --- 1) Cabecera de preferencias ---
     texto = "✅ He entendido lo siguiente sobre tus preferencias:\n\n"
     texto += "| Preferencia              | Valor                      |\n"
@@ -71,9 +76,10 @@ def formatear_preferencias_en_tabla(
     texto += f"| Tipo de coche           | {'Eléctrico' if is_yes(prefs_dict.get('solo_electricos')) else 'No necesariamente eléctrico'} |\n"
     texto += f"| Diseño exclusivo        | {dise_exclusivo_str} |\n"
     texto += f"| Altura                  | {'Mayor a 1.90 m' if is_yes(prefs_dict.get('altura_mayor_190')) else 'Menor a 1.90 m'} |\n"
-    texto += f"| Peso                    | {'Mayor a 100 kg' if is_yes(prefs_dict.get('peso_mayor_100')) else 'Menor a 100 kg'} |\n"
-    texto += f"| Transmisión preferida   | {transm_str} |\n"
-    texto += f"| Aventura                | {aventura_str} |\n"
+    texto += f"| Peso                    | {'Mayor a 100 kg' if is_yes(prefs_dict.get('peso_mayor_100')) else 'Menor a 100 kg'}   |\n"
+    texto += f"| Transmisión preferida   | {transm_str}      |\n"
+    texto += f"| Aventura                | {aventura_str}    |\n"
+    texto += f"| Prioriza Baja Depreciación| {baja_depr_str} |\n"
     
     # Mostrar los nuevos ratings 0-10
     if any(prefs_dict.get(f"rating_{cat}") is not None for cat in ["fiabilidad_durabilidad", "seguridad", "comodidad", "impacto_ambiental", "costes_uso", "tecnologia_conectividad"]):
@@ -88,6 +94,7 @@ def formatear_preferencias_en_tabla(
             "Impacto Ambiental": prefs_dict.get("rating_impacto_ambiental"),
             #"Costes de Uso/Mantenimiento": prefs_dict.get("rating_costes_uso"),
             "Tecnología y Conectividad": prefs_dict.get("rating_tecnologia_conectividad"),
+            
         }
         for desc, val in ratings_map.items():
             texto += f"| {desc:<32} | {val if val is not None else 'N/A'} |\n"

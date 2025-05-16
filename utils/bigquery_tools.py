@@ -30,6 +30,7 @@ MIN_MAX_RANGES = {
     "tecnologia": (1.0, 10.0),  # Asumiendo una escala de 1-10 para tecnologia en BQ
     "acceso_low_cost": (1.0, 10.0), # Asume una escala, donde más alto = más low_cost
     "deportividad": (1.0, 10.0),    # Asume una escala, donde más alto = más deportivo
+    "devaluacion": (0.0, 10.0), # Asumiendo una escala de 0-10 para depreciación en BQ
 }
 PENALTY_PUERTAS_BAJAS = -0.15
 # --- NUEVAS PENALIZACIONES (AJUSTA ESTOS VALORES) ---
@@ -69,9 +70,11 @@ def buscar_coches_bq( # Renombrada para claridad
         "rating_fiabilidad_durabilidad": pesos.get("rating_fiabilidad_durabilidad", 0.0),
         "rating_seguridad": pesos.get("rating_seguridad", 0.0),
         "rating_comodidad": pesos.get("rating_comodidad", 0.0),
-        "rating_impacto_ambiental": pesos.get("rating_impacto_ambiental", 0.0), # Para después
-       # "rating_costes_uso": pesos.get("rating_costes_uso", 0.0),             # Para después
-        "rating_tecnologia_conectividad": pesos.get("rating_tecnologia_conectividad", 0.0), # Para después
+        "rating_impacto_ambiental": pesos.get("rating_impacto_ambiental", 0.0), 
+       # "rating_costes_uso": pesos.get("rating_costes_uso", 0.0),             
+        "rating_tecnologia_conectividad": pesos.get("rating_tecnologia_conectividad", 0.0), 
+        "devaluacion": pesos.get("prioriza_baja_depreciacion", 0.0),
+        
     }
     
     # Flags de penalización (vienen en el dict 'filtros') --- FLAGS (DEBEN VENIR EN EL DICT 'filtros') ---
@@ -94,6 +97,7 @@ def buscar_coches_bq( # Renombrada para claridad
     min_tec, max_tec = MIN_MAX_RANGES["tecnologia"] 
     min_acc_lc, max_acc_lc = MIN_MAX_RANGES["acceso_low_cost"] # Necesario para penalización
     min_depor, max_depor = MIN_MAX_RANGES["deportividad"]    # Necesario para penalización
+    min_depr, max_depr = MIN_MAX_RANGES["devaluacion"]
 
     sql = f"""
     WITH ScaledData AS (
@@ -115,6 +119,7 @@ def buscar_coches_bq( # Renombrada para claridad
             -- CAMPOS ESCALADOS PARA PENALIZACIONES --
             COALESCE(SAFE_DIVIDE(COALESCE(acceso_low_cost, {min_acc_lc}) - {min_acc_lc}, NULLIF({max_acc_lc} - {min_acc_lc}, 0)), 0) AS acceso_low_cost_scaled,
             COALESCE(SAFE_DIVIDE(COALESCE(deportividad, {min_depor}) - {min_depor}, NULLIF({max_depor} - {min_depor}, 0)), 0) AS deportividad_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(devaluacion, {min_depr}) - {min_depr}, NULLIF({max_depr} - {min_depr}, 0)), 0) AS devaluacion_scaled,
             -- Mapeos existentes --
             CASE WHEN traccion = 'ALL' THEN 1.0 WHEN traccion = 'RWD' THEN 0.5 ELSE 0.0 END AS traccion_scaled,
             (CASE WHEN COALESCE(reductoras, FALSE) THEN 1.0 ELSE 0.0 END) AS reductoras_scaled,
@@ -147,6 +152,7 @@ def buscar_coches_bq( # Renombrada para claridad
         + fiabilidad_scaled * @peso_rating_impacto_ambiental  -- P4 (Impacto Ambiental) usa fiabilidad_scaled
         + durabilidad_scaled * @peso_rating_impacto_ambiental -- P4 (Impacto Ambiental) usa durabilidad_scaled (si así lo defines)
         + tecnologia_scaled * @peso_rating_tecnologia_conectividad -- P6
+        + devaluacion_scaled * @peso_devaluacion
         -- PENALIZACIONES POR COMODIDAD --
         + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
         + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND deportividad_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
@@ -175,6 +181,7 @@ def buscar_coches_bq( # Renombrada para claridad
         bigquery.ScalarQueryParameter("peso_rating_comodidad", "FLOAT64", pesos_completos["rating_comodidad"]),
         bigquery.ScalarQueryParameter("peso_rating_impacto_ambiental", "FLOAT64", pesos_completos["rating_impacto_ambiental"]), # <-- Nuevo
         bigquery.ScalarQueryParameter("peso_rating_tecnologia_conectividad", "FLOAT64", pesos_completos["rating_tecnologia_conectividad"]), # <-- Nuevo
+        bigquery.ScalarQueryParameter("peso_devaluacion", "FLOAT64", pesos_completos["devaluacion"]),
         bigquery.ScalarQueryParameter("flag_penalizar_low_cost_comodidad", "BOOL", flag_penalizar_low_cost_comod),
         bigquery.ScalarQueryParameter("flag_penalizar_deportividad_comodidad", "BOOL", flag_penalizar_deportividad_comod),
         # --- FIN NUEVOS PARÁMETROS ---
