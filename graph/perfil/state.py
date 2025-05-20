@@ -3,7 +3,7 @@ from typing import List, Optional, Annotated, Literal
 from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, model_validator
-from utils.enums import Transmision, TipoMecanica, NivelAventura
+from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesional
 from typing import Literal, Optional
 
 
@@ -11,14 +11,30 @@ from typing import Literal, Optional
         
 class PerfilUsuario(BaseModel):
     # Añadir default=None a todos los Optional que no lo tenían
+    apasionado_motor : Optional[str] = Field(default=None, description="¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'")
+    valora_estetica: Optional[str] = Field(default=None, description="¿Valora la estética del coche? Responde 'sí' o 'no'")
+    coche_principal_hogar: Optional[str] = Field(default=None,description="¿Será el coche principal del hogar? Responde 'sí' o 'no'")
+    uso_profesional: Optional[str] = Field(default=None, description="¿Usará el coche para trabajo? Responde 'sí' o 'no'")
+    tipo_uso_profesional: Optional[TipoUsoProfesional] = Field(default=None, description="Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'")
+    prefiere_diseno_exclusivo: Optional[str] = Field(default=None,description="¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?")
+    aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
+    transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'")
+    necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'")
     altura_mayor_190: Optional[str] = Field(default=None, description="¿El usuario mide más de 1.90 metros? Responde 'sí' o 'no'")
     peso_mayor_100: Optional[str] = Field(default=None, description="¿El usuario pesa más de 100 kg? Responde 'sí' o 'no'")
-    uso_profesional: Optional[str] = Field(default=None, description="¿Usará el coche para trabajo? Responde 'sí' o 'no'")
-    valora_estetica: Optional[str] = Field(default=None, description="¿Valora la estética del coche? Responde 'sí' o 'no'")
     solo_electricos: Optional[str] = Field(default=None, description="¿Quiere solo coches eléctricos? Responde 'sí' o 'no'")
     transmision_preferida: Optional[Transmision] = Field(default=None, description="¿Qué transmisión prefieres: automático, manual o ambos?")
-    apasionado_motor : Optional[str] = Field(default=None, description="¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'")
-    aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
+    # --- NUEVOS CAMPOS DE RATING (0-10) ---
+    rating_fiabilidad_durabilidad: Optional[int] = Field( default=None, ge=0, le=10,description="Importancia de Fiabilidad y Durabilidad (0-10).")  # ge=greater or equal, le=less or equal
+    rating_seguridad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Seguridad (0-10).")
+    rating_comodidad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Comodidad (0-10)." )
+    rating_impacto_ambiental: Optional[int] = Field(default=None, ge=0, le=10,description="Importancia del Bajo Impacto Medioambiental (0-10)."  )
+    #rating_costes_uso: Optional[int] = Field( default=None, ge=0, le=10, description="Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).") por ahora no va
+    rating_tecnologia_conectividad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Tecnología y Conectividad (0-10).")
+    prioriza_baja_depreciacion: Optional[str] = Field(default=None, description="¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'")
+    
+   
+    
     
     # ConfigDict se mantiene igual (recuerda quitar ignored_types si no lo hiciste)
     class ConfigDict:
@@ -80,8 +96,6 @@ class EconomiaUsuario(BaseModel):
 class ResultadoEconomia(BaseModel):
     economia: EconomiaUsuario = Field(description="Objeto que contiene TODA la información económica recopilada o actualizada.") 
     mensaje_validacion: str
-    
-
 
 class ResultadoSoloPerfil(BaseModel):
     """Salida esperada del LLM enfocado solo en el perfil del usuario."""
@@ -124,5 +138,10 @@ class EstadoAnalisisPerfil(TypedDict):
     info_pasajeros: Optional[InfoPasajeros] # Añadimos el nuevo objeto al estado principal
     penalizar_puertas_bajas: Optional[bool] 
     priorizar_ancho: Optional[bool]
+    flag_penalizar_low_cost_comodidad: Optional[bool]
+    flag_penalizar_deportividad_comodidad: Optional[bool]
+    flag_penalizar_antiguo_por_tecnologia: Optional[bool]
+    aplicar_logica_distintivo_ambiental: Optional[bool]
+    tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
 
 

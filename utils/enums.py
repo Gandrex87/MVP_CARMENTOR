@@ -40,3 +40,11 @@ class Transmision(str, Enum):
     AUTOMATICO = "automático"
     MANUAL      = "manual"
     AMBOS       = "ambos"
+
+class TipoUsoProfesional(str, Enum):
+    PASAJEROS = "pasajeros"
+    CARGA     = "carga"
+    MIXTO     = "mixto"
+    
+
+    

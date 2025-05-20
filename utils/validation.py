@@ -2,6 +2,7 @@
 from typing import Optional
 from pydantic import ValidationError
 from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario, InfoPasajeros
+from utils.conversion import is_yes
 
 # --- Función de Validación de Perfil (Definida anteriormente) ---
 def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
@@ -11,16 +12,28 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     if prefs is None:
         return False
     campos_obligatorios = [
-        "altura_mayor_190", "peso_mayor_100", "uso_profesional", 
-        "valora_estetica", "solo_electricos", "transmision_preferida", 
-        "apasionado_motor", "aventura"
-    ]
+        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "uso_profesional",
+        "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100","aventura", "transporta_carga_voluminosa", 
+        "solo_electricos", "transmision_preferida","rating_fiabilidad_durabilidad",
+        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_tecnologia_conectividad","prioriza_baja_depreciacion"
+    ] # por ahora no va rating_costes_uso
     for campo in campos_obligatorios:
         valor = getattr(prefs, campo, None)
-        print(f"Checking field '{campo}': value='{valor}', type={type(valor)}") # <-- Nuevo Print
+        #print(f"Checking field '{campo}': value='{valor}', type={type(valor)}") # <-- Nuevo Print
         if valor is None or (isinstance(valor, str) and not valor.strip()):
              print(f"DEBUG (Validation Perfil) ► Campo '{campo}' está vacío/None.")
              return False
+    # Si uso_profesional es 'sí', entonces tipo_uso_profesional también es obligatorio
+    if is_yes(prefs.uso_profesional): # Usar is_yes para manejar 'sí', 'si', etc.
+        if prefs.tipo_uso_profesional is None or \
+           not str(prefs.tipo_uso_profesional).strip(): # Verificar que no sea cadena vacía si es str
+            print("DEBUG (Validation Perfil) ► 'uso_profesional' es 'sí', pero 'tipo_uso_profesional' está vacío/None. Perfil INCOMPLETO.")
+            return False
+    # --- NUEVA COMPROBACIÓN CONDICIONAL PARA ESPACIO OBJETOS ESPECIALES ---
+    if is_yes(prefs.transporta_carga_voluminosa):
+        if prefs.necesita_espacio_objetos_especiales is None:
+            print("DEBUG (Validation Perfil) ► 'transporta_carga_voluminosa' es 'sí', pero 'necesita_espacio_objetos_especiales' es None. Perfil INCOMPLETO.")
+            return False
     print("DEBUG (Validation Perfil) ► Todos los campos obligatorios del perfil están presentes.")
     return True
 

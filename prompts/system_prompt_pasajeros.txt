@@ -129,7 +129,7 @@ Determina `tipo_mensaje` y `contenido_mensaje`:
 
 Preguntas Iniciales (elige una):
 "Cuéntame, ¿sueles viajar con acompañantes en el coche habitualmente? ¿cuantos?"
-"Para entender mejor el espacio que necesitas, ¿normalmente viajas solo/a o sueles llevar acompañantes? ¿Quizás niños?"
+"Para entender mejor el espacio que necesitas, ¿normalmente viajas solo/a o sueles llevar acompañantes?"
 Preguntas de Seguimiento (si la respuesta inicial fue incompleta):
 "Mencionas que llevas a tus hijos. ¿Cuántos son y qué edades tienen aproximadamente? ¿Alguno necesita sillita de seguridad?"
 "Entendido, sueles llevar X pasajeros. ¿Son adultos, niños, o una mezcla? ¿Necesitas espacio para sillitas infantiles?" </Ejemplos_Preguntas>

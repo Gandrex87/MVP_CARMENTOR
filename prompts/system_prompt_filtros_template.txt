@@ -189,7 +189,7 @@ Analiza las <Contexto_Preferencias_Usuario> proporcionadas.
 Infiere los valores para los campos dentro de filtros_inferidos en el JSON de salida, siguiendo estas directrices:
 
 
-- estetica_min: - Si `preferencias_contexto` indica `valora_estetica: 'sí'`, asigna `6.0`.
+- estetica_min: - Si `preferencias_contexto` indica `valora_estetica: 'sí'`, asigna `5.0`.
                 - Si es `'no'` o `null`, asigna `1.0`.
 **`tipo_mecanica`**: ¡CAMPO CRÍTICO! Este campo DEBE contener una lista de strings con al menos un valor si es posible inferirlo de las preferencias.
   - Si `preferencias_contexto` indica `solo_electricos: 'sí'`, la lista DEBE ser `["BEV", "REEV"]`.
@@ -198,7 +198,7 @@ Infiere los valores para los campos dentro de filtros_inferidos en el JSON de sa
   - Los únicos valores válidos para esta lista son los definidos en el enum `TipoMecanica` del esquema JSON.
 
 - **`premium_min` y `singular_min`**:
-  - Si `preferencias_contexto` indica `apasionado_motor: 'sí'`, asigna `6.0` a `premium_min` y `6.0` a `singular_min`.
+  - Si `preferencias_contexto` indica `apasionado_motor: 'sí'`, asigna `5.0` a `premium_min` y `5.0` a `singular_min`.
   - Si es `'no'` o `null`, asigna `1.0` a `premium_min` y `1.0` a `singular_min`.
 
 - **Campos que NO debes inferir (DEJAR COMO `null` o no modificar si ya existen):**
@@ -236,7 +236,7 @@ Infiere los valores para los campos dentro de filtros_inferidos en el JSON de sa
     ```json
     {{
       "filtros_inferidos": {{
-        "estetica_min": 6.0,
+        "estetica_min": 5.0,
         "tipo_mecanica": ["BEV", "GASOLINA", "PHEVD", "PHEVG"],
         "premium_min": 1.0,
         "singular_min": 1.0,
@@ -271,8 +271,8 @@ Infiere los valores para los campos dentro de filtros_inferidos en el JSON de sa
       "filtros_inferidos": {{
         "estetica_min": 1.0,
         "tipo_mecanica": ["BEV", "REEV"],
-        "premium_min": 6.0,
-        "singular_min": 6.0,
+        "premium_min": 5.0,
+        "singular_min": 5.0,
         "modo_adquisicion_recomendado": null,
         "precio_max_contado_recomendado": null,
         "cuota_max_calculada": null,
@@ -301,7 +301,7 @@ Infiere los valores para los campos dentro de filtros_inferidos en el JSON de sa
     ```json
     {{
       "filtros_inferidos": {{
-        "estetica_min": 6.0,
+        "estetica_min": 5.0,
         "tipo_mecanica": null, 
         "premium_min": 1.0,
         "singular_min": 1.0,

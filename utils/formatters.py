@@ -1,9 +1,7 @@
-from utils.conversion import normalizar_texto
-from utils.conversion import get_enum_names 
 from typing import Optional, Any, Dict # Añadir tipos
 from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario
-from utils.enums import Transmision, NivelAventura 
-from utils.conversion import is_yes, get_enum_names # Añadir is_yes
+#from utils.enums import Transmision, NivelAventura 
+from utils.conversion import is_yes
 
 # Define tipos más específicos para las entradas (opcional pero recomendado)
 PreferenciasInput = Optional[PerfilUsuario | Dict[str, Any]]
@@ -21,13 +19,10 @@ def formatear_preferencias_en_tabla(
      - Filtros técnicos inferidos
      - Datos de economía (si se proporcionan)
     """
-
     # --- Convertir a dict para acceso uniforme (si son Pydantic models) ---
     prefs_dict = preferencias.model_dump(mode='json') if hasattr(preferencias, "model_dump") else preferencias or {}
     filtros_dict = filtros.model_dump(mode='json') if hasattr(filtros, "model_dump") else filtros or {}
     econ_dict = economia.model_dump(mode='json') if hasattr(economia, "model_dump") else economia or {}
-
-    # --- Preparar algunos valores ---
     # Usar is_yes para las booleanas
     estetica_str = "Importante" if is_yes(prefs_dict.get("valora_estetica")) else "No prioritaria"
     
@@ -37,19 +32,72 @@ def formatear_preferencias_en_tabla(
 
     aventura_val = prefs_dict.get("aventura") # Esto será el valor (str)
     aventura_str = aventura_val.capitalize() if aventura_val else "No definido"
-
+    
+    coche_principal_val = prefs_dict.get("coche_principal_hogar")
+    if coche_principal_val is None:
+        coche_principal_str = "No especificado"
+    else:
+        coche_principal_str = "Sí" if is_yes(coche_principal_val) else "No"
+    
+    uso_prof_val = prefs_dict.get("uso_profesional")
+    uso_prof_str = "Profesional" if is_yes(uso_prof_val) else "Particular"
+    if is_yes(uso_prof_val):
+        tipo_uso_val_str = prefs_dict.get("tipo_uso_profesional") 
+        if tipo_uso_val_str and tipo_uso_val_str.strip(): # Asegurar que no sea cadena vacía
+            tipo_uso_display_str = tipo_uso_val_str.capitalize()
+        else:
+            tipo_uso_display_str = "No especificado" # <-- VALOR POR DEFECTO
+   
+    
+    dise_exclusivo_val = prefs_dict.get("prefiere_diseno_exclusivo")
+    dise_exclusivo_str = "No especificado"
+    if dise_exclusivo_val is not None:
+        dise_exclusivo_str = "Sí (Exclusivo)" if is_yes(dise_exclusivo_val) else "No (Discreto)"
+    
+    baja_depr_val = prefs_dict.get("prioriza_baja_depreciacion")
+    baja_depr_str = "No especificado"
+    if baja_depr_val is not None:
+        baja_depr_str = "Sí" if is_yes(baja_depr_val) else "No"
+    
     # --- 1) Cabecera de preferencias ---
     texto = "✅ He entendido lo siguiente sobre tus preferencias:\n\n"
-    texto += "| Preferencia             | Valor                      |\n"
-    texto += "|-------------------------|----------------------------|\n"
-    texto += f"| Tipo de coche           | {'Eléctrico' if is_yes(prefs_dict.get('solo_electricos')) else 'No necesariamente eléctrico'} |\n"
-    texto += f"| Uso                     | {'Uso profesional' if is_yes(prefs_dict.get('uso_profesional')) else 'Particular'} |\n"
-    texto += f"| Altura                  | {'Mayor a 1.90 m' if is_yes(prefs_dict.get('altura_mayor_190')) else 'Menor a 1.90 m'} |\n"
-    texto += f"| Peso                    | {'Mayor a 100 kg' if is_yes(prefs_dict.get('peso_mayor_100')) else 'Menor a 100 kg'} |\n"
-    texto += f"| Estética                | {estetica_str} |\n"
-    texto += f"| Transmisión preferida   | {transm_str} |\n"
+    texto += "| Preferencia              | Valor                      |\n"
+    texto += "|--------------------------|----------------------------|\n"
     texto += f"| Apasionado del motor    | {'Sí' if is_yes(prefs_dict.get('apasionado_motor')) else 'No'} |\n" # Usar Sí/No directamente
-    texto += f"| Aventura                | {aventura_str} |\n"
+    texto += f"| Estética                | {estetica_str} |\n"
+    texto += f"| Principal del Hogar     | {coche_principal_str} |\n" # <-- Fila añadida
+    texto += f"| Uso                     | {uso_prof_str} |\n"
+    if is_yes(uso_prof_val):
+        tipo_uso_val_str = prefs_dict.get("tipo_uso_profesional") 
+        tipo_uso_display_str = "No especificado" # Default para esta sección
+        if tipo_uso_val_str and tipo_uso_val_str.strip():
+            tipo_uso_display_str = tipo_uso_val_str.capitalize()
+        texto+=f"|   ↳ Tipo Profesional  | {tipo_uso_display_str} \n" # AHORA ESTÁ DENTRO DEL IF  
+    texto += f"| Tipo de coche           | {'Eléctrico' if is_yes(prefs_dict.get('solo_electricos')) else 'No necesariamente eléctrico'} |\n"
+    texto += f"| Diseño exclusivo        | {dise_exclusivo_str} |\n"
+    texto += f"| Altura                  | {'Mayor a 1.90 m' if is_yes(prefs_dict.get('altura_mayor_190')) else 'Menor a 1.90 m'} |\n"
+    texto += f"| Peso                    | {'Mayor a 100 kg' if is_yes(prefs_dict.get('peso_mayor_100')) else 'Menor a 100 kg'}   |\n"
+    texto += f"| Transmisión preferida   | {transm_str}      |\n"
+    texto += f"| Aventura                | {aventura_str}    |\n"
+    texto += f"| Prioriza Baja Depreciación| {baja_depr_str} |\n"
+    
+    # Mostrar los nuevos ratings 0-10
+    if any(prefs_dict.get(f"rating_{cat}") is not None for cat in ["fiabilidad_durabilidad", "seguridad", "comodidad", "impacto_ambiental", "costes_uso", "tecnologia_conectividad"]):
+        texto += "\n📊 Importancia de Características (0-10):\n\n" # Nueva sub-sección
+        texto += "| Característica                   | Rating (0-10) |\n"
+        texto += "|----------------------------------|---------------|\n"
+        
+        ratings_map = {
+            "Fiabilidad y Durabilidad": prefs_dict.get("rating_fiabilidad_durabilidad"),
+            "Seguridad": prefs_dict.get("rating_seguridad"),
+            "Comodidad": prefs_dict.get("rating_comodidad"),
+            "Impacto Ambiental": prefs_dict.get("rating_impacto_ambiental"),
+            #"Costes de Uso/Mantenimiento": prefs_dict.get("rating_costes_uso"),
+            "Tecnología y Conectividad": prefs_dict.get("rating_tecnologia_conectividad"),
+            
+        }
+        for desc, val in ratings_map.items():
+            texto += f"| {desc:<32} | {val if val is not None else 'N/A'} |\n"
 
     # --- 2) Filtros técnicos ---
     # (Asumiendo que tipo_mecanica y tipo_carroceria en filtros_dict ya son listas de strings (valores enum)
@@ -83,10 +131,6 @@ def formatear_preferencias_en_tabla(
                   cuota_calc = filtros_dict.get("cuota_max_calculada")
                   cuota_str = f"{cuota_calc:,.0f} €/mes".replace(",",".") if isinstance(cuota_calc, float) else "N/A"
                   texto += f"| Cuota Máx. Calculada    | {cuota_str} |\n"
-        # --- FIN FILAS AÑADIDAS --
-
-    # --- 3) Economía del usuario ---
-    # Dentro de formatear_preferencias_en_tabla en utils/formatters.py
 
     # --- 3) Economía del usuario ---
     if econ_dict: # Verifica si hay datos económicos
@@ -133,8 +177,5 @@ def formatear_preferencias_en_tabla(
                 if entrada is not None and isinstance(entrada, (int, float)):
                     ent_str = f"{entrada:,.0f} €".replace(",",".")
                     texto += f"| Entrada inicial         | {ent_str} |\n"
-                    
-    # 
-    texto += "\n\nEspero que este resumen te sea útil."
 
     return texto.strip()
