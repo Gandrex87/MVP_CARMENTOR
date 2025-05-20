@@ -12,16 +12,16 @@ Este módulo contiene funciones auxiliares reutilizables que permiten separar la
 Funcionamiento Detallado de Componentes Clave
 Para ofrecer recomendaciones personalizadas, el agente utiliza varias funciones especializadas. Dos de las más importantes en la lógica de selección y ranking de vehículos son compute_raw_weights y buscar_coches_bq.
 
-- `weights.py`
+## `weights.py`
   
 1. `compute_raw_weights`
 Esta función es el primer paso para traducir las diversas preferencias del usuario en un sistema numérico que permita comparar coches.
 
-## Propósito Principal `compute_raw_weights`
+### Propósito Principal `compute_raw_weights`
 
 Consolidar todas las preferencias del usuario (tanto las respuestas directas 'sí'/'no', las selecciones de enums como el nivel de aventura, y los ratings explícitos de 0-10) en un conjunto de "pesos crudos" o "puntuaciones de importancia inicial" para diferentes características de un vehículo. Estos pesos crudos aún no están listos para ser usados directamente en el ranking final, ya que no están en una escala comparable, pero reflejan la importancia inicial que el agente le da a cada aspecto.
 
-## Entradas Principales (`Args`)
+### Entradas Principales (`Args`)
 
 
 * `preferencias: Dict[str, Any]`: Un diccionario que contiene todas las respuestas del perfil del usuario, incluyendo:
@@ -37,24 +37,29 @@ Consolidar todas las preferencias del usuario (tanto las respuestas directas 's�
 * `premium_min_val`: Optional[float]: Valor numérico (ej: 0.5 o 3.0) derivado del post-procesamiento de apasionado_motor.
 * `singular_min_val`: Optional[float]: Valor numérico (ej: 1.0, 3.5 o 6.0) derivado del post-procesamiento de apasionado_motor y prefiere_diseno_exclusivo.
 * `priorizar_ancho`: Optional[bool]: Un flag booleano que indica si se debe dar más importancia al ancho del vehículo (derivado de la información de pasajeros).
+* `transporta_carga_voluminosa` == 'sí': Favorecer las columnas BQ maletero_minimo y maletero_maximo
+* `necesita_espacio_objetos_especiales` == 'sí' (lo que implica que la anterior también fue 'sí'):
+Favorecer tipo_carroceria: `[MONOVOLUMEN, FAMILIAR, FURGONETA, SUV]` (Esto lo manejaremos en RAG - Paso 6).
+Desfavorecer/Eliminar tipo_carroceria: `[3VOL, COUPE, DESCAPOTABLE]` (También en RAG).
+Favorecer las columnas BQ `largo` y `ancho`.
 
-
-## Lógica Central de weights.py
+### Lógica Central de weights.py
 
 1. **Pesos Base por Filtros Derivados**: Inicializa los pesos crudos para "`estetica`", "`premium`" y "`singular`" usando directamente los valores `estetica_min_val`, `premium_min_val` y `singular_min_val` recibidos. Estos valores ya reflejan una "importancia" derivada de las preferencias del usuario.
 2. **Pesos por `Aventura`**: Consulta el diccionario `AVENTURA_RAW` usando el nivel de aventura del usuario para obtener los pesos crudos para `"altura_libre_suelo"`, `"traccion"` y `"reductoras"`.
 3. **Pesos por Dimensiones del Conductor:** Si `altura_mayor_190` es 'sí', asigna pesos crudos predefinidos (más altos) a `"batalla"` e `"indice_altura_interior"`. Si es 'no', asigna pesos bajos.
-4. **Peso por Ancho del Vehículo:** Si `priorizar_ancho` es `True`, asigna un peso crudo predefinido (alto) a `"ancho"`. Si es False, asigna un peso bajo.
+4. **Peso por Ancho del Vehículo:** Si `priorizar_ancho` es `True`, asigna un peso crudo predefinido (`alto`) a `"ancho"`. Si es False, asigna un peso bajo.
 5. **Pesos por Ratings Explícitos:** Para cada una de las 5 (o 6) nuevas características (Fiabilidad y Durabilidad, Seguridad, Comodidad, Impacto Ambiental, Tecnología y Conectividad), toma el rating numérico (0-10) proporcionado por el usuario directamente del diccionario `preferencias` y lo usa como el peso crudo para esa característica `(ej: raw["rating_seguridad"] = preferencias.get("rating_seguridad", 0.0))``.
 6. **Salida** (Returns):`Dict[str, float]:` Un diccionario donde las claves son los nombres de las características (ej: `"estetica"`, `"traccion"`, `"rating_seguridad"`) y los valores son sus pesos crudos calculados.
 Este diccionario luego se pasa a la función `normalize_weights` para escalar todos estos pesos crudos a una suma total de 1.0, haciéndolos comparables para el scoring final.
 
-- `bigquery_tools.py`
+
+## `bigquery_tools.py`
 
 2.`buscar_coches_bq`
 Esta es la función principal que interactúa con la base de datos de coches en BigQuery para encontrar y clasificar vehículos según los criterios y preferencias del usuario.
 
-## Propósito Principal `buscar_coches_bq`
+### Propósito Principal `buscar_coches_bq`
 
 Construir y ejecutar una query SQL dinámica en BigQuery que:
 
@@ -72,7 +77,7 @@ Entradas Principales (`Args`):
 - `pesos: Dict[str, float]:` Un diccionario que contiene los pesos normalizados (suman 1.0) para todas las características que se consideran en el score_total (ej: `peso_estetica`, `peso_rating_seguridad`, `peso_ancho`, etc.). Estos vienen de `normalize_weights`(`compute_raw_weights`(...)).
 `k: int:` El número máximo de coches a devolver.
 
-## Lógica Central de bigquery_tools.py
+### Lógica Central de bigquery_tools.py
 
 1. Inicialización y Preparación de Pesos/Flags: Extrae los valores de los diccionarios filtros y pesos, estableciendo defaults (como 0.0 para pesos no especificados).
 2. Construcción del SQL - CTE ScaledData:
@@ -102,15 +107,93 @@ LIMIT @k: Limita el número de resultados.
 
 Una tupla conteniendo:
 
-1. List[Dict[str, Any]]: La lista de coches encontrados, donde cada coche es un diccionario.
+1. `List[Dict[str, Any]]`: La lista de coches encontrados, donde cada coche es un diccionario.
    
 2. str: El string SQL completo que se ejecutó.
    
-3. List[Dict[str, Any]]: Una lista de los parámetros formateados que se usaron en la query (para logging).
+3. `List[Dict[str, Any]]`: Una lista de los parámetros formateados que se usaron en la query (para logging).
+
+4. Análisis Conceptual del Enfoque para calificaciones de tecnologia>= 7:
+
+Definición de Rangos y Penalizaciones:
+Primero, definimos claramente los rangos de antigüedad:
+
+0-5 años: Sin penalización (valor de ajuste = 0.0)
+5 a 7 años: Penalización X (ej: -0.10)
+
+7 a 10 años: Penalización Y (ej: -0.20, más fuerte que X)
+
+10 años: Penalización Z (ej: -0.30, la más fuerte)
+Estos valores de penalización (X, Y, Z) serían constantes negativas que restaríamos al score.
+
+## `rag_carroceria.py` - Recomendación de Tipos de Carrocería
+
+Este módulo es responsable de una parte crucial de la personalización de las recomendaciones: sugerir los **tipos de carrocería** más adecuados para el usuario antes de realizar la búsqueda final en la base de datos de vehículos. Para ello, utiliza un enfoque de **Generación Aumentada por Recuperación (RAG)**.
+
+### Funcionamiento Principal
+
+El corazón de este módulo es la función `get_recommended_carrocerias`. Su objetivo es tomar las diversas preferencias del usuario y traducirlas en una consulta semántica para buscar en una base de datos vectorial de tipos de carrocería.
+
+#### 1. Fuente de Conocimiento (Vector Store)
+
+- **Origen de los Datos:** La información sobre los diferentes tipos de carrocería (ej: SUV, BERLINA, COUPE, TODOTERRENO, etc.), sus descripciones y una serie de *tags* asociados, se carga inicialmente desde un archivo PDF (manejado por `utils/rag_reader.py`).
+  
+- **Embeddings y Almacenamiento Vectorial:**
+  - Cada tipo de carrocería, junto con su descripción y tags, se convierte en un "documento".
+  - Se utilizan modelos de *embeddings* (específicamente `OpenAIEmbeddings`) para convertir el contenido textual de estos documentos en representaciones numéricas (vectores). Estos vectores capturan el significado semántico del texto.
+  - Estos vectores se almacenan y se indexan en un almacén vectorial eficiente, en este caso, **FAISS** (`langchain_community.vectorstores.FAISS`). Este índice permite búsquedas rápidas por similitud semántica.
+  
+- **Acceso al Vector Store:** La función `get_vectorstore()` se encarga de cargar o construir este índice FAISS para que esté disponible para las búsquedas.
+
+#### 2. La Función `get_recommended_carrocerias`
+
+- **Propósito:** Dada las preferencias del usuario, generar una lista de los `k` tipos de carrocería más relevantes.
+
+- **Entradas Principales (`Args`):**
+  * `preferencias: Dict[str, Any]`: Un diccionario que contiene las preferencias del perfil del usuario. Los campos clave utilizados incluyen:
+  * `solo_electricos` ('sí'/'no')
+  * `valora_estetica` ('sí'/'no')
+  * `apasionado_motor` ('sí'/'no')
+  * `aventura` (ej: "ninguna", "ocasional", "extrema")
+  * `uso_profesional` ('sí'/'no')
+  * `tipo_uso_profesional` (ej: "carga", "pasajeros", "mixto")
+  * `necesita_espacio_objetos_especiales` ('sí'/'no')
+  * `rating_comodidad` (calificación 0-10)
+  * `info_pasajeros: Optional[Dict[str, Any]]`: Un diccionario con información sobre los pasajeros habituales (frecuencia, número de niños en silla, número de otros pasajeros).
+  * `k: int`: El número deseado de tipos de carrocería a recomendar.
+
+- **Lógica de Construcción de la Query RAG:**
+    1. **Inicialización:** Se obtiene una instancia del vector store FAISS.
+    2. **Construcción de `partes_query`:** Se crea dinámicamente una lista de palabras y frases clave (`partes_query`) basada en las preferencias del usuario:
+        * Se añaden términos básicos si ciertas preferencias son afirmativas (ej: "eléctrico" si `solo_electricos='sí'`; "diseño" si `valora_estetica='sí'`).
+        * **Sinónimos:** Se utilizan diccionarios predefinidos de sinónimos (ej: `AVENTURA_SYNONYMS`, `ESTETICA_VALORADA_SYNONYMS`, `USO_PROF_CARGA_SYNONYMS`, etc.) para enriquecer la query. Por ejemplo, si `aventura="extrema"`, se añaden términos como "off-road", "terrenos difíciles".
+        * **Lógica Condicional para Espacio:**
+            * Si `necesita_espacio_objetos_especiales='sí'`, se añaden términos clave como "gran capacidad de carga", "maletero amplio", "versatilidad interior".
+            * Si `rating_comodidad` es alto (ej: >= 8), se añaden términos relacionados con el confort y los tipos de carrocería espaciosos (ej: "confort de marcha", "berlina confortable", "SUV familiar cómodo").
+        * **Lógica para Pasajeros:** Si se llevan pasajeros frecuentemente o niños en silla, se añaden términos como "espacio para pasajeros", "coche familiar grande", "muchas plazas".
+    3. **Formación de la Query String:** Las `partes_query` se unen para formar una única cadena de texto (`query_str`). Se eliminan duplicados y se utiliza una query de fallback si no se generaron partes.
+    4. **Búsqueda por Similitud:** Se ejecuta `vs.similarity_search(query_str, k=k+2)` contra el índice FAISS. Esta búsqueda devuelve los documentos (tipos de carrocería con sus descripciones/tags) cuyos vectores son semánticamente más similares al vector de la `query_str` generada. Se piden `k+2` resultados para tener un pequeño margen para el post-filtrado.
+    5. **Extracción de Tipos Únicos:** De los documentos devueltos, se extraen los nombres de los tipos de carrocería (almacenados en la metadata de cada documento), asegurando que no haya duplicados.
+    6. **Post-Filtrado (Lógica de Exclusión):**
+        * Si `necesita_espacio_objetos_especiales='sí'`, se aplica un filtro para **eliminar** explícitamente tipos de carrocería menos prácticos para carga (como "3VOL", "COUPE", "DESCAPOTABLE") de la lista de recomendaciones. Se incluye una lógica para revertir a los resultados RAG originales si este filtro elimina todas las opciones.
+        * *(Opcional)* Se podría añadir una lógica similar para el post-filtrado basado en `rating_comodidad` si el enriquecimiento de la query no es suficiente para favorecer los tipos deseados.
+    7. **Fallback Final:** Si después de todo el proceso no se obtienen tipos de carrocería, se devuelve una lista de fallback genérica (ej: ["SUV", "BERLINA", "FAMILIAR", "COMPACTO"]).
+
+- **Salida (`Returns`):**
+  
+`List[str]`: Una lista de los `k` nombres de tipos de carrocería más recomendados según la búsqueda RAG y el post-filtrado.
+
+### Importancia en el Flujo del Agente
+
+La lista de `tipo_carroceria` devuelta por `get_recommended_carrocerias` se guarda en el estado (`filtros_inferidos.tipo_carroceria`) y luego se utiliza como un **filtro duro** en la cláusula `WHERE` de la query final a BigQuery (`AND tipo_carroceria IN UNNEST(@tipos_carroceria)`). Esto asegura que la búsqueda final de coches se restrinja a los tipos de carrocería que el sistema RAG ha considerado más apropiados para las necesidades expresadas por el usuario, especialmente en términos de espacio, uso y aventura.
+
+Este componente permite al agente ir más allá de simples coincidencias de palabras clave, utilizando la comprensión semántica para guiar una de las decisiones de filtrado más importantes.
+
+
 
 ////////////////////////////////
 
-otros temas para seguimiento:
+otros temas para seguimiento: 
 
 Explicación:
 
@@ -127,3 +210,5 @@ Los umbrales dentro de los CASE WHEN para las penalizaciones no eliminan coches,
 Esto te da la flexibilidad de decir: "Prefiero coches cómodos, y si un coche es excesivamente deportivo, eso le resta puntos para mí, pero no significa que lo descarte por completo si es sobresaliente en otras cosas que valoro".
 
 ¿Queda más claro así? Si te parece bien este enfoque, podemos continuar con la implementación en buscar_coches_bq.
+
+MUNICIPIO_ZBE, 	ZONA_LLUVIAS,	ZONA_NIEBLAS,	ZONA_NIEVE, ZONA_CLIMA_MONTA,	ZONA_GLP,	ZONA_GNV

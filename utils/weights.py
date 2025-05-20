@@ -67,7 +67,7 @@ def compute_raw_weights(
     if is_yes(altura_pref_val):
         print("DEBUG (Weights) ► Usuario alto. Asignando pesos a batalla/índice.")
         raw["batalla"] = 5.0 
-        raw["indice_altura_interior"] = 5.0 
+        raw["indice_altura_interior"] = 4.0 
     else:
         print("DEBUG (Weights) ► Usuario NO alto. Asignando pesos bajos a batalla/índice.")
         raw["batalla"] = 1.0 
@@ -106,8 +106,53 @@ def compute_raw_weights(
         raw["rating_impacto_ambiental"] = 0.0
         #raw["rating_costes_uso"] = 0.0
         raw["rating_tecnologia_conectividad"] = 0.0
-        
-  
+    # --- NUEVA LÓGICA PARA PESOS DE CARGA Y ESPACIO ---
+    # Inicializar pesos crudos para las nuevas características BQ que se ponderarán
+    raw["maletero_minimo_score"] = 1.0  # Un peso base bajo si no se necesita carga
+    raw["maletero_maximo_score"] = 1.0  # Un peso base bajo
+    raw["largo_vehiculo_score"] = 1.0   # Un peso base bajo
+
+    if is_yes(preferencias.get("transporta_carga_voluminosa")):
+        # Si transporta carga voluminosa, aumentamos la importancia de las columnas de maletero
+        raw["maletero_minimo_score"] = 5.0 # Ejemplo de peso crudo, ojo,  ajustar según importancia
+        raw["maletero_maximo_score"] = 5.0 # Ejemplo de peso crudo
+        print(f"DEBUG (Weights) ► transporta_carga_voluminosa='sí'. Pesos crudos para maletero: {raw['maletero_minimo_score']}/{raw['maletero_maximo_score']}")
+
+        if is_yes(preferencias.get("necesita_espacio_objetos_especiales")):
+            # Si además necesita espacio para objetos especiales, aumentamos la importancia de largo y ancho
+            raw["largo_vehiculo_score"] = 5.0 # Ejemplo de peso crudo
+            # Para 'ancho', podemos sumarle al valor que ya tenía por 'priorizar_ancho' o establecer un mínimo alto.
+            # Optemos por asegurar un mínimo alto si esta condición es sí.
+            raw["ancho"] = max(raw.get("ancho", 0.5), 5.0) # Asegurar que sea al menos 5.0
+            print(f"DEBUG (Weights) ► necesita_espacio_objetos_especiales='sí'. Pesos crudos para largo: {raw['largo_vehiculo_score']}, ancho actualizado a: {raw['ancho']}")
+    # --- FIN NUEVA LÓGICA ---
+    
+    # --- NUEVA LÓGICA: Favorecer índice_altura y autonomía si comodidad es alta ---
+    UMBRAL_RATING_COMODIDAD_PARA_FAVORECER = 8 # Define tu umbral
+    rating_comodidad_val = preferencias.get("rating_comodidad")
+
+    # Inicializar peso para autonomía (nueva característica a ponderar)
+    raw["autonomia_vehiculo"] = 1.0 # Peso base bajo por defecto
+
+    if rating_comodidad_val is not None and rating_comodidad_val >= UMBRAL_RATING_COMODIDAD_PARA_FAVORECER:
+        print(f"DEBUG (Weights) ► Comodidad alta ({rating_comodidad_val}). Aumentando pesos para índice_altura y autonomía.")
+        # Aumentar el peso de indice_altura_interior. 
+        # Podemos sumarle al existente o establecer un valor alto. Sumar es más flexible.
+        raw["indice_altura_interior"] = raw.get("indice_altura_interior", 0.5) + 4.0 # Ejemplo: suma 4 puntos crudos
+        # Asignar un peso crudo alto a la autonomía
+        raw["autonomia_vehiculo"] = 5.0 # Ejemplo de peso crudo alto, ajusta según importancia
+    
+    # Pesos específicos para bajo peso y bajo consumo, activados por alto rating de impacto ambiental
+    raw["fav_bajo_peso"] = 0.0 # Default
+    raw["fav_bajo_consumo"] = 0.0 # Default
+    
+    UMBRAL_IMPACTO_PARA_PESO_CONSUMO = 8 # Mismo umbral que para el flag del distintivo
+    rating_ia = preferencias.get("rating_impacto_ambiental")
+    if rating_ia is not None and rating_ia >= UMBRAL_IMPACTO_PARA_PESO_CONSUMO:
+        print(f"DEBUG (Weights) ► Impacto Ambiental alto ({rating_ia}). Activando pesos para bajo peso y bajo consumo.")
+        raw["fav_bajo_peso"] = 5.0 # Ejemplo de peso crudo, ¡AJUSTA!
+        raw["fav_bajo_consumo"] = 6.0 # Ejemplo de peso crudo, ¡AJUSTA!
+    
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}
     

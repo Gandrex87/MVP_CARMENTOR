@@ -31,14 +31,31 @@ MIN_MAX_RANGES = {
     "acceso_low_cost": (1.0, 10.0), # Asume una escala, donde más alto = más low_cost
     "deportividad": (1.0, 10.0),    # Asume una escala, donde más alto = más deportivo
     "devaluacion": (0.0, 10.0), # Asumiendo una escala de 0-10 para depreciación en BQ
+    "maletero_minimo": (11.0, 15000.0), # Ejemplo en litros, ¡USA TUS VALORES!
+    "maletero_maximo": (11.0, 15000.0), # Ejemplo en litros, ¡USA TUS VALORES!
+    "largo": (2450.0, 6400.0) ,       # Ejemplo en mm, ¡USA TUS VALORES!
+    "autonomia_uso_maxima": (30.8, 1582.4), # --- NUEVO RANGO PARA AUTONOMÍA ---
+    "peso": (470.0, 3500.0), 
+    "indice_consumo_energia": (7.4, 133.0) 
+    
 }
 PENALTY_PUERTAS_BAJAS = -0.15
 # --- NUEVAS PENALIZACIONES (AJUSTA ESTOS VALORES) ---
 PENALTY_LOW_COST_POR_COMODIDAD = -0.20 # Cuánto restar si es muy low-cost y se quiere confort
-PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.15 # Cuánto restar si es muy deportivo y se quiere confort
+PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.20 # Cuánto restar si es muy deportivo y se quiere confort
 # --- UMBRALES PARA PENALIZACIÓN (AJUSTA ESTOS VALORES, 0-1 después de escalar) ---
 UMBRAL_LOW_COST_PENALIZABLE = 0.7 # Penalizar si acceso_low_cost_scaled >= 0.7
 UMBRAL_DEPORTIVIDAD_PENALIZABLE = 0.7 # Penalizar si deportividad_scaled >= 0.7
+# --- NUEVAS CONSTANTES PARA PENALIZACIÓN GRADUAL POR ANTIGÜEDAD ---
+PENALTY_ANTIGUEDAD_MAS_10_ANOS = -0.45
+PENALTY_ANTIGUEDAD_7_A_10_ANOS = -0.30
+PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -0.15
+
+# --- NUEVAS CONSTANTES PARA BONIFICACIÓN/PENALIZACIÓN DISTINTIVO AMBIENTAL ---
+BONUS_DISTINTIVO_ECO_CERO_C = 0.20  # Cuánto sumar si es C, ECO o CERO
+PENALTY_DISTINTIVO_NA_B = -0.50   # Cuánto restar si es NA o B
+BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 0.20 #
+# --------------------------------------------------------------------------
 
 def buscar_coches_bq( # Renombrada para claridad
     filtros: Optional[FiltrosDict],
@@ -74,6 +91,14 @@ def buscar_coches_bq( # Renombrada para claridad
        # "rating_costes_uso": pesos.get("rating_costes_uso", 0.0),             
         "rating_tecnologia_conectividad": pesos.get("rating_tecnologia_conectividad", 0.0), 
         "devaluacion": pesos.get("prioriza_baja_depreciacion", 0.0),
+        # Las claves deben coincidir con las generadas en compute_raw_weights
+        "maletero_minimo_score": pesos.get("maletero_minimo_score", 0.0),
+        "maletero_maximo_score": pesos.get("maletero_maximo_score", 0.0),
+        "largo_vehiculo_score": pesos.get("largo_vehiculo_score", 0.0),
+        "autonomia_vehiculo": pesos.get("autonomia_vehiculo", 0.0),
+         # ---claves deben coincidir con compute_raw_weights) ---
+        "fav_bajo_peso": pesos.get("fav_bajo_peso", 0.0),
+        "fav_bajo_consumo": pesos.get("fav_bajo_consumo", 0.0),
         
     }
     
@@ -81,6 +106,8 @@ def buscar_coches_bq( # Renombrada para claridad
     penalizar_puertas_val = bool(filtros.get("penalizar_puertas_bajas", False))
     flag_penalizar_low_cost_comod = bool(filtros.get("flag_penalizar_low_cost_comodidad", False))
     flag_penalizar_deportividad_comod = bool(filtros.get("flag_penalizar_deportividad_comodidad", False))
+    flag_penalizar_antiguo_tec_val = bool(filtros.get("penalizar_antiguedad_por_tecnologia", False))
+    flag_aplicar_logica_distintivo_val = bool(filtros.get("aplicar_logica_distintivo_ambiental", False))
 
     # Desempaquetar Min/Max (todos necesarios para la CTE ScaledData)
     min_est, max_est = MIN_MAX_RANGES["estetica"]
@@ -98,6 +125,12 @@ def buscar_coches_bq( # Renombrada para claridad
     min_acc_lc, max_acc_lc = MIN_MAX_RANGES["acceso_low_cost"] # Necesario para penalización
     min_depor, max_depor = MIN_MAX_RANGES["deportividad"]    # Necesario para penalización
     min_depr, max_depr = MIN_MAX_RANGES["devaluacion"]
+    min_mal_min, max_mal_min = MIN_MAX_RANGES["maletero_minimo"]
+    min_mal_max, max_mal_max = MIN_MAX_RANGES["maletero_maximo"]
+    min_largo, max_largo = MIN_MAX_RANGES["largo"]
+    min_auton, max_auton = MIN_MAX_RANGES["autonomia_uso_maxima"]
+    min_peso_kg, max_peso_kg = MIN_MAX_RANGES["peso"]
+    min_consumo, max_consumo = MIN_MAX_RANGES["indice_consumo_energia"]
 
     sql = f"""
     WITH ScaledData AS (
@@ -120,8 +153,15 @@ def buscar_coches_bq( # Renombrada para claridad
             COALESCE(SAFE_DIVIDE(COALESCE(acceso_low_cost, {min_acc_lc}) - {min_acc_lc}, NULLIF({max_acc_lc} - {min_acc_lc}, 0)), 0) AS acceso_low_cost_scaled,
             COALESCE(SAFE_DIVIDE(COALESCE(deportividad, {min_depor}) - {min_depor}, NULLIF({max_depor} - {min_depor}, 0)), 0) AS deportividad_scaled,
             COALESCE(SAFE_DIVIDE(COALESCE(devaluacion, {min_depr}) - {min_depr}, NULLIF({max_depr} - {min_depr}, 0)), 0) AS devaluacion_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(maletero_minimo, {min_mal_min}) - {min_mal_min}, NULLIF({max_mal_min} - {min_mal_min}, 0)), 0) AS maletero_minimo_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(maletero_maximo, {min_mal_max}) - {min_mal_max}, NULLIF({max_mal_max} - {min_mal_max}, 0)), 0) AS maletero_maximo_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(largo, {min_largo}) - {min_largo}, NULLIF({max_largo} - {min_largo}, 0)), 0) AS largo_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(autonomia_uso_maxima, {min_auton}) - {min_auton}, NULLIF({max_auton} - {min_auton}, 0)), 0) AS autonomia_uso_maxima_scaled,
             -- Mapeos existentes --
             CASE WHEN traccion = 'ALL' THEN 1.0 WHEN traccion = 'RWD' THEN 0.5 ELSE 0.0 END AS traccion_scaled,
+            -- --- NUEVOS CAMPOS ESCALADOS (INVERTIDOS) ---
+            COALESCE(SAFE_DIVIDE({max_peso_kg} - COALESCE(peso, {max_peso_kg}), NULLIF({max_peso_kg} - {min_peso_kg}, 0)), 0) AS bajo_peso_scaled, -- Invertido
+            COALESCE(SAFE_DIVIDE({max_consumo} - COALESCE(indice_consumo_energia, {max_consumo}), NULLIF({max_consumo} - {min_consumo}, 0)), 0) AS bajo_consumo_scaled, -- Invertido
             (CASE WHEN COALESCE(reductoras, FALSE) THEN 1.0 ELSE 0.0 END) AS reductoras_scaled,
             (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END) AS puertas_penalty
         FROM
@@ -129,9 +169,9 @@ def buscar_coches_bq( # Renombrada para claridad
     )
     SELECT
       -- Añade las nuevas columnas BQ si quieres ver sus valores originales fiabilidad, durabilidad, seguridad, comodidad, acceso_low_cost, deportividad, tecnologia (para después)
-      nombre, ID, marca, modelo, cambio_automatico, tipo_mecanica, tipo_carroceria, 
-      indice_altura_interior, batalla, estetica, premium, singular, altura_libre_suelo, 
-      ancho, traccion, reductoras, puertas, plazas, precio_compra_contado,
+      nombre, ID, modelo, cambio_automatico, tipo_mecanica, tipo_carroceria, 
+      indice_altura_interior, estetica, premium, singular, altura_libre_suelo, maletero_minimo, maletero_maximo,
+      traccion, reductoras, plazas, precio_compra_contado,
       
       ( 
         estetica_scaled * @peso_estetica 
@@ -152,11 +192,42 @@ def buscar_coches_bq( # Renombrada para claridad
         + fiabilidad_scaled * @peso_rating_impacto_ambiental  -- P4 (Impacto Ambiental) usa fiabilidad_scaled
         + durabilidad_scaled * @peso_rating_impacto_ambiental -- P4 (Impacto Ambiental) usa durabilidad_scaled (si así lo defines)
         + tecnologia_scaled * @peso_rating_tecnologia_conectividad -- P6
+        + maletero_minimo_scaled * @peso_maletero_minimo_score
+        + maletero_maximo_scaled * @peso_maletero_maximo_score
+        + largo_scaled * @peso_largo_vehiculo_score
         + devaluacion_scaled * @peso_devaluacion
-        -- PENALIZACIONES POR COMODIDAD --
+        + autonomia_uso_maxima_scaled * @peso_autonomia_vehiculo
+        -- Estos se activan si el peso correspondiente es > 0 (calculado en compute_raw_weights)
+        + bajo_peso_scaled * @peso_fav_bajo_peso
+        + bajo_consumo_scaled * @peso_fav_bajo_consumo
+        -- PENALIZACIONES POR COMODIDAD y  ANTIGÜEDAD--
         + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
         + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND deportividad_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
-        -- FIN NUEVOS TÉRMINOS Y PENALIZACIONES --
+        + (CASE WHEN @flag_penalizar_antiguo_tec = TRUE THEN
+                 CASE
+                     WHEN anos_vehiculo > 10 THEN {PENALTY_ANTIGUEDAD_MAS_10_ANOS}
+                     WHEN anos_vehiculo > 7  THEN {PENALTY_ANTIGUEDAD_7_A_10_ANOS}
+                     WHEN anos_vehiculo > 5  THEN {PENALTY_ANTIGUEDAD_5_A_7_ANOS}
+                     ELSE 0.0 
+                 END
+             ELSE 0.0 
+           END)
+        -- --- NUEVA LÓGICA PARA DISTINTIVO AMBIENTAL ---
+        + (CASE
+             WHEN @flag_aplicar_logica_distintivo = TRUE THEN
+                 CASE
+                     WHEN distintivo_ambiental IN ('0', 'ECO', 'C') THEN {BONUS_DISTINTIVO_ECO_CERO_C}
+                     WHEN distintivo_ambiental IN ('B', 'NA') THEN {PENALTY_DISTINTIVO_NA_B}
+                     ELSE 0.0 -- Para otros distintivos o si es NULL
+                 END
+             ELSE 0.0 -- Si el flag no está activo
+           END)
+        -- --- NUEVA LÓGICA PARA FAVORECER 'ocasion' ---
+        + (CASE
+             WHEN @flag_aplicar_logica_distintivo = TRUE AND COALESCE(ocasion, FALSE) = TRUE THEN {BONUS_OCASION_POR_IMPACTO_AMBIENTAL}
+             ELSE 0.0
+           END)
+        -- --- FIN NUEVA LÓGICA 'ocasion' ---
       ) AS score_total
     FROM ScaledData
     WHERE 1=1 
@@ -182,8 +253,17 @@ def buscar_coches_bq( # Renombrada para claridad
         bigquery.ScalarQueryParameter("peso_rating_impacto_ambiental", "FLOAT64", pesos_completos["rating_impacto_ambiental"]), # <-- Nuevo
         bigquery.ScalarQueryParameter("peso_rating_tecnologia_conectividad", "FLOAT64", pesos_completos["rating_tecnologia_conectividad"]), # <-- Nuevo
         bigquery.ScalarQueryParameter("peso_devaluacion", "FLOAT64", pesos_completos["devaluacion"]),
+        # --- NUEVOS PARÁMETROS DE PESO PARA CARGA Y ESPACIO ---
+        bigquery.ScalarQueryParameter("peso_maletero_minimo_score", "FLOAT64", pesos_completos["maletero_minimo_score"]),
+        bigquery.ScalarQueryParameter("peso_maletero_maximo_score", "FLOAT64", pesos_completos["maletero_maximo_score"]),
+        bigquery.ScalarQueryParameter("peso_largo_vehiculo_score", "FLOAT64", pesos_completos["largo_vehiculo_score"]),
+        bigquery.ScalarQueryParameter("peso_autonomia_vehiculo", "FLOAT64", pesos_completos["autonomia_vehiculo"]),
+        bigquery.ScalarQueryParameter("peso_fav_bajo_peso", "FLOAT64", pesos_completos["fav_bajo_peso"]),
+        bigquery.ScalarQueryParameter("peso_fav_bajo_consumo", "FLOAT64", pesos_completos["fav_bajo_consumo"]),
         bigquery.ScalarQueryParameter("flag_penalizar_low_cost_comodidad", "BOOL", flag_penalizar_low_cost_comod),
         bigquery.ScalarQueryParameter("flag_penalizar_deportividad_comodidad", "BOOL", flag_penalizar_deportividad_comod),
+        bigquery.ScalarQueryParameter("flag_penalizar_antiguo_tec", "BOOL", flag_penalizar_antiguo_tec_val),
+        bigquery.ScalarQueryParameter("flag_aplicar_logica_distintivo", "BOOL", flag_aplicar_logica_distintivo_val),
         # --- FIN NUEVOS PARÁMETROS ---
         bigquery.ScalarQueryParameter("k", "INT64", k)
     ]

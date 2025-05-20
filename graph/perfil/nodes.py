@@ -153,15 +153,20 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if is_yes(prefs.uso_profesional) and prefs.tipo_uso_profesional is None:
         return "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
     if prefs.prefiere_diseno_exclusivo is None: return "En cuanto al estilo del coche, ¿te inclinas más por un diseño exclusivo y llamativo, o por algo más discreto y convencional?"
-    if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
     if prefs.altura_mayor_190 is None: return "Para recomendarte un vehículo con espacio adecuado, ¿tu altura supera los 1.90 metros?"
     if prefs.peso_mayor_100 is None: return "Para garantizar tu máxima comodidad, ¿tienes un peso superior a 100 kg?"
+    if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
+    if prefs.transporta_carga_voluminosa is None:
+        return "¿Transportas con frecuencia equipaje o carga voluminosa? (Responde 'sí' o 'no')"
+    if is_yes(prefs.transporta_carga_voluminosa) and prefs.necesita_espacio_objetos_especiales is None:
+        return "¿Y ese transporte de carga incluye objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos para bebé, sillas de ruedas, instrumentos musicales, etc?"
+    # --- FIN NUEVAS PREGUNTAS DE CARGA ---
     if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?"
     if prefs.transmision_preferida is None: return "En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n 1) Automático\n 2) Manual\n 3) Ambos, puedo considerar ambas opciones"
      # --- NUEVAS PREGUNTAS DE RATING (0-10) ---
     if prefs.rating_fiabilidad_durabilidad is None: return "En una escala de 0 (nada importante) a 10 (extremadamente importante), ¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche?"
     if prefs.rating_seguridad is None:return "Pensando en la Seguridad, ¿qué puntuación le darías en importancia (0-10)?"
-    if prefs.rating_comodidad is None:return "Y en cuanto a la Comodidad general del vehículo, ¿cuán prioritaria es para ti (0-10)?"
+    if prefs.rating_comodidad is None:return "Y en cuanto a la comodidad y confort del vehiculo que tan importante es que se maximice? (0-10)"
     if prefs.rating_impacto_ambiental is None: return "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección (0-10)?"
     #if prefs.rating_costes_uso is None: return "Respecto a los Costes de Uso y Mantenimiento Reducidos, ¿cómo lo puntuarías en importancia (0-10)?"
     if prefs.rating_tecnologia_conectividad is None: return "Finalmente, para la Tecnología y Conectividad del coche, ¿qué tan relevante es para ti (0-10)?"
@@ -794,7 +799,6 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     filtros_obj = state.get("filtros_inferidos")       # Objeto FiltrosInferidos
     economia_obj = state.get("economia")           # Objeto EconomiaUsuario
     info_pasajeros_obj = state.get("info_pasajeros") # Objeto InfoPasajeros
-    
     priorizar_ancho_flag = state.get("priorizar_ancho", False)
     pesos_calculados = None # Inicializar
     tabla_final_md = "Error al generar el resumen." # Default
@@ -812,7 +816,9 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
              "penalizar_puertas_bajas": state.get("penalizar_puertas_bajas"),
              "priorizar_ancho": priorizar_ancho_flag,
              "flag_penalizar_low_cost_comodidad": False, # Default
-             "flag_penalizar_deportividad_comodidad": False # Default
+             "flag_penalizar_deportividad_comodidad": False ,# Default
+             "flag_penalizar_antiguo_por_tecnologia": False,
+             "aplicar_logica_distintivo_ambiental": False # <-- Default para el nuevo flag
          }
     # Trabajar con una copia de filtros para las modificaciones
     filtros_actualizados = filtros_obj.model_copy(deep=True)   
@@ -864,17 +870,35 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     
     # --- LÓGICA PARA FLAGS DE PENALIZACIÓN POR COMODIDAD (USANDO OBJETO Pydantic) ---
     UMBRAL_COMODIDAD_PARA_PENALIZAR = 7 
-    flag_penalizar_low_cost_por_comodidad = False
-    flag_penalizar_deportividad_por_comodidad = False
+    flag_penalizar_low_cost_comodidad = False
+    flag_penalizar_deportividad_comodidad = False
 
     # Usamos el objeto preferencias_obj directamente aquí
     if preferencias_obj and preferencias_obj.rating_comodidad is not None:
         if preferencias_obj.rating_comodidad >= UMBRAL_COMODIDAD_PARA_PENALIZAR:
-            flag_penalizar_low_cost_por_comodidad = True
-            flag_penalizar_deportividad_por_comodidad = True
+            flag_penalizar_low_cost_comodidad = True
+            flag_penalizar_deportividad_comodidad = True
             print(f"DEBUG (Finalizar) ► Rating Comodidad ({preferencias_obj.rating_comodidad}) >= {UMBRAL_COMODIDAD_PARA_PENALIZAR}. Activando flags de penalización.")
-    # --- FIN LÓGICA FLAGS ---
+    
+    # --- NUEVA LÓGICA PARA FLAG DE PENALIZACIÓN POR ANTIGÜEDAD Y TECNOLOGÍA ---
+    UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD = 7 # Ejemplo, puedes ajustarlo
 
+    flag_penalizar_antiguo_tec = False 
+    if preferencias_obj and preferencias_obj.rating_tecnologia_conectividad is not None:
+        if preferencias_obj.rating_tecnologia_conectividad >= UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD:
+            flag_penalizar_antiguo_tec = True
+            print(f"DEBUG (Finalizar) ► Rating Tecnología ({preferencias_obj.rating_tecnologia_conectividad}) >= {UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD}. Activando flag de penalización por antigüedad.")
+            
+    # --- NUEVA LÓGICA PARA FLAG DE DISTINTIVO AMBIENTAL ---
+    UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA = 8 # ¡AJUSTA ESTE UMBRAL!
+    flag_aplicar_logica_distintivo = False # Default
+    
+    if preferencias_obj and preferencias_obj.rating_impacto_ambiental is not None:
+        if preferencias_obj.rating_impacto_ambiental >= UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA:
+            flag_aplicar_logica_distintivo = True
+            print(f"DEBUG (Finalizar) ► Rating Impacto Ambiental ({preferencias_obj.rating_impacto_ambiental}) >= {UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA}. Activando lógica de distintivo ambiental.")
+    # --- FIN NUEVA LÓGICA FLAG DISTINTIVO ---
+    # ---
     # 2. Cálculo de Pesos
     print("DEBUG (Finalizar) ► Calculando pesos...")
     try:
@@ -927,28 +951,13 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
         "tabla_resumen_criterios": tabla_final_md, # Añade/Sobrescribe
         "coches_recomendados": None,               # Añade/Sobrescribe
         "priorizar_ancho": priorizar_ancho_flag,   # Sobrescribe con el valor local
-        "flag_penalizar_low_cost_comodidad": flag_penalizar_low_cost_por_comodidad, # Añade/Sobrescribe
-        "flag_penalizar_deportividad_comodidad": flag_penalizar_deportividad_por_comodidad, # Añade/Sobrescribe
+        "flag_penalizar_low_cost_comodidad": flag_penalizar_low_cost_comodidad, # Añade/Sobrescribe
+        "flag_penalizar_deportividad_comodidad": flag_penalizar_deportividad_comodidad, # Añade/Sobrescribe
+        "flag_penalizar_antiguo_por_tecnologia": flag_penalizar_antiguo_tec,
+        "aplicar_logica_distintivo_ambiental": flag_aplicar_logica_distintivo,
         "pregunta_pendiente": None                 # Sobrescribe
     }
-    # 5. Devolver el estado final completo
-    # return {
-    #     "preferencias_usuario": preferencias_obj,
-    #     "info_pasajeros": info_pasajeros_obj,
-    #     "filtros_inferidos": filtros_actualizados, 
-    #     "economia": economia_obj, 
-    #     "pesos": pesos_calculados, 
-    #     "messages": historial_final,
-    #     "tabla_resumen_criterios": tabla_final_md,
-    #     "coches_recomendados": None, 
-    #     "penalizar_puertas_bajas": state.get("penalizar_puertas_bajas"),
-    #     "priorizar_ancho": priorizar_ancho_flag,
-    #     "flag_penalizar_low_cost_comodidad": flag_penalizar_low_cost_por_comodidad,
-    #     "flag_penalizar_deportividad_comodidad": flag_penalizar_deportividad_por_comodidad, 
-    #     "pregunta_pendiente": None
-    # }
-
-# --- Fin Etapa 4 ---
+  # --- Fin Etapa 4 ---
 
 
 # --- NUEVO NODO BÚSQUEDA FINAL Etapa 5 ---
@@ -967,6 +976,8 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     tabla_resumen_criterios = state.get("tabla_resumen_criterios") # Tabla MD de criterios
     flag_penalizar_lc_comod = state.get("flag_penalizar_low_cost_comodidad", False)
     flag_penalizar_dep_comod = state.get("flag_penalizar_deportividad_comodidad", False)
+    flag_penalizar_antiguo_tec_val = state.get("flag_penalizar_antiguo_por_tecnologia", False)
+    flag_aplicar_distintivo_val = state.get("aplicar_logica_distintivo_ambiental", False)
 
 
     thread_id = "unknown_thread"
@@ -997,6 +1008,8 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         filtros_para_bq['penalizar_puertas_bajas'] = penalizar_puertas_flag
         filtros_para_bq['flag_penalizar_low_cost_comodidad'] = flag_penalizar_lc_comod
         filtros_para_bq['flag_penalizar_deportividad_comodidad'] = flag_penalizar_dep_comod
+        filtros_para_bq['flag_penalizar_antiguo_por_tecnologia'] = flag_penalizar_antiguo_tec_val
+        filtros_para_bq['aplicar_logica_distintivo_ambiental'] = flag_aplicar_distintivo_val
         
         k_coches = 7 
         print(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
@@ -1129,5 +1142,9 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         "economia": economia_obj, # No se modifica aquí
         "info_pasajeros": state.get("info_pasajeros"), # No se modifica aquí
         "preferencias_usuario": state.get("preferencias_usuario"), # No se modifica aquí
+        "flag_penalizar_low_cost_comodidad": flag_penalizar_lc_comod,
+        "flag_penalizar_deportividad_comodidad": flag_penalizar_dep_comod, 
+        "flag_penalizar_antiguo_por_tecnologia": flag_penalizar_antiguo_tec_val,
+        "aplicar_logica_distintivo_ambiental": flag_aplicar_distintivo_val,
         "tabla_resumen_criterios": tabla_resumen_criterios # Persiste si se necesita
     }

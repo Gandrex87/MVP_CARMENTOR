@@ -13,8 +13,8 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         return False
     campos_obligatorios = [
         "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "uso_profesional",
-        "prefiere_diseno_exclusivo", "aventura", "altura_mayor_190", "peso_mayor_100", "solo_electricos", 
-        "transmision_preferida","rating_fiabilidad_durabilidad",
+        "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100","aventura", "transporta_carga_voluminosa", 
+        "solo_electricos", "transmision_preferida","rating_fiabilidad_durabilidad",
         "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_tecnologia_conectividad","prioriza_baja_depreciacion"
     ] # por ahora no va rating_costes_uso
     for campo in campos_obligatorios:
@@ -28,6 +28,11 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         if prefs.tipo_uso_profesional is None or \
            not str(prefs.tipo_uso_profesional).strip(): # Verificar que no sea cadena vacía si es str
             print("DEBUG (Validation Perfil) ► 'uso_profesional' es 'sí', pero 'tipo_uso_profesional' está vacío/None. Perfil INCOMPLETO.")
+            return False
+    # --- NUEVA COMPROBACIÓN CONDICIONAL PARA ESPACIO OBJETOS ESPECIALES ---
+    if is_yes(prefs.transporta_carga_voluminosa):
+        if prefs.necesita_espacio_objetos_especiales is None:
+            print("DEBUG (Validation Perfil) ► 'transporta_carga_voluminosa' es 'sí', pero 'necesita_espacio_objetos_especiales' es None. Perfil INCOMPLETO.")
             return False
     print("DEBUG (Validation Perfil) ► Todos los campos obligatorios del perfil están presentes.")
     return True

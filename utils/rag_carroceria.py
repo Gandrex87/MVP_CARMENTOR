@@ -120,6 +120,9 @@ def get_vectorstore(force_rebuild: bool = False) -> FAISS:
         raise RuntimeError(f"No se pudo construir ni cargar el vector store: {e}")
 
 
+# USO_PROF_SYNONYMS = [
+#     "profesional", "transporte de mercancías", "transporte de pasajeros", "herramientas", "comercio", "logística"
+# ]
 
 # Mapa de sinónimos por nivel de aventura
 AVENTURA_SYNONYMS = {
@@ -127,10 +130,6 @@ AVENTURA_SYNONYMS = {
     "ocasional": ["campo", "ligero fuera de asfalto", "excursiones", "profesional", "versátil"],
     "extrema":   ["off-road", "terrenos difíciles","tracción 4x4","barro", "gran altura libre", "reductora"]
 }
-
-# USO_PROF_SYNONYMS = [
-#     "profesional", "transporte de mercancías", "transporte de pasajeros", "herramientas", "comercio", "logística"
-# ]
 
 # NUEVOS SINÓNIMOS SUGERIDOS (a usar dinámicamente en get_recommended_carrocerias)
 USO_PROF_CARGA_SYNONYMS = [
@@ -166,91 +165,159 @@ APASIONADO_MOTOR_SYNONYMS = [ # Si apasionado_motor == "sí"
 # Podrías incluso tener para SOLO_ELECTRICOS, aunque "eléctrico" es bastante directo
 SOLO_ELECTRICOS_SYNONYMS = ["cero emisiones", "sostenible", "bajo consumo energético"]
 
+# --- NUEVOS SINÓNIMOS/TÉRMINOS PARA ALTA COMODIDAD ---
+ALTA_COMODIDAD_CARROCERIA_SYNONYMS = ["comodidad y confort", "mascotas", "derivado de un 2VOL o 3VOL", "SUV familiar cómodo",   "monovolumen espacioso"
+]
+NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS = ["maletero amplio", "versatilidad interior","portón trasero grande", "modularidad"]
 
-def get_recommended_carrocerias(preferencias: dict,  filtros: dict, info_pasajeros: Optional[dict], k: int = 4) -> list[str]: # El arg 'filtros' sigue sin usarse
-    vs = get_vectorstore() # Ahora usa la nueva lógica
-    partes = []
-    # Aquí lógica para construir 'partes' de la query RAG / basada en 'preferencias' y SYNONYMS.
-    if is_yes(preferencias.get("solo_electricos")):
-        partes.append("eléctrico")
-        partes.extend(SOLO_ELECTRICOS_SYNONYMS)
-    # if is_yes(preferencias.get("uso_profesional")):
-    #     partes.extend(USO_PROF_SYNONYMS)
-    if is_yes(preferencias.get("valora_estetica")):
-       #partes.append("diseño") # Término principal
-        partes.extend(ESTETICA_VALORADA_SYNONYMS)
-    if is_yes(preferencias.get("apasionado_motor")):
-        #partes.append("conducción emocionante") # Término principal
-        partes.extend(APASIONADO_MOTOR_SYNONYMS)
-            
-    raw_av = preferencias.get("aventura")
-    nivel_aventura_str = ""
-    if hasattr(raw_av, "value"): # Si es un Enum
-        nivel_aventura_str = raw_av.value.strip().lower()
-    elif isinstance(raw_av, str): # Si ya es un string
-        nivel_aventura_str = raw_av.strip().lower()
+# --- FIN NUEVOS SINÓNIMOS ---
 
-    if nivel_aventura_str in AVENTURA_SYNONYMS:
-        partes.extend(AVENTURA_SYNONYMS[nivel_aventura_str])
+
+def get_recommended_carrocerias(
+    preferencias: Dict[str, Any], 
+    filtros_tecnicos: Optional[Dict[str, Any]], # <--- ASEGÚRATE QUE ESTE ARGUMENTO EXISTA 
+    info_pasajeros: Optional[Dict[str, Any]], 
+    k: int = 4
+) -> List[str]:
+    """
+    Obtiene tipos de carrocería recomendados usando RAG,
+    influenciado por las preferencias del usuario.
+    """
+    vs = get_vectorstore() 
+    if not vs:
+        logging.warning("WARN (RAG) ► Vectorstore no disponible. Devolviendo fallback de carrocerías.")
+        return ["SUV", "MONOVOLUMEN", "FAMILIAR", "3VOL"][:k] 
+
+    partes_query = []
+
+    # --- 1. Construcción de Partes de la Query basada en Preferencias ---
+    if is_yes(preferencias.get("solo_electricos")) and SOLO_ELECTRICOS_SYNONYMS:
+        partes_query.extend(SOLO_ELECTRICOS_SYNONYMS)
     
-    # --- Lógica Mejorada para USO_PROFESIONAL ---
+    if is_yes(preferencias.get("valora_estetica")) and ESTETICA_VALORADA_SYNONYMS:
+        partes_query.extend(ESTETICA_VALORADA_SYNONYMS)
+    
+    if is_yes(preferencias.get("apasionado_motor")) and APASIONADO_MOTOR_SYNONYMS:
+        partes_query.extend(APASIONADO_MOTOR_SYNONYMS)
+            
+    # Aventura
+    aventura_val = preferencias.get("aventura")
+    nivel_aventura_str = ""
+    if hasattr(aventura_val, "value"): nivel_aventura_str = aventura_val.value.strip().lower()
+    elif isinstance(aventura_val, str): nivel_aventura_str = aventura_val.strip().lower()
+
+    if nivel_aventura_str and nivel_aventura_str in AVENTURA_SYNONYMS:
+        partes_query.extend(AVENTURA_SYNONYMS[nivel_aventura_str])
+    elif not nivel_aventura_str or nivel_aventura_str == "ninguna":
+        if "ninguna" in AVENTURA_SYNONYMS: partes_query.extend(AVENTURA_SYNONYMS["ninguna"])
+        else: partes_query.extend(["urbano", "carretera", "compacto"])
+
+    # Uso Profesional
     if is_yes(preferencias.get("uso_profesional")):
-        partes.append("profesional") # Término base siempre que sea uso profesional
+        partes_query.append("profesional") 
+        tipo_uso_prof_val = preferencias.get("tipo_uso_profesional")
+        detalle_uso_str = ""
+        if hasattr(tipo_uso_prof_val, "value"): detalle_uso_str = tipo_uso_prof_val.value.lower()
+        elif isinstance(tipo_uso_prof_val, str): detalle_uso_str = tipo_uso_prof_val.lower()
 
-        # Obtener el detalle del uso profesional. Asumimos que si existe, está en 'preferencias'.
-        # Si lo guardas en otro sitio (ej. un campo específico en el estado), ajusta cómo lo obtienes.
-        detalle_uso = preferencias.get("tipo_uso_profesional", "").lower() # "" como default si no existe
-
-        if detalle_uso == "carga":
-            logging.info("RAG Query: Añadiendo sinónimos para USO PROFESIONAL - CARGA.")
-            partes.extend(USO_PROF_CARGA_SYNONYMS)
-        elif detalle_uso == "pasajeros":
-            logging.info("RAG Query: Añadiendo sinónimos para USO PROFESIONAL - PASAJEROS.")
-            partes.extend(USO_PROF_PASAJEROS_SYNONYMS)
-        elif detalle_uso == "mixto":
-            logging.info("RAG Query: Añadiendo sinónimos para USO PROFESIONAL - MIXTO.")
-            partes.extend(USO_PROF_MIXTO_SYNONYMS)
+        if detalle_uso_str == "carga" and USO_PROF_CARGA_SYNONYMS: partes_query.extend(USO_PROF_CARGA_SYNONYMS)
+        elif detalle_uso_str == "pasajeros" and USO_PROF_PASAJEROS_SYNONYMS: partes_query.extend(USO_PROF_PASAJEROS_SYNONYMS)
+        elif detalle_uso_str == "mixto" and USO_PROF_MIXTO_SYNONYMS: partes_query.extend(USO_PROF_MIXTO_SYNONYMS)
                 
-    # Información de Pasajeros (¡NUEVO!)
-    if isinstance(info_pasajeros, dict): # Verificar que info_pasajeros sea un diccionario y no None
+    # Información de Pasajeros
+    if isinstance(info_pasajeros, dict):
         frecuencia = info_pasajeros.get("frecuencia", "nunca")
         num_ninos_silla = info_pasajeros.get("num_ninos_silla", 0)
         num_otros_pasajeros = info_pasajeros.get("num_otros_pasajeros", 0)
 
         if frecuencia != "nunca":
-            if num_ninos_silla > 0:
-                logging.info("RAG Query: Añadiendo sinónimos por niños con silla.")
-                partes.extend(ESPACIO_PASAJEROS_NINOS_SYNONYMS)
+            if num_ninos_silla > 0 and ESPACIO_PASAJEROS_NINOS_SYNONYMS:
+                partes_query.extend(ESPACIO_PASAJEROS_NINOS_SYNONYMS)
             elif (num_ninos_silla + num_otros_pasajeros) >= 2: 
-                logging.info("RAG Query: Añadiendo sinónimos por número de acompañantes >= 2.")
-                partes.extend(["espacio para pasajeros", "viajar acompañado", "amplitud interior"])
-                if "muchas plazas" not in partes: partes.append("muchas plazas")
-                if "gran capacidad interior" not in partes: partes.append("gran capacidad interior")
+                partes_query.extend(["espacio para pasajeros", "viajar acompañado", "amplitud interior", "muchas plazas", "gran capacidad interior"])
     else:
-        logging.info("RAG Query: No se proporcionó información de pasajeros o es inválida.")
+        logging.info("INFO (RAG Query) ► No se proporcionó información de pasajeros válida para RAG.")
 
-    # Evitar duplicados en la lista de partes (opcional, pero puede limpiar la query)
+    # Necesidad de Espacio para Objetos Especiales
+    if is_yes(preferencias.get("necesita_espacio_objetos_especiales")) and NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS:
+        logging.info("INFO (RAG) ► Necesidad de espacio objetos especiales. Enriqueciendo query.")
+        partes_query.extend(NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS)
+    
+    # Alta Comodidad
+    UMBRAL_RATING_COMODIDAD_RAG = 8 
+    rating_comodidad_val = preferencias.get("rating_comodidad")
+    if rating_comodidad_val is not None and rating_comodidad_val >= UMBRAL_RATING_COMODIDAD_RAG and ALTA_COMODIDAD_CARROCERIA_SYNONYMS:
+        logging.info(f"INFO (RAG) ► Rating Comodidad alto. Enriqueciendo query para confort.")
+        partes_query.extend(ALTA_COMODIDAD_CARROCERIA_SYNONYMS)
+
+    # --- 2. Limpieza y Formación de la Query String ---
     partes_unicas = []
-    for p in partes:
-        if p not in partes_unicas:
-            partes_unicas.append(p)
-    partes = partes_unicas
+    if partes_query: # Solo procesar si hay partes
+        for p in partes_query:
+            if p not in partes_unicas:
+                partes_unicas.append(p)
             
-    logging.info(f"Partes de la query RAG (pre-join): {partes}")
-    
-    logging.info(f"Partes de la query RAG: {partes}")
-    query = " ".join(partes) if partes else "coche versátil y práctico" # Query por defecto mejorada
+    query_str = " ".join(partes_unicas).strip()
+    if not query_str: 
+        query_str = "coche versátil moderno confortable práctico" 
+        logging.info(f"INFO (RAG) ► Query RAG vacía, usando fallback: '{query_str}'")
 
-    logging.info(f"Ejecutando búsqueda RAG con query: '{query}' y k={k}")
-    docs = vs.similarity_search(query, k=k)
+    logging.info(f"INFO (RAG) ► Query RAG construida: '{query_str}' con k={k}")
+    print(f"DEBUG (RAG Query Construida) ► Partes: {partes_unicas} -> Query: '{query_str}'")
+
+    # --- 3. Búsqueda por Similitud ---
+    try:
+        docs = vs.similarity_search(query_str, k=k + 3) # Pedir algunos más para el post-filtrado
+    except Exception as e_rag_search:
+        logging.error(f"ERROR (RAG) ► Fallo en similarity_search: {e_rag_search}")
+        return ["SUV", "FAMILIAR", "COMPACTO"][:k]
+
+    # --- 4. Extracción de Tipos Únicos de los Documentos ---
+    tipos_obtenidos_rag = []
+    if docs:
+        seen_tipos = set()
+        for doc in docs:
+            tipo = doc.metadata.get("tipo")
+            if tipo and tipo not in seen_tipos:
+                tipos_obtenidos_rag.append(tipo)
+                seen_tipos.add(tipo)
     
-    tipos_recomendados = []
-    seen_tipos = set()
-    for doc in docs:
-        tipo = doc.metadata.get("tipo")
-        if tipo and tipo not in seen_tipos:
-            tipos_recomendados.append(tipo)
-            seen_tipos.add(tipo)
+    # --- 5. Post-Filtrado Secuencial ---
+    tipos_finales = list(tipos_obtenidos_rag) # Trabajar con una copia
+
+    # Post-Filtro 1: Por necesidad de espacio para objetos especiales
+    if is_yes(preferencias.get("necesita_espacio_objetos_especiales")):
+        tipos_a_excluir_espacio = {"3VOL", "COUPE", "DESCAPOTABLE"}
+        logging.info(f"INFO (RAG) ► Aplicando post-filtro por objetos especiales, excluyendo: {tipos_a_excluir_espacio}")
+        original_antes_filtro = list(tipos_finales)
+        tipos_finales = [tipo for tipo in tipos_finales if tipo.upper() not in tipos_a_excluir_espacio]
+        if not tipos_finales and original_antes_filtro:
+            logging.warning(f"WARN (RAG) ► Post-filtro por objetos especiales eliminó todos. Revirtiendo este filtro específico.")
+            tipos_finales = original_antes_filtro # Revertir solo este filtro
+
+    # Post-Filtro 2: Para perfiles claramente urbanos/particulares/sin carga voluminosa
+    transporta_carga_val = preferencias.get("transporta_carga_voluminosa")
+    if aventura_val == "ninguna" and \
+       not is_yes(preferencias.get("uso_profesional")) and \
+       not is_yes(transporta_carga_val): # Verifica también que no transporte carga voluminosa
+        
+        tipos_a_excluir_urbano = {"TODOTERRENO", "PICKUP", "COMERCIAL", "AUTOCARAVANA"} #Validar con Teo
+        logging.info(f"INFO (RAG) ► Perfil urbano/particular/sin carga. Aplicando post-filtro, excluyendo: {tipos_a_excluir_urbano}")
+        original_antes_filtro = list(tipos_finales)
+        tipos_finales = [tipo for tipo in tipos_finales if tipo.upper() not in tipos_a_excluir_urbano]
+        if not tipos_finales and original_antes_filtro:
+            logging.warning(f"WARN (RAG) ► Post-filtro urbano eliminó todos. Revirtiendo este filtro específico.")
+            tipos_finales = original_antes_filtro # Revertir solo este filtro
             
-    logging.info(f"Tipos de carrocería recomendados por RAG: {tipos_recomendados}")
-    return tipos_recomendados
+    # --- 6. Fallback Final y Retorno ---
+    if not tipos_finales:
+        logging.warning(f"WARN (RAG) ► RAG (después de post-filtros) no devolvió tipos para query: '{query_str}'. Usando fallback general.")
+        tipos_finales = ["SUV", "FAMILIAR", "COMPACTO"]
+            
+    logging.info(f"INFO (RAG) ► Tipos de carrocería recomendados por RAG (final, top {k}): {tipos_finales[:k]}")
+    return tipos_finales[:k]
+
+
+
+#==========================================================#==========================================================#==========================================================
+

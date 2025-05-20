@@ -1,12 +1,12 @@
-# build_faiss_index.py
+# utils/build_faiss_index.py
 import os
 from dotenv import load_dotenv
-from utils.rag_carroceria import create_and_save_faiss_index, PDF_PATH, FAISS_INDEX_DIR # Importa las constantes y la función
 
-if __name__ == "__main__":
-    print("Cargando variables de entorno...")
+if __name__ == "__main__":  
     load_dotenv() # Asegúrate de tener tu .env con OPENAI_API_KEY
+    from .rag_carroceria import create_and_save_faiss_index, PDF_PATH, FAISS_INDEX_DIR
 
+    print("Cargando variables de entorno...")
     print(f"Este script construirá el índice FAISS desde '{PDF_PATH}' y lo guardará en '{FAISS_INDEX_DIR}'.")
     # Opcional: Preguntar al usuario si está seguro, especialmente si el índice ya existe.
     # proceed = input(f"El directorio del índice '{FAISS_INDEX_DIR}' podría ser sobrescrito. ¿Continuar? (s/N): ")
