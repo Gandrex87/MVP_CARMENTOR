@@ -92,7 +92,7 @@ def formatear_preferencias_en_tabla(
             "Seguridad": prefs_dict.get("rating_seguridad"),
             "Comodidad": prefs_dict.get("rating_comodidad"),
             "Impacto Ambiental": prefs_dict.get("rating_impacto_ambiental"),
-            #"Costes de Uso/Mantenimiento": prefs_dict.get("rating_costes_uso"),
+            "Costes de Uso/Mantenimiento": prefs_dict.get("rating_costes_uso"),
             "Tecnología y Conectividad": prefs_dict.get("rating_tecnologia_conectividad"),
             
         }

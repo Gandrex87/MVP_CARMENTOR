@@ -150,8 +150,24 @@ def compute_raw_weights(
     rating_ia = preferencias.get("rating_impacto_ambiental")
     if rating_ia is not None and rating_ia >= UMBRAL_IMPACTO_PARA_PESO_CONSUMO:
         print(f"DEBUG (Weights) ► Impacto Ambiental alto ({rating_ia}). Activando pesos para bajo peso y bajo consumo.")
-        raw["fav_bajo_peso"] = 5.0 # Ejemplo de peso crudo, ¡AJUSTA!
-        raw["fav_bajo_consumo"] = 6.0 # Ejemplo de peso crudo, ¡AJUSTA!
+        raw["fav_bajo_peso"] += 5.0 # Ejemplo de peso crudo, ¡AQUI DEBEMOS AJUSTAR!
+        raw["fav_bajo_consumo"] += 5.0 # Ejemplo de peso crudo, ¡AQUI DEBEMOS AJUSTAR!
+    
+    # --- NUEVA LÓGICA PARA rating_costes_uso ---
+    raw["rating_costes_uso"] = float(preferencias.get("rating_costes_uso") or 0.0) # Peso directo para el concepto general
+    
+    # Pesos específicos para bajo coste de uso, bajo coste de mantenimiento, y bajo consumo / activados por alto rating_costes_uso
+    raw["fav_bajo_coste_uso_directo"] = 0.0 # Default
+    raw["fav_bajo_coste_mantenimiento_directo"] = 0.0 # Default
+    
+    UMBRAL_COSTES_USO_PARA_EXTRAS = 8 # ¡AJUSTA ESTE UMBRAL!
+    rating_cu = preferencias.get("rating_costes_uso")
+    if rating_cu is not None and rating_cu >= UMBRAL_COSTES_USO_PARA_EXTRAS:
+        print(f"DEBUG (Weights) ► Costes de Uso alto ({rating_cu}). Activando pesos para bajo consumo, bajo coste uso y mantenimiento.")
+        raw["fav_bajo_consumo"] += 5.0 # Refuerza el peso de bajo consumo (ej: 7.0) ¡AJUSTArR!
+        raw["fav_bajo_coste_uso_directo"] = 9.0    # Peso específico para columna costes_de_uso, ¡AJUSTAR!
+        raw["fav_bajo_coste_mantenimiento_directo"] = 7.0 # Peso específico para columna costes_mantenimiento, ¡AJUSTAR!
+    # --- FIN NUEVA LÓGICA ---
     
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}

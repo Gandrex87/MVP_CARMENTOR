@@ -212,3 +212,4 @@ Esto te da la flexibilidad de decir: "Prefiero coches cómodos, y si un coche es
 ¿Queda más claro así? Si te parece bien este enfoque, podemos continuar con la implementación en buscar_coches_bq.
 
 MUNICIPIO_ZBE, 	ZONA_LLUVIAS,	ZONA_NIEBLAS,	ZONA_NIEVE, ZONA_CLIMA_MONTA,	ZONA_GLP,	ZONA_GNV
+

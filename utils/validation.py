@@ -15,8 +15,8 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "uso_profesional",
         "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100","aventura", "transporta_carga_voluminosa", 
         "solo_electricos", "transmision_preferida","rating_fiabilidad_durabilidad",
-        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_tecnologia_conectividad","prioriza_baja_depreciacion"
-    ] # por ahora no va rating_costes_uso
+        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_costes_uso", "rating_tecnologia_conectividad", "prioriza_baja_depreciacion"
+    ] # por ahora no va 
     for campo in campos_obligatorios:
         valor = getattr(prefs, campo, None)
         #print(f"Checking field '{campo}': value='{valor}', type={type(valor)}") # <-- Nuevo Print

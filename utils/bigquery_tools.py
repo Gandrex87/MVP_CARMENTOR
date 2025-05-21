@@ -36,8 +36,9 @@ MIN_MAX_RANGES = {
     "largo": (2450.0, 6400.0) ,       # Ejemplo en mm, ¡USA TUS VALORES!
     "autonomia_uso_maxima": (30.8, 1582.4), # --- NUEVO RANGO PARA AUTONOMÍA ---
     "peso": (470.0, 3500.0), 
-    "indice_consumo_energia": (7.4, 133.0) 
-    
+    "indice_consumo_energia": (7.4, 133.0),
+    "costes_de_uso": (3.0, 31.0), 
+    "costes_mantenimiento": (1.0, 10.0) ,    
 }
 PENALTY_PUERTAS_BAJAS = -0.15
 # --- NUEVAS PENALIZACIONES (AJUSTA ESTOS VALORES) ---
@@ -88,7 +89,9 @@ def buscar_coches_bq( # Renombrada para claridad
         "rating_seguridad": pesos.get("rating_seguridad", 0.0),
         "rating_comodidad": pesos.get("rating_comodidad", 0.0),
         "rating_impacto_ambiental": pesos.get("rating_impacto_ambiental", 0.0), 
-       # "rating_costes_uso": pesos.get("rating_costes_uso", 0.0),             
+        "rating_costes_uso": pesos.get("rating_costes_uso", 0.0), # Peso general para el concepto
+        "fav_bajo_coste_uso_directo": pesos.get("fav_bajo_coste_uso_directo", 0.0),
+        "fav_bajo_coste_mantenimiento_directo": pesos.get("fav_bajo_coste_mantenimiento_directo", 0.0),             
         "rating_tecnologia_conectividad": pesos.get("rating_tecnologia_conectividad", 0.0), 
         "devaluacion": pesos.get("prioriza_baja_depreciacion", 0.0),
         # Las claves deben coincidir con las generadas en compute_raw_weights
@@ -121,6 +124,8 @@ def buscar_coches_bq( # Renombrada para claridad
     min_durab, max_durab = MIN_MAX_RANGES["durabilidad"]
     min_seg, max_seg = MIN_MAX_RANGES["seguridad"]
     min_comod, max_comod = MIN_MAX_RANGES["comodidad"]
+    min_coste_uso, max_coste_uso = MIN_MAX_RANGES["costes_de_uso"]
+    min_coste_mante, max_coste_mante = MIN_MAX_RANGES["costes_mantenimiento"]
     min_tec, max_tec = MIN_MAX_RANGES["tecnologia"] 
     min_acc_lc, max_acc_lc = MIN_MAX_RANGES["acceso_low_cost"] # Necesario para penalización
     min_depor, max_depor = MIN_MAX_RANGES["deportividad"]    # Necesario para penalización
@@ -148,6 +153,10 @@ def buscar_coches_bq( # Renombrada para claridad
             COALESCE(SAFE_DIVIDE(COALESCE(durabilidad, {min_durab}) - {min_durab}, NULLIF({max_durab} - {min_durab}, 0)), 0) AS durabilidad_scaled,
             COALESCE(SAFE_DIVIDE(COALESCE(seguridad, {min_seg}) - {min_seg}, NULLIF({max_seg} - {min_seg}, 0)), 0) AS seguridad_scaled,
             COALESCE(SAFE_DIVIDE(COALESCE(comodidad, {min_comod}) - {min_comod}, NULLIF({max_comod} - {min_comod}, 0)), 0) AS comodidad_scaled,
+              -- --- NUEVOS CAMPOS ESCALADOS (INVERTIDOS PORQUE MENOR ES MEJOR) ---
+            COALESCE(SAFE_DIVIDE({max_coste_uso} - COALESCE(costes_de_uso, {max_coste_uso}), NULLIF({max_coste_uso} - {min_coste_uso}, 0)), 0) AS costes_de_uso_scaled,
+            COALESCE(SAFE_DIVIDE({max_coste_mante} - COALESCE(costes_mantenimiento, {max_coste_mante}), NULLIF({max_coste_mante} - {min_coste_mante}, 0)), 0) AS costes_mantenimiento_scaled,
+            -- --- FIN NUEVOS CAMPOS ESCALADOS ---
             COALESCE(SAFE_DIVIDE(COALESCE(tecnologia, {min_tec}) - {min_tec}, NULLIF({max_tec} - {min_tec}, 0)), 0) AS tecnologia_scaled, -- <-- Nuevo escalado
             -- CAMPOS ESCALADOS PARA PENALIZACIONES --
             COALESCE(SAFE_DIVIDE(COALESCE(acceso_low_cost, {min_acc_lc}) - {min_acc_lc}, NULLIF({max_acc_lc} - {min_acc_lc}, 0)), 0) AS acceso_low_cost_scaled,
@@ -168,10 +177,11 @@ def buscar_coches_bq( # Renombrada para claridad
             `thecarmentor-mvp2.web_cars.match_coches_pruebas`
     )
     SELECT
-      -- Añade las nuevas columnas BQ si quieres ver sus valores originales fiabilidad, durabilidad, seguridad, comodidad, acceso_low_cost, deportividad, tecnologia (para después)
+      -- Añade las nuevas columnas BQ si quieres ver sus valores originales:
       nombre, ID, modelo, cambio_automatico, tipo_mecanica, tipo_carroceria, 
-      indice_altura_interior, estetica, premium, singular, altura_libre_suelo, maletero_minimo, maletero_maximo,
-      traccion, reductoras, plazas, precio_compra_contado,
+      indice_altura_interior, estetica, premium, singular,  seguridad, comodidad, acceso_low_cost, deportividad, tecnologia, devaluacion, altura_libre_suelo, maletero_minimo, maletero_maximo,
+      traccion, reductoras, plazas, precio_compra_contado, largo, autonomia_uso_maxima, distintivo_ambiental, anos_vehiculo, ocasion,
+      peso AS peso_original_kg, indice_consumo_energia AS consumo_original, costes_de_uso, costes_mantenimiento, -- <-- Nuevas columnas originales
       
       ( 
         estetica_scaled * @peso_estetica 
@@ -200,6 +210,10 @@ def buscar_coches_bq( # Renombrada para claridad
         -- Estos se activan si el peso correspondiente es > 0 (calculado en compute_raw_weights)
         + bajo_peso_scaled * @peso_fav_bajo_peso
         + bajo_consumo_scaled * @peso_fav_bajo_consumo
+        -- --- NUEVOS TÉRMINOS DE SCORE PARA COSTES DE USO Y MANTENIMIENTO ---
+        + costes_de_uso_scaled * @peso_fav_bajo_coste_uso_directo
+        + costes_mantenimiento_scaled * @peso_fav_bajo_coste_mantenimiento_directo
+        -- --- FIN NUEVOS TÉRMINOS ---
         -- PENALIZACIONES POR COMODIDAD y  ANTIGÜEDAD--
         + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
         + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND deportividad_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
@@ -252,6 +266,10 @@ def buscar_coches_bq( # Renombrada para claridad
         bigquery.ScalarQueryParameter("peso_rating_comodidad", "FLOAT64", pesos_completos["rating_comodidad"]),
         bigquery.ScalarQueryParameter("peso_rating_impacto_ambiental", "FLOAT64", pesos_completos["rating_impacto_ambiental"]), # <-- Nuevo
         bigquery.ScalarQueryParameter("peso_rating_tecnologia_conectividad", "FLOAT64", pesos_completos["rating_tecnologia_conectividad"]), # <-- Nuevo
+         # --- NUEVOS PARÁMETROS DE PESO_COSTES DE USO ---
+        bigquery.ScalarQueryParameter("peso_rating_costes_uso", "FLOAT64", pesos_completos["rating_costes_uso"]), # Para el peso general del concepto
+        bigquery.ScalarQueryParameter("peso_fav_bajo_coste_uso_directo", "FLOAT64", pesos_completos["fav_bajo_coste_uso_directo"]),
+        bigquery.ScalarQueryParameter("peso_fav_bajo_coste_mantenimiento_directo", "FLOAT64", pesos_completos["fav_bajo_coste_mantenimiento_directo"]),
         bigquery.ScalarQueryParameter("peso_devaluacion", "FLOAT64", pesos_completos["devaluacion"]),
         # --- NUEVOS PARÁMETROS DE PESO PARA CARGA Y ESPACIO ---
         bigquery.ScalarQueryParameter("peso_maletero_minimo_score", "FLOAT64", pesos_completos["maletero_minimo_score"]),
@@ -363,26 +381,3 @@ def buscar_coches_bq( # Renombrada para claridad
         traceback.print_exc()
         return [], sql, log_params_for_logging # Devolver SQL y params incluso si falla
     
-#RESUMEN   
-# MIN_MAX_RANGES: Debes añadir los rangos para fiabilidad, durabilidad, seguridad, comodidad, tecnologia y, crucialmente, para acceso_low_cost y deportividad (o como se llamen tus columnas BQ que representan esos conceptos).
-# Nuevas Constantes: Definí PENALTY_LOW_COST_POR_COMODIDAD, PENALTY_DEPORTIVIDAD_POR_COMODIDAD, UMBRAL_LOW_COST_PENALIZABLE, UMBRAL_DEPORTIVIDAD_PENALIZABLE. Ajusta estos valores según necesites.
-# pesos_completos: Ahora extrae los pesos para los nuevos ratings (ej: pesos.get("rating_fiabilidad_durabilidad", 0.0)).
-# Nuevos Flags: Obtiene flag_penalizar_low_cost_comodidad y flag_penalizar_deportividad_comodidad del diccionario filtros.
-# Desempaquetar Min/Max: Se desempaquetan los Min/Max para las nuevas columnas BQ.
-# CTE ScaledData:
-# Se añaden las líneas para calcular fiabilidad_scaled, durabilidad_scaled, seguridad_scaled, comodidad_scaled.
-# Se añaden las líneas para calcular acceso_low_cost_scaled y deportividad_scaled.
-# La penalización por puertas se mantiene.
-# SELECT Final: Se añaden las columnas originales (fiabilidad, durabilidad, etc., y acceso_low_cost, deportividad) para que puedas ver sus valores.
-# Cálculo score_total:
-# Se añaden los términos para fiabilidad/durabilidad, seguridad y comodidad, multiplicados por sus respectivos @peso_rating_....
-# Se añaden los dos nuevos CASE WHEN para las penalizaciones, usando los @flag_..., los umbrales y los valores de penalización.
-# params: Se añaden los nuevos ScalarQueryParameter para los @peso_rating_... y los @flag_....
-# Filtros WHERE: La lógica de filtros WHERE (transmisión, estetica_min, etc.) se mantiene como estaba.
-# Recordatorios Antes de Probar:
-
-# Actualiza MIN_MAX_RANGES con los rangos correctos para TODAS las columnas numéricas que escalas.
-# Asegúrate de que tu tabla BQ tenga columnas llamadas fiabilidad, durabilidad, seguridad, comodidad, acceso_low_cost, deportividad (o los nombres que uses, y ajústalos en el SQL).
-# Verifica que finalizar_y_presentar_node esté pasando los nuevos pesos (ej: rating_fiabilidad_durabilidad) en el diccionario pesos y los nuevos flags (ej: flag_penalizar_low_cost_comodidad) en el diccionario filtros a esta función buscar_coches_bq.
-# Este es un cambio sustancial en el score. ¡Pruébalo con cuidado y observa cómo cambian los rankings!
-

@@ -6,7 +6,7 @@ Eres un asistente de conversación amigable y metodológico. Tu misión actual e
 La estructura JSON que DEBES generar es la siguiente:
 ```json
 {{
-  "$$defs": {{
+  "$defs": {{
     "NivelAventura": {{
       "enum": [
         "ninguna",
@@ -73,7 +73,7 @@ La estructura JSON que DEBES generar es la siguiente:
         "tipo_uso_profesional": {{
           "anyOf": [
             {{
-              "$$ref": "#/$$defs/TipoUsoProfesional"
+              "$ref": "#/$defs/TipoUsoProfesional"
             }},
             {{
               "type": "null"
@@ -98,7 +98,7 @@ La estructura JSON que DEBES generar es la siguiente:
         "aventura": {{
           "anyOf": [
             {{
-              "$$ref": "#/$$defs/NivelAventura"
+              "$ref": "#/$defs/NivelAventura"
             }},
             {{
               "type": "null"
@@ -175,7 +175,7 @@ La estructura JSON que DEBES generar es la siguiente:
         "transmision_preferida": {{
           "anyOf": [
             {{
-              "$$ref": "#/$$defs/Transmision"
+              "$ref": "#/$defs/Transmision"
             }},
             {{
               "type": "null"
@@ -244,6 +244,21 @@ La estructura JSON que DEBES generar es la siguiente:
           "description": "Importancia del Bajo Impacto Medioambiental (0-10).",
           "title": "Rating Impacto Ambiental"
         }},
+        "rating_costes_uso": {{
+          "anyOf": [
+            {{
+              "maximum": 10,
+              "minimum": 0,
+              "type": "integer"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).",
+          "title": "Rating Costes Uso"
+        }},
         "rating_tecnologia_conectividad": {{
           "anyOf": [
             {{
@@ -298,7 +313,7 @@ La estructura JSON que DEBES generar es la siguiente:
   "description": "Salida esperada del LLM enfocado solo en el perfil del usuario.",
   "properties": {{
     "preferencias_usuario": {{
-      "$$ref": "#/$$defs/PerfilUsuario",
+      "$ref": "#/$defs/PerfilUsuario",
       "description": "Objeto con las preferencias del usuario actualizadas o inferidas."
     }},
     "tipo_mensaje": {{
@@ -443,6 +458,7 @@ Bloque de Ratings (preguntar una vez que los otros campos de perfil estén listo
 • `rating_comodidad`: "Y en cuanto a la Comodidad y confort del vehiculo que tan importante es que se maximice? (0-10)"
 • `rating_impacto_ambiental`: "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección (0-10)?"
 • `rating_tecnologia_conectividad`: "Finalmente, para la Tecnología y Conectividad del coche, ¿qué tan relevante es para ti (0-10)?"
+• `rating_costes_uso`: ¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? (donde 0 significa 'No es importante en absoluto' y 10 significa 'Es extremadamente importante')"
 prioriza_baja_depreciacion: 
 • "¿Es importante para ti que la depreciación del coche sea lo más baja posible? (Responde 'sí' o 'no')"
 
