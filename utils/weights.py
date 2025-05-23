@@ -167,6 +167,18 @@ def compute_raw_weights(
         raw["fav_bajo_consumo"] += 5.0 # Refuerza el peso de bajo consumo (ej: 7.0) ¡AJUSTArR!
         raw["fav_bajo_coste_uso_directo"] = 9.0    # Peso específico para columna costes_de_uso, ¡AJUSTAR!
         raw["fav_bajo_coste_mantenimiento_directo"] = 7.0 # Peso específico para columna costes_mantenimiento, ¡AJUSTAR!
+    
+    # --- LÓGICA PARA PESOS DE ARRASTRE DE REMOLQUE ---
+    # Usaremos claves distintas para estos pesos para que sean específicos
+    raw["par_motor_remolque_score"] = 1.0  # Peso base muy bajo si no arrastra
+    raw["cap_remolque_cf_score"] = 1.0   # Capacidad remolque con freno
+    raw["cap_remolque_sf_score"] = 1.0   # Capacidad remolque sin freno
+
+    if is_yes(preferencias.get("arrastra_remolque")):
+        print(f"DEBUG (Weights) ► Usuario arrastra remolque. Aplicando pesos específicos.")
+        raw["par_motor_remolque_score"] = 6.0
+        raw["cap_remolque_cf_score"] = 7.0
+        raw["cap_remolque_sf_score"] = 3.0
     # --- FIN NUEVA LÓGICA ---
     
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")

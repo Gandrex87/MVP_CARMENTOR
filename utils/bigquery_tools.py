@@ -14,7 +14,7 @@ from google.cloud import bigquery
 FiltrosDict = Dict[str, Any] 
 PesosDict = Dict[str, float]
 
-# Definir aquí los rangos mínimos y máximos para cada característica
+# Definir aquí los rangos mínimos y máximos para cada característica/Valores de bd
 MIN_MAX_RANGES = {
     "estetica": (1.0, 10.0),
     "premium": (1.0, 10.0),
@@ -38,19 +38,22 @@ MIN_MAX_RANGES = {
     "peso": (470.0, 3500.0), 
     "indice_consumo_energia": (7.4, 133.0),
     "costes_de_uso": (3.0, 31.0), 
-    "costes_mantenimiento": (1.0, 10.0) ,    
+    "costes_mantenimiento": (1.0, 10.0) ,
+    "par": (41.0, 967.0), 
+    "capacidad_remolque_con_freno": (100.0, 3600.0), 
+    "capacidad_remolque_sin_freno": (35.0, 1250.0),   
 }
-PENALTY_PUERTAS_BAJAS = -0.15
+PENALTY_PUERTAS_BAJAS = -0.10
 # --- NUEVAS PENALIZACIONES (AJUSTA ESTOS VALORES) ---
-PENALTY_LOW_COST_POR_COMODIDAD = -0.20 # Cuánto restar si es muy low-cost y se quiere confort
-PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.20 # Cuánto restar si es muy deportivo y se quiere confort
+PENALTY_LOW_COST_POR_COMODIDAD = -0.15 # Cuánto restar si es muy low-cost y se quiere confort
+PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.15 # Cuánto restar si es muy deportivo y se quiere confort
 # --- UMBRALES PARA PENALIZACIÓN (AJUSTA ESTOS VALORES, 0-1 después de escalar) ---
 UMBRAL_LOW_COST_PENALIZABLE = 0.7 # Penalizar si acceso_low_cost_scaled >= 0.7
 UMBRAL_DEPORTIVIDAD_PENALIZABLE = 0.7 # Penalizar si deportividad_scaled >= 0.7
 # --- NUEVAS CONSTANTES PARA PENALIZACIÓN GRADUAL POR ANTIGÜEDAD ---
-PENALTY_ANTIGUEDAD_MAS_10_ANOS = -0.45
-PENALTY_ANTIGUEDAD_7_A_10_ANOS = -0.30
-PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -0.15
+PENALTY_ANTIGUEDAD_MAS_10_ANOS = -0.30
+PENALTY_ANTIGUEDAD_7_A_10_ANOS = -0.20
+PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -0.10
 
 # --- NUEVAS CONSTANTES PARA BONIFICACIÓN/PENALIZACIÓN DISTINTIVO AMBIENTAL ---
 BONUS_DISTINTIVO_ECO_CERO_C = 0.20  # Cuánto sumar si es C, ECO o CERO
@@ -73,7 +76,7 @@ def buscar_coches_bq( # Renombrada para claridad
         logging.error(f"Error al inicializar cliente BigQuery: {e_auth}")
         return []
 
-    # Pesos completos (incluyendo los nuevos ratings)
+    # Pesos completos (incluyendo los nuevos ratings - DEBEN COINCIDIR CON RAW-WEIGHTS)
     pesos_completos = {
         "estetica": pesos.get("estetica", 0.0),
         "premium": pesos.get("premium", 0.0),
@@ -93,23 +96,25 @@ def buscar_coches_bq( # Renombrada para claridad
         "fav_bajo_coste_uso_directo": pesos.get("fav_bajo_coste_uso_directo", 0.0),
         "fav_bajo_coste_mantenimiento_directo": pesos.get("fav_bajo_coste_mantenimiento_directo", 0.0),             
         "rating_tecnologia_conectividad": pesos.get("rating_tecnologia_conectividad", 0.0), 
-        "devaluacion": pesos.get("prioriza_baja_depreciacion", 0.0),
+        "devaluacion": pesos.get("devaluacion", 0.0), 
         # Las claves deben coincidir con las generadas en compute_raw_weights
         "maletero_minimo_score": pesos.get("maletero_minimo_score", 0.0),
         "maletero_maximo_score": pesos.get("maletero_maximo_score", 0.0),
         "largo_vehiculo_score": pesos.get("largo_vehiculo_score", 0.0),
         "autonomia_vehiculo": pesos.get("autonomia_vehiculo", 0.0),
-         # ---claves deben coincidir con compute_raw_weights) ---
         "fav_bajo_peso": pesos.get("fav_bajo_peso", 0.0),
         "fav_bajo_consumo": pesos.get("fav_bajo_consumo", 0.0),
+        "par_motor_remolque_score": pesos.get("par_motor_remolque_score", 0.0),
+        "cap_remolque_cf_score": pesos.get("cap_remolque_cf_score", 0.0),
+        "cap_remolque_sf_score": pesos.get("cap_remolque_sf_score", 0.0),
         
     }
-    
+
     # Flags de penalización (vienen en el dict 'filtros') --- FLAGS (DEBEN VENIR EN EL DICT 'filtros') ---
     penalizar_puertas_val = bool(filtros.get("penalizar_puertas_bajas", False))
     flag_penalizar_low_cost_comod = bool(filtros.get("flag_penalizar_low_cost_comodidad", False))
     flag_penalizar_deportividad_comod = bool(filtros.get("flag_penalizar_deportividad_comodidad", False))
-    flag_penalizar_antiguo_tec_val = bool(filtros.get("penalizar_antiguedad_por_tecnologia", False))
+    flag_penalizar_antiguo_tec_val = bool(filtros.get("flag_penalizar_antiguo_por_tecnologia", False))
     flag_aplicar_logica_distintivo_val = bool(filtros.get("aplicar_logica_distintivo_ambiental", False))
 
     # Desempaquetar Min/Max (todos necesarios para la CTE ScaledData)
@@ -136,6 +141,9 @@ def buscar_coches_bq( # Renombrada para claridad
     min_auton, max_auton = MIN_MAX_RANGES["autonomia_uso_maxima"]
     min_peso_kg, max_peso_kg = MIN_MAX_RANGES["peso"]
     min_consumo, max_consumo = MIN_MAX_RANGES["indice_consumo_energia"]
+    min_par, max_par = MIN_MAX_RANGES["par"]
+    min_cap_cf, max_cap_cf = MIN_MAX_RANGES["capacidad_remolque_con_freno"]
+    min_cap_sf, max_cap_sf = MIN_MAX_RANGES["capacidad_remolque_sin_freno"]
 
     sql = f"""
     WITH ScaledData AS (
@@ -171,6 +179,9 @@ def buscar_coches_bq( # Renombrada para claridad
             -- --- NUEVOS CAMPOS ESCALADOS (INVERTIDOS) ---
             COALESCE(SAFE_DIVIDE({max_peso_kg} - COALESCE(peso, {max_peso_kg}), NULLIF({max_peso_kg} - {min_peso_kg}, 0)), 0) AS bajo_peso_scaled, -- Invertido
             COALESCE(SAFE_DIVIDE({max_consumo} - COALESCE(indice_consumo_energia, {max_consumo}), NULLIF({max_consumo} - {min_consumo}, 0)), 0) AS bajo_consumo_scaled, -- Invertido
+            COALESCE(SAFE_DIVIDE(COALESCE(par, {min_par}) - {min_par}, NULLIF({max_par} - {min_par}, 0)), 0) AS par_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(capacidad_remolque_con_freno, {min_cap_cf}) - {min_cap_cf}, NULLIF({max_cap_cf} - {min_cap_cf}, 0)), 0) AS cap_remolque_cf_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(capacidad_remolque_sin_freno, {min_cap_sf}) - {min_cap_sf}, NULLIF({max_cap_sf} - {min_cap_sf}, 0)), 0) AS cap_remolque_sf_scaled, 
             (CASE WHEN COALESCE(reductoras, FALSE) THEN 1.0 ELSE 0.0 END) AS reductoras_scaled,
             (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END) AS puertas_penalty
         FROM
@@ -178,10 +189,10 @@ def buscar_coches_bq( # Renombrada para claridad
     )
     SELECT
       -- Añade las nuevas columnas BQ si quieres ver sus valores originales:
-      nombre, ID, modelo, cambio_automatico, tipo_mecanica, tipo_carroceria, 
+      nombre, ID , modelo, cambio_automatico, tipo_mecanica, tipo_carroceria, 
       indice_altura_interior, estetica, premium, singular,  seguridad, comodidad, acceso_low_cost, deportividad, tecnologia, devaluacion, altura_libre_suelo, maletero_minimo, maletero_maximo,
       traccion, reductoras, plazas, precio_compra_contado, largo, autonomia_uso_maxima, distintivo_ambiental, anos_vehiculo, ocasion,
-      peso AS peso_original_kg, indice_consumo_energia AS consumo_original, costes_de_uso, costes_mantenimiento, -- <-- Nuevas columnas originales
+      peso AS peso_original_kg, indice_consumo_energia AS consumo_original, costes_de_uso, costes_mantenimiento,par, capacidad_remolque_con_freno,capacidad_remolque_sin_freno,
       
       ( 
         estetica_scaled * @peso_estetica 
@@ -213,7 +224,9 @@ def buscar_coches_bq( # Renombrada para claridad
         -- --- NUEVOS TÉRMINOS DE SCORE PARA COSTES DE USO Y MANTENIMIENTO ---
         + costes_de_uso_scaled * @peso_fav_bajo_coste_uso_directo
         + costes_mantenimiento_scaled * @peso_fav_bajo_coste_mantenimiento_directo
-        -- --- FIN NUEVOS TÉRMINOS ---
+        + par_scaled * @peso_par_motor_remolque_score
+        + cap_remolque_cf_scaled * @peso_cap_remolque_cf_score
+        + cap_remolque_sf_scaled * @peso_cap_remolque_sf_score
         -- PENALIZACIONES POR COMODIDAD y  ANTIGÜEDAD--
         + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
         + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND deportividad_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
@@ -271,13 +284,15 @@ def buscar_coches_bq( # Renombrada para claridad
         bigquery.ScalarQueryParameter("peso_fav_bajo_coste_uso_directo", "FLOAT64", pesos_completos["fav_bajo_coste_uso_directo"]),
         bigquery.ScalarQueryParameter("peso_fav_bajo_coste_mantenimiento_directo", "FLOAT64", pesos_completos["fav_bajo_coste_mantenimiento_directo"]),
         bigquery.ScalarQueryParameter("peso_devaluacion", "FLOAT64", pesos_completos["devaluacion"]),
-        # --- NUEVOS PARÁMETROS DE PESO PARA CARGA Y ESPACIO ---
         bigquery.ScalarQueryParameter("peso_maletero_minimo_score", "FLOAT64", pesos_completos["maletero_minimo_score"]),
         bigquery.ScalarQueryParameter("peso_maletero_maximo_score", "FLOAT64", pesos_completos["maletero_maximo_score"]),
         bigquery.ScalarQueryParameter("peso_largo_vehiculo_score", "FLOAT64", pesos_completos["largo_vehiculo_score"]),
         bigquery.ScalarQueryParameter("peso_autonomia_vehiculo", "FLOAT64", pesos_completos["autonomia_vehiculo"]),
         bigquery.ScalarQueryParameter("peso_fav_bajo_peso", "FLOAT64", pesos_completos["fav_bajo_peso"]),
         bigquery.ScalarQueryParameter("peso_fav_bajo_consumo", "FLOAT64", pesos_completos["fav_bajo_consumo"]),
+        bigquery.ScalarQueryParameter("peso_par_motor_remolque_score", "FLOAT64", pesos_completos["par_motor_remolque_score"]),
+        bigquery.ScalarQueryParameter("peso_cap_remolque_cf_score", "FLOAT64", pesos_completos["cap_remolque_cf_score"]),
+        bigquery.ScalarQueryParameter("peso_cap_remolque_sf_score", "FLOAT64", pesos_completos["cap_remolque_sf_score"]),
         bigquery.ScalarQueryParameter("flag_penalizar_low_cost_comodidad", "BOOL", flag_penalizar_low_cost_comod),
         bigquery.ScalarQueryParameter("flag_penalizar_deportividad_comodidad", "BOOL", flag_penalizar_deportividad_comod),
         bigquery.ScalarQueryParameter("flag_penalizar_antiguo_tec", "BOOL", flag_penalizar_antiguo_tec_val),
@@ -299,10 +314,6 @@ def buscar_coches_bq( # Renombrada para claridad
         "estetica_min": ("estetica", "FLOAT64"),
         "premium_min": ("premium", "FLOAT64"),
         "singular_min": ("singular", "FLOAT64"),
-        # Dejamos solo los que SÍ deben ser filtros duros si existen, 
-        # o mantenemos el mapa vacío si no hay otros filtros numéricos duros.
-        # Si tuvieras otros como "potencia_min_cv", irían aquí.
-        # Por ahora, este mapa podría quedar vacío o no existir si no hay otros filtros numéricos.
     }
     for key, (column, dtype) in numeric_filters_map.items():
         value = filtros.get(key)
@@ -351,21 +362,42 @@ def buscar_coches_bq( # Renombrada para claridad
     
     log_params_for_logging = [] 
     if params: # Asegurarse de que params no sea None o vacío
-        for p in params:
-            param_name = p.name
-            param_value = getattr(p, 'value', getattr(p, 'values', None)) # Para Scalar y Array params
+        for p_idx, p in enumerate(params): # Usar enumerate si necesitas un índice para depurar
+            param_name = "unknown_param_name"
+            param_value = None
+            param_type_str = "UNKNOWN_TYPE"
             
-            param_type_str = "UNKNOWN" # Default
-            if isinstance(p, bigquery.ScalarQueryParameter):
-                param_type_str = p.type_ # Atributo correcto para el tipo escalar
-            elif isinstance(p, bigquery.ArrayQueryParameter):
-                param_type_str = f"ARRAY<{p.array_type}>" # Atributo correcto para el tipo de array
+            try:
+                param_name = p.name
+                param_value = getattr(p, 'value', getattr(p, 'values', "N/A")) # Para Scalar y Array params
+                
+                if isinstance(p, bigquery.ScalarQueryParameter):
+                    param_type_str = p.type_ # Atributo correcto para el tipo escalar
+                elif isinstance(p, bigquery.ArrayQueryParameter):
+                    param_type_str = f"ARRAY<{p.array_type}>" # Atributo correcto para el tipo de array
+                else:
+                    param_type_str = f"UNEXPECTED_PARAM_TYPE ({type(p)})"
 
-            log_params_for_logging.append({
-                "name": param_name, 
-                "value": param_value, 
-                "type": param_type_str # Usar el tipo corregido
-            })
+                log_params_for_logging.append({
+                    "name": param_name, 
+                    "value": param_value, 
+                    "type": param_type_str 
+                })
+            except AttributeError as e_attr:
+                # Esto puede pasar si un objeto en 'params' no es lo que esperamos
+                logging.error(f"Error al procesar parámetro para logging en índice {p_idx}: {e_attr}. Objeto: {p}")
+                log_params_for_logging.append({
+                    "name": f"error_param_{p_idx}", 
+                    "value": "Error al procesar", 
+                    "type": "ERROR"
+                })
+            except Exception as e_gen:
+                logging.error(f"Error general al procesar parámetro para logging en índice {p_idx}: {e_gen}. Objeto: {p}")
+                log_params_for_logging.append({
+                    "name": f"error_param_{p_idx}", 
+                    "value": "Error general al procesar", 
+                    "type": "ERROR"
+                })
     print("--- 🧠 SQL Query (Paso a Paso) ---\n", sql) 
     print("\n--- 📦 Parameters (Paso a Paso) ---\n", [(p.name, getattr(p, 'value', getattr(p, 'values', None))) for p in params]) 
 
@@ -380,4 +412,4 @@ def buscar_coches_bq( # Renombrada para claridad
         logging.error(f"❌ (Paso a Paso) Error al ejecutar la query en BigQuery: {e}")
         traceback.print_exc()
         return [], sql, log_params_for_logging # Devolver SQL y params incluso si falla
-    
+

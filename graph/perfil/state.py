@@ -17,21 +17,23 @@ class PerfilUsuario(BaseModel):
     uso_profesional: Optional[str] = Field(default=None, description="¿Usará el coche para trabajo? Responde 'sí' o 'no'")
     tipo_uso_profesional: Optional[TipoUsoProfesional] = Field(default=None, description="Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'")
     prefiere_diseno_exclusivo: Optional[str] = Field(default=None,description="¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?")
-    aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
-    transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'")
-    necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'")
     altura_mayor_190: Optional[str] = Field(default=None, description="¿El usuario mide más de 1.90 metros? Responde 'sí' o 'no'")
     peso_mayor_100: Optional[str] = Field(default=None, description="¿El usuario pesa más de 100 kg? Responde 'sí' o 'no'")
+    transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'")
+    necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'")    
+    arrastra_remolque: Optional[str] = Field(default=None, description="¿Va a arrastrar remolque pesado o caravana? Responde 'sí' o 'no'" )
+    aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
     solo_electricos: Optional[str] = Field(default=None, description="¿Quiere solo coches eléctricos? Responde 'sí' o 'no'")
+    prioriza_baja_depreciacion: Optional[str] = Field(default=None, description="¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'")
     transmision_preferida: Optional[Transmision] = Field(default=None, description="¿Qué transmisión prefieres: automático, manual o ambos?")
     # --- NUEVOS CAMPOS DE RATING (0-10) ---
     rating_fiabilidad_durabilidad: Optional[int] = Field( default=None, ge=0, le=10,description="Importancia de Fiabilidad y Durabilidad (0-10).")  # ge=greater or equal, le=less or equal
     rating_seguridad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Seguridad (0-10).")
     rating_comodidad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Comodidad (0-10)." )
     rating_impacto_ambiental: Optional[int] = Field(default=None, ge=0, le=10,description="Importancia del Bajo Impacto Medioambiental (0-10)."  )
-    rating_costes_uso: Optional[int] = Field( default=None, ge=0, le=10, description="Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).") 
     rating_tecnologia_conectividad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Tecnología y Conectividad (0-10).")
-    prioriza_baja_depreciacion: Optional[str] = Field(default=None, description="¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'")
+    rating_costes_uso: Optional[int] = Field( default=None, ge=0, le=10, description="Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).") 
+    
     
 
     

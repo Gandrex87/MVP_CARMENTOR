@@ -155,25 +155,26 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if prefs.prefiere_diseno_exclusivo is None: return "En cuanto al estilo del coche, ¿te inclinas más por un diseño exclusivo y llamativo, o por algo más discreto y convencional?"
     if prefs.altura_mayor_190 is None: return "Para recomendarte un vehículo con espacio adecuado, ¿tu altura supera los 1.90 metros?"
     if prefs.peso_mayor_100 is None: return "Para garantizar tu máxima comodidad, ¿tienes un peso superior a 100 kg?"
-    if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
     if prefs.transporta_carga_voluminosa is None:
         return "¿Transportas con frecuencia equipaje o carga voluminosa? (Responde 'sí' o 'no')"
     if is_yes(prefs.transporta_carga_voluminosa) and prefs.necesita_espacio_objetos_especiales is None:
         return "¿Y ese transporte de carga incluye objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos para bebé, sillas de ruedas, instrumentos musicales, etc?"
+    if prefs.arrastra_remolque is None: return "¿Vas a arrastrar remolque pesado o caravana?"
+    if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
     # --- FIN NUEVAS PREGUNTAS DE CARGA ---
     if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?"
     if prefs.transmision_preferida is None: return "En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n 1) Automático\n 2) Manual\n 3) Ambos, puedo considerar ambas opciones"
+    if prefs.prioriza_baja_depreciacion is None: return "¿Es importante para ti que la depreciación del coche sea lo más baja posible? 'sí' o 'no'"
      # --- NUEVAS PREGUNTAS DE RATING (0-10) ---
     if prefs.rating_fiabilidad_durabilidad is None: return "En una escala de 0 (nada importante) a 10 (extremadamente importante), ¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche?"
     if prefs.rating_seguridad is None:return "Pensando en la Seguridad, ¿qué puntuación le darías en importancia (0-10)?"
     if prefs.rating_comodidad is None:return "Y en cuanto a la comodidad y confort del vehiculo que tan importante es que se maximice? (0-10)"
-    if prefs.rating_impacto_ambiental is None: return "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección (0-10)?"
-    if prefs.rating_costes_uso is None: return "ahora, ¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? (0-10)?" 
-    if prefs.rating_tecnologia_conectividad is None: return "Finalmente, para la Tecnología y Conectividad del coche, ¿qué tan relevante es para ti (0-10)?"
-    if prefs.prioriza_baja_depreciacion is None: return "¿Es importante para ti que la depreciación del coche sea lo más baja posible? 'sí' o 'no'"
+    if prefs.rating_impacto_ambiental is None: return "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección (0-10)?" 
+    if prefs.rating_tecnologia_conectividad is None: return "En cuanto a la Tecnología y Conectividad del coche, ¿qué tan relevante es para ti (0-10)?"
+    if prefs.rating_costes_uso is None: return "finalmente, ¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? (0-10)?" 
     # --- FIN NUEVAS PREGUNTAS DE RATING ---
     
-    return "¿Podrías darme algún detalle más sobre tus preferencias?" # Fallback muy genérico
+    return "¿Podrías darme algún detalle más sobre tus preferencias?" # Fallback muy genérico 
 
 def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     """
@@ -345,10 +346,10 @@ def validar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
 def _obtener_siguiente_pregunta_pasajeros(info: Optional[InfoPasajeros]) -> str:
     """Genera una pregunta fallback específica para pasajeros si falta algo."""
     if info is None or info.frecuencia is None:
-        return "Cuéntame, ¿quiénes suelen viajar contigo en el coche habitualmente? ¿Llevas pasajeros a menudo?"
+        return "Cuéntame, ¿sueles viajar con acompañantes en el coche habitualmente? (nunca/ocasional/frecuente)"
     elif info.frecuencia != "nunca":
         if info.num_ninos_silla is None and info.num_otros_pasajeros is None:
-            return "¿Cuántas personas suelen ser en total (adultos/niños)? ¿Algún niño necesita sillita?"
+            return "¿Cuántas personas suelen ser en total (adultos/niños)?"
         elif info.num_ninos_silla is None:
             # Intenta ser un poco más específico si ya sabe Z
             z_val = info.num_otros_pasajeros
@@ -860,7 +861,7 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
                 prefs_dict_para_funciones, 
                 filtros_dict_para_rag, 
                 info_pasajeros_dict_para_rag, 
-                k=4
+                k=3 #antes 4 HACER PRUEBAS
             ) 
             print(f"DEBUG (Finalizar) ► RAG recomendó: {tipos_carroceria_rec}")
             filtros_actualizados.tipo_carroceria = tipos_carroceria_rec 

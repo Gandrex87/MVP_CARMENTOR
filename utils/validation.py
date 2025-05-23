@@ -12,10 +12,9 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     if prefs is None:
         return False
     campos_obligatorios = [
-        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "uso_profesional",
-        "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100","aventura", "transporta_carga_voluminosa", 
-        "solo_electricos", "transmision_preferida","rating_fiabilidad_durabilidad",
-        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_costes_uso", "rating_tecnologia_conectividad", "prioriza_baja_depreciacion"
+        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100",
+        "transporta_carga_voluminosa", "arrastra_remolque","aventura",  "solo_electricos",  "prioriza_baja_depreciacion","transmision_preferida","rating_fiabilidad_durabilidad", 
+        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_tecnologia_conectividad", "rating_costes_uso"
     ] # por ahora no va 
     for campo in campos_obligatorios:
         valor = getattr(prefs, campo, None)

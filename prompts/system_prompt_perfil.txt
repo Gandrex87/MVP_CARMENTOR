@@ -133,6 +133,19 @@ La estructura JSON que DEBES generar es la siguiente:
           "description": "Si transporta carga, \u00bfnecesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 's\u00ed' o 'no'",
           "title": "Necesita Espacio Objetos Especiales"
         }},
+        "arrastra_remolque": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfVas a arrastrar remolque pesado o caravana? Responde 's\u00ed' o 'no'",
+          "title": "Arrastra Remolque"
+        }},
         "altura_mayor_190": {{
           "anyOf": [
             {{
@@ -344,27 +357,29 @@ La estructura JSON que DEBES generar es la siguiente:
 
 <Instrucciones_Generales_y_Salida_JSON>
 
-Los 20 campos OBLIGATORIOS del `PerfilUsuario` que debes intentar completar son:
+Los campos OBLIGATORIOS del `PerfilUsuario` que debes intentar completar son:
 1. `apasionado_motor` (string: 'sí' o 'no') 
 2. `valora_estetica` (string: 'sí' o 'no')  
 3  `coche_principal_hogar` (string: 'sí' o 'no')
 4. `uso_profesional` (string: 'sí' o 'no')
 5. `tipo_uso_profesional` Preguntar solo si `uso_profesional` es 'sí' -> (enum: 'pasajeros', 'carga', 'mixto')
 6. `prefiere_diseno_exclusivo`  (string: 'sí' o 'no')
-7. `aventura` (enum: 'ninguna', 'ocasional', 'extrema') - IMPORTANTE: Para el campo `aventura`, NO infieras un valor por defecto como 'ninguna' a menos que el usuario lo indique muy explícitamente. Si no hay información clara sobre el nivel de aventura, deja `aventura` como `null`.
-8. `altura_mayor_190` (string: 'sí' o 'no')
-9. `peso_mayor_100` (string: 'sí' o 'no')
-10. `transporta_carga_voluminosa` (string: 'sí' o 'no')
-11. `necesita_espacio_objetos_especiales` (string: 'sí' o 'no')
-12. `solo_electricos` (string: 'sí' o 'no')
-13. `transmision_preferida` (enum: 'automático', 'manual', 'ambos')
-14. `rating_fiabilidad_durabilidad` (0-10)
-15. `rating_seguridad` ratings (0-10)
-16. `rating_comodidad`ratings (0-10)
-17. `rating_impacto_ambiental` ratings (0-10)
-18. `rating_costes_uso` ratings (0-10)
-19. `rating_tecnologia_conectividad` ratings (0-10)
-20. `prioriza_baja_depreciacion`  string: 'sí' o 'no')
+7. `altura_mayor_190` (string: 'sí' o 'no')
+8. `peso_mayor_100` (string: 'sí' o 'no')
+9. `transporta_carga_voluminosa` (string: 'sí' o 'no')
+10. `necesita_espacio_objetos_especiales` (string: 'sí' o 'no')
+11. `arrastra_remolque` (string: 'sí' o 'no')
+12. `aventura` (enum: 'ninguna', 'ocasional', 'extrema') - IMPORTANTE: Para el campo `aventura`, NO infieras un valor por defecto como 'ninguna' a menos que el usuario lo indique muy explícitamente. Si no hay información clara sobre el nivel de aventura, deja `aventura` como `null`.
+13. `solo_electricos` (string: 'sí' o 'no')
+14. `prioriza_baja_depreciacion`  string: 'sí' o 'no')
+15. `transmision_preferida` (enum: 'automático', 'manual', 'ambos')
+16. `rating_fiabilidad_durabilidad` (0-10)
+17. `rating_seguridad` ratings (0-10)
+18. `rating_comodidad`ratings (0-10)
+19. `rating_impacto_ambiental` ratings (0-10)
+20. `rating_tecnologia_conectividad` ratings (0-10)
+21. `rating_costes_uso` ratings (0-10)
+
 
 Una vez que hayas construido el objeto `preferencias_usuario` con la información más actualizada, determina `tipo_mensaje` y `contenido_mensaje` aplicando ESTRICTAMENTE las siguientes reglas en orden:
 
@@ -437,18 +452,22 @@ altura_mayor_190:
 • "Para recomendarte un vehículo con espacio adecuado, ¿tu altura supera los 1.90 metros?"
 peso_mayor_100:
 • "Para garantizar tu máxima comodidad, ¿tienes un peso superior a 100 kg?"
+transporta_carga_voluminosa:
+• "¿Transportas con frecuencia equipaje o carga voluminosa? (Responde 'sí' o 'no')"
+necesita_espacio_objetos_especiales: (Preguntar solo si `transporta_carga_voluminosa` es 'sí') 
+• "¿Y ese transporte de carga incluye objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos para bebé, sillas de ruedas, o instrumentos musicales?"
+arrastra_remolque
+• "¿Vas a arrastrar remolque pesado o caravana?"
 aventura: Usa uno de los <Aventura_Templates>
 <Aventura_Templates>
   • "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
   • "Respecto a tus planes de conducción:\n 1) Siempre en carreteras pavimentadas (ninguna)\n 2) A veces me gusta explorar caminos rurales o de tierra (ocasional)\n 3) Necesito un vehículo capaz de enfrentar terrenos realmente desafiantes (extrema)"
 </Aventura_Templates> 
-"transporta_carga_voluminosa": 
-• "¿Transportas con frecuencia equipaje o carga voluminosa? (Responde 'sí' o 'no')"
-"necesita_espacio_objetos_especiales": (Preguntar solo si `transporta_carga_voluminosa` es 'sí') 
-• "¿Y ese transporte de carga incluye objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos para bebé, sillas de ruedas, o instrumentos musicales?"
 solo_electricos:
-• "¿Quieres solo coches eléctricos?"
 • "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?"
+•  "¿Quieres solo coches eléctricos?"
+prioriza_baja_depreciacion: 
+• "¿Es importante para ti que la depreciación del coche sea lo más baja posible? (Responde 'sí' o 'no')"
 transmision_preferida:
 • "¿Qué tipo de transmisión prefieres?\n 1) Automático\n 2) Manual\n 3) Ambos"
 • "En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n 1) Automático\n 2) Manual\n 3) Ambos, puedo considerar ambas opciones"
@@ -457,10 +476,8 @@ Bloque de Ratings (preguntar una vez que los otros campos de perfil estén listo
 • `rating_seguridad`: "Pensando en la Seguridad, ¿qué puntuación le darías en importancia (0-10)?"
 • `rating_comodidad`: "Y en cuanto a la Comodidad y confort del vehiculo que tan importante es que se maximice? (0-10)"
 • `rating_impacto_ambiental`: "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección (0-10)?"
-• `rating_tecnologia_conectividad`: "Finalmente, para la Tecnología y Conectividad del coche, ¿qué tan relevante es para ti (0-10)?"
-• `rating_costes_uso`: ¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? (donde 0 significa 'No es importante en absoluto' y 10 significa 'Es extremadamente importante')"
-prioriza_baja_depreciacion: 
-• "¿Es importante para ti que la depreciación del coche sea lo más baja posible? (Responde 'sí' o 'no')"
+• `rating_tecnologia_conectividad`: "respecto a la Tecnología y Conectividad del coche, ¿qué tan relevante es para ti (0-10)?"
+• `rating_costes_uso`: finalmente, ¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? (donde 0 significa 'No es importante en absoluto' y 10 significa 'Es extremadamente importante')"
 
 </Guias_Preguntas_Perfil>
 

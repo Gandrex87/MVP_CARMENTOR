@@ -177,7 +177,7 @@ def get_recommended_carrocerias(
     preferencias: Dict[str, Any], 
     filtros_tecnicos: Optional[Dict[str, Any]], # <--- ASEGÚRATE QUE ESTE ARGUMENTO EXISTA 
     info_pasajeros: Optional[Dict[str, Any]], 
-    k: int = 4
+    k: int = 3 #antes 4
 ) -> List[str]:
     """
     Obtiene tipos de carrocería recomendados usando RAG,
@@ -199,7 +199,12 @@ def get_recommended_carrocerias(
     
     if is_yes(preferencias.get("apasionado_motor")) and APASIONADO_MOTOR_SYNONYMS:
         partes_query.extend(APASIONADO_MOTOR_SYNONYMS)
-            
+    
+    if is_yes(preferencias.get("arrastra_remolque")):
+        logging.info("INFO (RAG) ► Usuario arrastra remolque. Enriqueciendo query RAG para capacidad de arrastre.")
+        partes_query.extend([
+            "capacidad de carga", " transportar cargas grandes", "robusto", 
+            "estructura resistente","remolcar caravana"])
     # Aventura
     aventura_val = preferencias.get("aventura")
     nivel_aventura_str = ""
@@ -234,7 +239,7 @@ def get_recommended_carrocerias(
             if num_ninos_silla > 0 and ESPACIO_PASAJEROS_NINOS_SYNONYMS:
                 partes_query.extend(ESPACIO_PASAJEROS_NINOS_SYNONYMS)
             elif (num_ninos_silla + num_otros_pasajeros) >= 2: 
-                partes_query.extend(["espacio para pasajeros", "viajar acompañado", "amplitud interior", "muchas plazas", "gran capacidad interior"])
+                partes_query.extend(["espacio para pasajeros", "viajar acompañado", "amplitud interior", "muchas plazas"])
     else:
         logging.info("INFO (RAG Query) ► No se proporcionó información de pasajeros válida para RAG.")
 
