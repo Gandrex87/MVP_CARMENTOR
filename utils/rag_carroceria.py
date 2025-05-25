@@ -127,25 +127,24 @@ def get_vectorstore(force_rebuild: bool = False) -> FAISS:
 # Mapa de sinónimos por nivel de aventura
 AVENTURA_SYNONYMS = {
     "ninguna":   ["ciudad", "asfalto", "uso diario", "practicidad", "maniobrable"],
-    "ocasional": ["campo", "ligero fuera de asfalto", "excursiones", "profesional", "versátil"],
-    "extrema":   ["off-road", "terrenos difíciles","tracción 4x4","barro", "gran altura libre", "reductora"]
+    "ocasional": ["campo", "ligero fuera de asfalto", "excursiones", "versátil"],
+    "extrema":   ["off-road", "terrenos difíciles","tracción 4x4", "gran altura libre", "reductoras"]
 }
 
 # NUEVOS SINÓNIMOS SUGERIDOS (a usar dinámicamente en get_recommended_carrocerias)
 USO_PROF_CARGA_SYNONYMS = [
-    "transporte de mercancías", "herramientas", "materiales", "logística", "entregas", "furgón" 
+    "transporte de mercancías", "logística", "furgón" 
     # Tags del PDF relevantes: "Transporte de objetos especiales", "logística", "entregas", "comercio", "servicio técnico", "carga pesada"
 ]
 
 USO_PROF_PASAJEROS_SYNONYMS = [
-    "transporte de personas","vehículo de pasajeros", "transporte escolar", "rutas de personal",
-    "muchos asientos"
+    "transporte personas", "rutas de personal", "muchos asientos"
     # Tags del PDF relevantes: "Muchos pasajeros" (en FURGONETA, MONOVOLUMEN), "viajes familiares" (FURGONETA) podría tener una connotación.
 ]
 
 USO_PROF_MIXTO_SYNONYMS = [
-    "uso mixto profesional", "versatilidad carga y pasajeros", "vehículo combi", 
-    "transporte de equipo y personal", "trabajo y familia adaptable", "doble cabina"
+    "uso mixto profesional", "vehículo combi", 
+    "transporte equipo y personal", "trabajo y familia adaptable", "doble cabina"
     # Tags del PDF relevantes: FURGONETA (intrínsecamente mixto), PICKUP (doble cabina), SUV, FAMILIAR.
 ]
 
@@ -155,21 +154,19 @@ ESTETICA_VALORADA_SYNONYMS = [ # Si valora_estetica == "sí"
 ]
 
 ESPACIO_PASAJEROS_NINOS_SYNONYMS = [ # Si num_ninos_silla > 0 o muchos pasajeros
-   "espacio sillas infantiles", "modularidad asientos", "accesibilidad plazas traseras"
-]
+   "espacio sillas infantiles", "modularidad asientos"]
 
 APASIONADO_MOTOR_SYNONYMS = [ # Si apasionado_motor == "sí"
-    "conducción emocionante", "singular", "motor avanzado", "ágil en curvas"
-]
+    "conducción emocionante", "singular", "ágil en curvas"]
 
 # Podrías incluso tener para SOLO_ELECTRICOS, aunque "eléctrico" es bastante directo
 SOLO_ELECTRICOS_SYNONYMS = ["cero emisiones", "sostenible", "bajo consumo energético"]
 
 # --- NUEVOS SINÓNIMOS/TÉRMINOS PARA ALTA COMODIDAD ---
-ALTA_COMODIDAD_CARROCERIA_SYNONYMS = ["comodidad y confort", "mascotas", "derivado de un 2VOL o 3VOL", "SUV familiar cómodo",   "monovolumen espacioso"
-]
-NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS = ["maletero amplio", "versatilidad interior","portón trasero grande", "modularidad"]
-
+ALTA_COMODIDAD_CARROCERIA_SYNONYMS = ["comodidad y confort","derivado de 2VOL o 3VOL", "monovolumen espacioso"]
+NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS = ["maletero amplio", "portón trasero grande", "modularidad"]
+# --- NUEVOS SINÓNIMOS PARA CLIMA DE MONTAÑA ---
+CLIMA_MONTA_CARROCERIA_SYNONYMS = ["todoterreno", "SUV robusto"]
 # --- FIN NUEVOS SINÓNIMOS ---
 
 
@@ -177,7 +174,8 @@ def get_recommended_carrocerias(
     preferencias: Dict[str, Any], 
     filtros_tecnicos: Optional[Dict[str, Any]], # <--- ASEGÚRATE QUE ESTE ARGUMENTO EXISTA 
     info_pasajeros: Optional[Dict[str, Any]], 
-    k: int = 3 #antes 4
+    info_clima: Optional[Dict[str, Any]], # <-- NUEVO ARGUMENTO
+    k: int = 4 #antes 4
 ) -> List[str]:
     """
     Obtiene tipos de carrocería recomendados usando RAG,
@@ -254,7 +252,13 @@ def get_recommended_carrocerias(
     if rating_comodidad_val is not None and rating_comodidad_val >= UMBRAL_RATING_COMODIDAD_RAG and ALTA_COMODIDAD_CARROCERIA_SYNONYMS:
         logging.info(f"INFO (RAG) ► Rating Comodidad alto. Enriqueciendo query para confort.")
         partes_query.extend(ALTA_COMODIDAD_CARROCERIA_SYNONYMS)
-
+        
+    # --- LÓGICA PARA INFLUIR RAG CON CLIMA CP DE MONTAÑA ---
+    if info_clima and info_clima.get("ZONA_CLIMA_MONTA") is True:
+        logging.info("INFO (RAG) ► Zona de Clima de Montaña detectada. Enriqueciendo query RAG.")
+        if CLIMA_MONTA_CARROCERIA_SYNONYMS:
+            partes_query.extend(CLIMA_MONTA_CARROCERIA_SYNONYMS)
+    
     # --- 2. Limpieza y Formación de la Query String ---
     partes_unicas = []
     if partes_query: # Solo procesar si hay partes

@@ -5,21 +5,200 @@ from .state import (EstadoAnalisisPerfil,
                     PerfilUsuario, ResultadoSoloPerfil , 
                     FiltrosInferidos, ResultadoSoloFiltros,
                     EconomiaUsuario,ResultadoEconomia ,
-                    InfoPasajeros, ResultadoPasajeros)
-from config.llm import llm_solo_perfil, llm_solo_filtros, llm_economia, llm_pasajeros
-from prompts.loader import system_prompt_perfil, system_prompt_filtros_template, prompt_economia_structured_sys_msg, system_prompt_pasajeros
+                    InfoPasajeros, ResultadoPasajeros,
+                    InfoClimaUsuario, ResultadoCP)
+from config.llm import llm_solo_perfil, llm_solo_filtros, llm_economia, llm_pasajeros, llm_cp_extractor
+from prompts.loader import system_prompt_perfil, system_prompt_filtros_template, prompt_economia_structured_sys_msg, system_prompt_pasajeros, system_prompt_cp
 from utils.postprocessing import aplicar_postprocesamiento_perfil, aplicar_postprocesamiento_filtros
 from utils.validation import check_perfil_usuario_completeness , check_filtros_completos, check_economia_completa, check_pasajeros_completo
 from utils.formatters import formatear_preferencias_en_tabla
 from utils.weights import compute_raw_weights, normalize_weights
 from utils.rag_carroceria import get_recommended_carrocerias
 from utils.bigquery_tools import buscar_coches_bq
+from utils.bq_data_lookups import obtener_datos_climaticos_por_cp # IMPORT para la función de búsqueda de clima ---
 from utils.conversion import is_yes 
 from utils.bq_logger import log_busqueda_a_bigquery 
 import traceback 
 import pandas as pd
 
 # En graph/nodes.py
+
+# --- INICIO: NUEVOS NODOS PARA ETAPA DE CÓDIGO POSTAL ---
+
+# En graph/perfil/nodes.py
+def preguntar_cp_inicial_node(state: EstadoAnalisisPerfil) -> dict:
+    print("--- Ejecutando Nodo: preguntar_cp_inicial_node ---")
+    mensaje_pendiente = state.get("pregunta_pendiente")
+    historial_actual = state.get("messages", [])
+    historial_nuevo = list(historial_actual) # Crear copia
+
+    mensaje_a_mostrar = "Por favor, introduce tu código postal de 5 dígitos." # Fallback muy básico
+
+    if mensaje_pendiente and mensaje_pendiente.strip():
+        mensaje_a_mostrar = mensaje_pendiente
+        print(f"DEBUG (Preguntar CP Inicial) ► Usando mensaje pendiente: {mensaje_a_mostrar}")
+    else:
+        # Esto podría pasar si validar_cp_node no puso un mensaje de fallback
+        # cuando tipo_mensaje_cp_llm era None o inesperado.
+        print("WARN (Preguntar CP Inicial) ► No había mensaje pendiente válido, usando fallback.")
+
+    ai_msg = AIMessage(content=mensaje_a_mostrar)
+    if not historial_actual or historial_actual[-1].content != ai_msg.content:
+        historial_nuevo.append(ai_msg)
+        print(f"DEBUG (Preguntar CP Inicial) ► Mensaje final añadido: {mensaje_a_mostrar}")
+    else:
+        print("DEBUG (Preguntar CP Inicial) ► Mensaje duplicado, no se añade.")
+
+    # Devolver solo los campos modificados
+    return {
+        "messages": historial_nuevo,
+        "pregunta_pendiente": None # Siempre limpiar
+    }
+
+
+def recopilar_cp_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Llama a llm_cp_extractor para obtener el código postal del usuario.
+    Guarda el mensaje del LLM (pregunta de aclaración o confirmación) 
+    y el CP extraído (si lo hay) en el estado.
+    """
+    print("--- Ejecutando Nodo: recopilar_cp_node ---")
+    historial = state.get("messages", [])
+    
+    # No necesitamos la guarda de AIMessage aquí si este es el primer nodo real
+    # o si el nodo anterior (preguntar_cp_inicial) ya es un AIMessage.
+    # Si el flujo es START -> recopilar_cp_node, no habrá AIMessage previo.
+    
+    codigo_postal_extraido_llm = None
+    contenido_msg_llm = "Lo siento, no pude procesar tu código postal en este momento." # Default
+    tipo_msg_llm = "ERROR"
+
+    try:
+        # llm_cp_extractor devuelve ResultadoCP
+        response: ResultadoCP = llm_cp_extractor.invoke(
+            [system_prompt_cp, *historial], # Pasa el prompt y el historial
+            config={"configurable": {"tags": ["llm_cp_extractor"]}} 
+        )
+        print(f"DEBUG (CP) ► Respuesta llm_cp_extractor: {response}")
+
+        codigo_postal_extraido_llm = response.codigo_postal_extraido
+        tipo_msg_llm = response.tipo_mensaje
+        contenido_msg_llm = response.contenido_mensaje
+        
+        print(f"DEBUG (CP) ► CP extraído por LLM: '{codigo_postal_extraido_llm}', Tipo Mensaje: '{tipo_msg_llm}'")
+
+    except ValidationError as e_val:
+        print(f"ERROR (CP) ► Error de Validación Pydantic en llm_cp_extractor: {e_val}")
+        contenido_msg_llm = f"Hubo un problema al procesar tu código postal (formato inválido): {e_val}. ¿Podrías intentarlo de nuevo?"
+        tipo_msg_llm = "PREGUNTA_ACLARACION" # Forzar pregunta si hay error de validación
+    except Exception as e:
+        print(f"ERROR (CP) ► Fallo general al invocar llm_cp_extractor: {e}")
+        traceback.print_exc()
+        # contenido_msg_llm ya tiene un default de error
+
+    # Guardar el CP extraído temporalmente en el estado para validación,
+    # y el mensaje del LLM en pregunta_pendiente.
+    # El CP final validado se guardará en state['codigo_postal_usuario'] en el nodo de validación.
+    return {
+        #**state,
+        "pregunta_pendiente": contenido_msg_llm,
+        "codigo_postal_extraido_temporal": codigo_postal_extraido_llm,
+        "tipo_mensaje_cp_llm": tipo_msg_llm
+    }
+
+def validar_cp_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Valida el código postal extraído por el LLM.
+    Si es válido, lo guarda en state['codigo_postal_usuario'].
+    Si no es válido, prepara para re-preguntar.
+    Devuelve una clave para la arista condicional: 'cp_valido' o 'repreguntar_cp'.
+    """
+    print("--- Ejecutando Nodo: validar_cp_node ---")
+    cp_extraido = state.get("codigo_postal_extraido_temporal")
+    tipo_mensaje_cp_llm = state.get("tipo_mensaje_cp_llm")
+    
+    decision = "repreguntar_cp" # Por defecto, repreguntar
+    cp_validado_para_estado = None
+    mensaje_para_siguiente_pregunta = state.get("pregunta_pendiente") # Mensaje del LLM
+
+    if tipo_mensaje_cp_llm == "CP_OBTENIDO":
+        if cp_extraido and cp_extraido.isdigit() and len(cp_extraido) == 5:
+            print(f"DEBUG (CP Validation) ► CP '{cp_extraido}' parece válido. Procediendo a buscar clima.")
+            cp_validado_para_estado = cp_extraido
+            decision = "cp_valido_listo_para_clima"
+            # No necesitamos un mensaje pendiente si el CP es válido y el LLM ya confirmó
+            # o dio mensaje vacío. El siguiente nodo (buscar_info_clima) no necesita pregunta_pendiente.
+            mensaje_para_siguiente_pregunta = None 
+        elif cp_extraido is None and tipo_mensaje_cp_llm == "CP_OBTENIDO":
+            # Caso donde el usuario se negó a dar CP, y el LLM lo manejó (según prompt)
+            print("DEBUG (CP Validation) ► Usuario no proporcionó CP, pero LLM manejó la situación. Avanzando sin CP.")
+            decision = "cp_valido_listo_para_clima" # Avanza, pero cp_validado_para_estado será None
+            mensaje_para_siguiente_pregunta = None
+        else:
+            # El LLM dijo que obtuvo CP, pero no es válido en formato
+            print(f"WARN (CP Validation) ► LLM indicó CP_OBTENIDO, pero CP '{cp_extraido}' es inválido. Repreguntando.")
+            # El mensaje_para_siguiente_pregunta ya debería ser la pregunta de aclaración del LLM
+            # Si no lo es, el nodo preguntar_cp_node debería tener un fallback.
+            if not mensaje_para_siguiente_pregunta or mensaje_para_siguiente_pregunta.strip() == "":
+                 mensaje_para_siguiente_pregunta = "El código postal no parece correcto. ¿Podrías darme los 5 dígitos de tu CP?"
+            decision = "repreguntar_cp"
+            
+    elif tipo_mensaje_cp_llm == "PREGUNTA_ACLARACION":
+        print("DEBUG (CP Validation) ► LLM necesita aclarar CP. Repreguntando.")
+        # mensaje_para_siguiente_pregunta ya contiene la pregunta del LLM
+        decision = "repreguntar_cp"
+    else: # ERROR o tipo inesperado
+        print(f"ERROR (CP Validation) ► Tipo de mensaje LLM inesperado o error: '{tipo_mensaje_cp_llm}'. Repreguntando por seguridad.")
+        mensaje_para_siguiente_pregunta = "Hubo un problema con el código postal. ¿Podrías intentarlo de nuevo con 5 dígitos?"
+        decision = "repreguntar_cp"
+
+    # Actualizar el estado con el CP validado (si lo hay) y la decisión para el router
+    # Limpiar los campos temporales
+    return {
+        "codigo_postal_usuario": cp_validado_para_estado,
+        "pregunta_pendiente": mensaje_para_siguiente_pregunta,
+        "codigo_postal_extraido_temporal": None,
+        "tipo_mensaje_cp_llm": None,
+        "_decision_cp_validation": decision
+    }
+
+def buscar_info_clima_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Si hay un código postal válido, busca la información climática en BQ.
+    Actualiza state['info_clima_usuario'].
+    """
+    print("--- Ejecutando Nodo: buscar_info_clima_node ---")
+    cp_usuario = state.get("codigo_postal_usuario")
+    info_clima_calculada = None # Default
+
+    if cp_usuario:
+        print(f"DEBUG (Clima) ► Buscando datos climáticos para CP: {cp_usuario}")
+        try:
+            info_clima_calculada = obtener_datos_climaticos_por_cp(cp_usuario)
+            if info_clima_calculada and info_clima_calculada.cp_valido_encontrado:
+                print(f"DEBUG (Clima) ► Datos climáticos encontrados: {info_clima_calculada.model_dump()}")
+            elif info_clima_calculada: # cp_valido_encontrado fue False
+                 print(f"WARN (Clima) ► CP {cp_usuario} procesado por BQ pero no arrojó datos de zona específicos o no se encontró.")
+                 # info_clima_calculada tendrá los booleanos en False y cp_valido_encontrado=False
+            else: # La función devolvió None (error en la función)
+                 print(f"ERROR (Clima) ► obtener_datos_climaticos_por_cp devolvió None para CP {cp_usuario}.")
+                 info_clima_calculada = InfoClimaUsuario(codigo_postal_consultado=cp_usuario, cp_valido_encontrado=False)
+        except Exception as e_clima:
+            print(f"ERROR (Clima) ► Fallo al buscar info de clima: {e_clima}")
+            traceback.print_exc()
+            info_clima_calculada = InfoClimaUsuario(codigo_postal_consultado=cp_usuario, cp_valido_encontrado=False) # Guardar con error
+    else:
+        print("INFO (Clima) ► No hay código postal de usuario, omitiendo búsqueda de clima.")
+        # Crear un objeto InfoClimaUsuario con defaults (todos False) si no hay CP
+        info_clima_calculada = InfoClimaUsuario(cp_valido_encontrado=False) 
+
+    return {"info_clima_usuario": info_clima_calculada}
+
+# --- FIN NUEVOS NODOS PARA ETAPA DE CÓDIGO POSTAL ---
+
+
+
+
 # --- Etapa 1: Recopilación de Preferencias del Usuario ---
 
 def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
@@ -801,8 +980,12 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     economia_obj = state.get("economia")           # Objeto EconomiaUsuario
     info_pasajeros_obj = state.get("info_pasajeros") # Objeto InfoPasajeros
     priorizar_ancho_flag = state.get("priorizar_ancho", False)
+    codigo_postal_usuario_val = state.get("codigo_postal_usuario")
     pesos_calculados = None # Inicializar
     tabla_final_md = "Error al generar el resumen." # Default
+    info_clima_obj = state.get("info_clima_usuario") # Es un objeto InfoClimaUsuario o None
+
+    
 
     # Verificar pre-condiciones
     if not preferencias_obj or not filtros_obj or not economia_obj: # info_pasajeros es opcional para este check
@@ -811,15 +994,23 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
          # Devolver un estado mínimo para no romper el grafo
          return {
              "messages": historial + [ai_msg],
-             "preferencias_usuario": preferencias_obj, "info_pasajeros": info_pasajeros_obj,
-             "filtros_inferidos": filtros_obj, "economia": economia_obj, "pesos": None,
-             "tabla_resumen_criterios": None, "coches_recomendados": None,
+             "preferencias_usuario": preferencias_obj, 
+             "info_pasajeros": info_pasajeros_obj,
+             "filtros_inferidos": filtros_obj, 
+             "economia": economia_obj, "pesos": None,
+             "tabla_resumen_criterios": None, 
+             "coches_recomendados": None,
              "penalizar_puertas_bajas": state.get("penalizar_puertas_bajas"),
              "priorizar_ancho": priorizar_ancho_flag,
              "flag_penalizar_low_cost_comodidad": False, # Default
              "flag_penalizar_deportividad_comodidad": False ,# Default
              "flag_penalizar_antiguo_por_tecnologia": False,
-             "aplicar_logica_distintivo_ambiental": False # <-- Default para el nuevo flag
+             "aplicar_logica_distintivo_ambiental": False, # <-- Default para el nuevo flag
+             "codigo_postal_usuario": codigo_postal_usuario_val,
+             "info_clima_usuario": info_clima_obj,
+             "es_zona_nieblas_estado": False, #flags clima para el estado (aunque no se usen directamente en BQ, es bueno tenerlos)
+             "es_zona_nieve_estado": False,
+             "es_zona_clima_monta_estado": False,
          }
     # Trabajar con una copia de filtros para las modificaciones
     filtros_actualizados = filtros_obj.model_copy(deep=True)   
@@ -852,7 +1043,7 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     prefs_dict_para_funciones = preferencias_obj.model_dump(mode='json', exclude_none=False)
     filtros_dict_para_rag = filtros_actualizados.model_dump(mode='json', exclude_none=False)
     info_pasajeros_dict_para_rag = info_pasajeros_obj.model_dump(mode='json') if info_pasajeros_obj else None
-
+    info_clima_dict_para_rag = info_clima_obj.model_dump(mode='json') if info_clima_obj else None
     # 1. Llamada RAG
     if not filtros_actualizados.tipo_carroceria: 
         print("DEBUG (Finalizar) ► Llamando a RAG...")
@@ -860,8 +1051,9 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
             tipos_carroceria_rec = get_recommended_carrocerias(
                 prefs_dict_para_funciones, 
                 filtros_dict_para_rag, 
-                info_pasajeros_dict_para_rag, 
-                k=3 #antes 4 HACER PRUEBAS
+                info_pasajeros_dict_para_rag,
+                info_clima_dict_para_rag, # <-- NUEVO: Pasar info_clima a RAG 
+                k=4 #antes 4 HACER PRUEBAS
             ) 
             print(f"DEBUG (Finalizar) ► RAG recomendó: {tipos_carroceria_rec}")
             filtros_actualizados.tipo_carroceria = tipos_carroceria_rec 
@@ -898,8 +1090,17 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
         if preferencias_obj.rating_impacto_ambiental >= UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA:
             flag_aplicar_logica_distintivo = True
             print(f"DEBUG (Finalizar) ► Rating Impacto Ambiental ({preferencias_obj.rating_impacto_ambiental}) >= {UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA}. Activando lógica de distintivo ambiental.")
-    # --- FIN NUEVA LÓGICA FLAG DISTINTIVO ---
-    # ---
+   
+    # --- PREPARAR FLAGS CLIMÁTICOS PARA compute_raw_weights ---
+    es_nieblas = False
+    es_nieve = False
+    es_monta = False
+    if info_clima_obj and info_clima_obj.cp_valido_encontrado: # Solo si tenemos datos válidos de clima
+        es_nieblas = info_clima_obj.ZONA_NIEBLAS or False
+        es_nieve = info_clima_obj.ZONA_NIEVE or False
+        es_monta = info_clima_obj.ZONA_CLIMA_MONTA or False
+    # --- FIN PREPARAR FLAGS ---
+    
     # 2. Cálculo de Pesos
     print("DEBUG (Finalizar) ► Calculando pesos...")
     try:
@@ -912,7 +1113,10 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
             estetica_min_val=estetica_min_val,
             premium_min_val=premium_min_val,
             singular_min_val=singular_min_val,
-            priorizar_ancho=priorizar_ancho_flag
+            priorizar_ancho=priorizar_ancho_flag,
+            es_zona_nieblas=es_nieblas,
+            es_zona_nieve=es_nieve,
+            es_zona_clima_monta=es_monta
         )
         pesos_calculados = normalize_weights(raw_weights)
         print(f"DEBUG (Finalizar) ► Pesos calculados: {pesos_calculados}") 
@@ -921,14 +1125,18 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
         traceback.print_exc()
         pesos_calculados = {} # Default a dict vacío en error para evitar None más adelante
     
-    # 3. Formateo de la Tabla
+    # 3.Formateo de la Tabla
     print("DEBUG (Finalizar) ► Formateando tabla final...")
     try:
+        info_clima_dict_para_tabla = info_clima_obj.model_dump(mode='json') if info_clima_obj else {} 
         # Pasamos los OBJETOS Pydantic originales (o actualizados)
         tabla_final_md = formatear_preferencias_en_tabla(
             preferencias=preferencias_obj, 
             filtros=filtros_actualizados, 
-            economia=economia_obj
+            economia=economia_obj,
+            codigo_postal_usuario=codigo_postal_usuario_val,
+            info_clima_usuario=info_clima_dict_para_tabla # <-- PASAR INFO CLIMA
+            
             # info_pasajeros también podría pasarse si el formateador lo usa
         )
         print("\n--- TABLA RESUMEN GENERADA (DEBUG) ---")
@@ -956,6 +1164,8 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_penalizar_deportividad_comodidad": flag_penalizar_deportividad_comodidad, # Añade/Sobrescribe
         "flag_penalizar_antiguo_por_tecnologia": flag_penalizar_antiguo_tec,
         "aplicar_logica_distintivo_ambiental": flag_aplicar_logica_distintivo,
+        "codigo_postal_usuario": codigo_postal_usuario_val, 
+        "info_clima_usuario": info_clima_obj, # Propagar el objeto completo
         "pregunta_pendiente": None                 # Sobrescribe
     }
   # --- Fin Etapa 4 ---

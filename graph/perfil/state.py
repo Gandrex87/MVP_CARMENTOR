@@ -7,7 +7,20 @@ from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesi
 from typing import Literal, Optional
 
 
-# 🧠 Modelos de Datos (PerfilUsuario, FiltrosInferidos, EconomiaUsuario): Estos modelos definen la información que quieres recopilar.
+# 🧠 Modelos de Datos (InfoClimaUsuario, PerfilUsuario, FiltrosInferidos, EconomiaUsuario): Estos modelos definen la información que quieres recopilar.
+   
+   
+# Las claves aquí deben coincidir con los nombres de tus columnas en la tabla zona_climas
+class InfoClimaUsuario(BaseModel):
+    MUNICIPIO_ZBE: bool = False # Default a False
+    ZONA_LLUVIAS: bool = False
+    ZONA_NIEBLAS: bool = False
+    ZONA_NIEVE: bool = False
+    ZONA_CLIMA_MONTA: bool = False
+    ZONA_GLP: bool = False
+    ZONA_GNV: bool = False
+    cp_valido_encontrado: bool = Field(default=False, description="Indica si el CP se procesó y se encontró en al menos una categoría o es válido.")
+    codigo_postal_consultado: Optional[str] = Field(default=None, description="El CP que se consultó.") 
         
 class PerfilUsuario(BaseModel):
     # Añadir default=None a todos los Optional que no lo tenían
@@ -33,10 +46,6 @@ class PerfilUsuario(BaseModel):
     rating_impacto_ambiental: Optional[int] = Field(default=None, ge=0, le=10,description="Importancia del Bajo Impacto Medioambiental (0-10)."  )
     rating_tecnologia_conectividad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Tecnología y Conectividad (0-10).")
     rating_costes_uso: Optional[int] = Field( default=None, ge=0, le=10, description="Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).") 
-    
-    
-
-    
     
     # ConfigDict se mantiene igual (recuerda quitar ignored_types si no lo hiciste)
     class ConfigDict:
@@ -126,10 +135,25 @@ class ResultadoSoloFiltros(BaseModel):
     filtros_inferidos: FiltrosInferidos
     mensaje_validacion: str = Field(description="Pregunta de seguimiento CLARA y CORTA si falta información ESENCIAL para completar los FiltrosInferidos (ej: tipo_mecanica), o un mensaje de confirmación si los filtros están completos.")
 
-    
+
+# Modelo Pydantic para la salida del LLM que extrae el CP ---
+class ResultadoCP(BaseModel):
+    """Salida esperada del LLM enfocado en extraer el código postal."""
+    codigo_postal_extraido: Optional[str] = Field(default=None, description="El código postal numérico de 5 dígitos extraído de la respuesta del usuario.")
+    tipo_mensaje: Literal["PREGUNTA_ACLARACION", "CP_OBTENIDO", "ERROR"] = Field(description="Clasificación: 'PREGUNTA_ACLARACION' si el CP no es válido o falta, 'CP_OBTENIDO' si se extrajo un CP válido, 'ERROR'.")
+    contenido_mensaje: str = Field(description="El texto real del mensaje: la pregunta de aclaración para el CP, una confirmación, o un detalle del error.")
+
+
+
+
 #ES el contenedor general que acumula toda la información a lo largo de la ejecución del grafo.
 class EstadoAnalisisPerfil(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]  # 👈 sumo todos los mensajes sin perder contexto
+    codigo_postal_usuario: Optional[str] # El CP validado
+    info_clima_usuario: Optional[InfoClimaUsuario] # Los datos climáticos de BQ
+    codigo_postal_extraido_temporal: Optional[str]
+    tipo_mensaje_cp_llm: Optional[Literal["PREGUNTA_ACLARACION", "CP_OBTENIDO", "ERROR"]]
+    _decision_cp_validation: Optional[Literal["buscar_clima", "repreguntar_cp"]] # Clave interna para routing
     preferencias_usuario: Optional[PerfilUsuario]
     filtros_inferidos: Optional[FiltrosInferidos]
     economia: Optional[EconomiaUsuario]          # ← nuevo canal para la rama económica

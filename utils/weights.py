@@ -17,9 +17,14 @@ from graph.perfil.state import PerfilUsuario # Importar para type hint
 # ... (AVENTURA_RAW como lo definiste) ...
 AVENTURA_RAW = {
   "ninguna":   {"altura_libre_suelo":  0,   "traccion":  0,  "reductoras":  0},
-  "ocasional": {"altura_libre_suelo":  6,   "traccion":  4,  "reductoras":  1},
-  "extrema":   {"altura_libre_suelo":  8,   "traccion": 10,  "reductoras":  8},
+  "ocasional": {"altura_libre_suelo":  6,   "traccion":  3,  "reductoras":  1},
+  "extrema":   {"altura_libre_suelo":  8,   "traccion": 8,  "reductoras":  8},
 }
+
+# --- VALORES DE AJUSTE DE PESO CRUDO POR CLIMA (¡AJUSTA ESTOS!) ---
+AJUSTE_PESO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
+AJUSTE_PESO_TRACCION_POR_NIEVE = 5.0   # Cuánto sumar al peso crudo de tracción si hay nieve
+AJUSTE_PESO_TRACCION_POR_MONTA = 2.0   # Cuánto sumar al peso crudo de tracción si es clima de montaña
 
 # --- Función compute_raw_weights CORREGIDA ---
 def compute_raw_weights(
@@ -27,7 +32,10 @@ def compute_raw_weights(
     estetica_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.estetica_min)
     premium_min_val: Optional[float],       # Renombrado para claridad (viene de filtros.premium_min)
     singular_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.singular_min)
-    priorizar_ancho: Optional[bool] # <-- NUEVO ARGUMENTO BOOLEANO
+    priorizar_ancho: Optional[bool], # <-- NUEVO ARGUMENTO BOOLEANO
+    es_zona_nieblas: bool = False,
+    es_zona_nieve: bool = False,
+    es_zona_clima_monta: bool = False,
     ) -> Dict[str, float]: 
     """
     Calcula pesos crudos. Accede a preferencias usando notación de punto.
@@ -125,7 +133,6 @@ def compute_raw_weights(
             # Optemos por asegurar un mínimo alto si esta condición es sí.
             raw["ancho"] = max(raw.get("ancho", 0.5), 5.0) # Asegurar que sea al menos 5.0
             print(f"DEBUG (Weights) ► necesita_espacio_objetos_especiales='sí'. Pesos crudos para largo: {raw['largo_vehiculo_score']}, ancho actualizado a: {raw['ancho']}")
-    # --- FIN NUEVA LÓGICA ---
     
     # --- NUEVA LÓGICA: Favorecer índice_altura y autonomía si comodidad es alta ---
     UMBRAL_RATING_COMODIDAD_PARA_FAVORECER = 8 # Define tu umbral
@@ -179,7 +186,25 @@ def compute_raw_weights(
         raw["par_motor_remolque_score"] = 6.0
         raw["cap_remolque_cf_score"] = 7.0
         raw["cap_remolque_sf_score"] = 3.0
-    # --- FIN NUEVA LÓGICA ---
+        
+    # --- NUEVA LÓGICA PARA AJUSTAR PESOS POR CLIMA ---
+    # 6. Ajustar pesos basados en información climática
+    # Aseguramos que las claves existan antes de sumarles
+    raw["rating_seguridad"] = raw.get("rating_seguridad", 0.0) 
+    raw["traccion"] = raw.get("traccion", 0.0) 
+
+    if es_zona_nieblas:
+        raw["rating_seguridad"] += AJUSTE_PESO_SEGURIDAD_POR_NIEBLA
+        print(f"DEBUG (Weights) ► Zona Nieblas: Ajustando peso rating_seguridad a {raw['rating_seguridad']}")
+    
+    if es_zona_nieve:
+        raw["traccion"] += AJUSTE_PESO_TRACCION_POR_NIEVE
+        print(f"DEBUG (Weights) ► Zona Nieve: Ajustando peso traccion a {raw['traccion']}")
+        
+    if es_zona_clima_monta:
+        raw["traccion"] += AJUSTE_PESO_TRACCION_POR_MONTA # Se suma al ajuste por nieve si ambos son True
+        print(f"DEBUG (Weights) ► Zona Clima Montaña: Ajustando peso traccion a {raw['traccion']}")
+    # --- FIN NUEVA LÓGICA CLIMA ---
     
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}

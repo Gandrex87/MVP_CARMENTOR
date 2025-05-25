@@ -1,6 +1,6 @@
 # instanciación del modelo, init_chat_model, y configuración de structured_llm.
 from langchain.chat_models import init_chat_model
-from graph.perfil.state import ResultadoSoloPerfil, ResultadoSoloFiltros, ResultadoEconomia, ResultadoPasajeros# Ajusta la ruta de importación
+from graph.perfil.state import ResultadoSoloPerfil, ResultadoSoloFiltros, ResultadoEconomia, ResultadoPasajeros, ResultadoCP# Ajusta la ruta de importación
 from dotenv import load_dotenv
 
 
@@ -35,8 +35,10 @@ llm_economia = llm_potente.with_structured_output(ResultadoEconomia, method="fun
 # 4. LLM para la Etapa de Información de Pasajeros
 #    Usará el prompt system_prompt_pasajeros.txt y devolverá ResultadoPasajeros
 llm_pasajeros = llm.with_structured_output(ResultadoPasajeros)
-# --- FIN NUEVA CONFIGURACIÓN ---
 
+# --- NUEVA CONFIGURACIÓN LLM PARA CÓDIGO POSTAL ---
+# Usará el prompt system_prompt_cp.txt y devolverá ResultadoCP
+llm_cp_extractor = llm.with_structured_output(ResultadoCP,  method="function_calling")
 
 
 

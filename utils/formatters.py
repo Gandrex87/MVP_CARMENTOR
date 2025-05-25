@@ -11,7 +11,11 @@ EconomiaInput = Optional[EconomiaUsuario | Dict[str, Any]]
 def formatear_preferencias_en_tabla(
     preferencias: PreferenciasInput, 
     filtros: FiltrosInput = None, 
-    economia: EconomiaInput = None
+    economia: EconomiaInput = None,
+    codigo_postal_usuario: Optional[str] = None,
+    info_clima_usuario: Optional[Dict[str, Any]] = None # <-- NUEVO PARÁMETRO
+    
+    
 ) -> str:
     """
     Devuelve una tabla Markdown con:
@@ -23,6 +27,7 @@ def formatear_preferencias_en_tabla(
     prefs_dict = preferencias.model_dump(mode='json') if hasattr(preferencias, "model_dump") else preferencias or {}
     filtros_dict = filtros.model_dump(mode='json') if hasattr(filtros, "model_dump") else filtros or {}
     econ_dict = economia.model_dump(mode='json') if hasattr(economia, "model_dump") else economia or {}
+    info_clima_dict = info_clima_usuario if info_clima_usuario is not None else {} # <-- Usar dict
     # Usar is_yes para las booleanas
     estetica_str = "Importante" if is_yes(prefs_dict.get("valora_estetica")) else "No prioritaria"
     
@@ -58,28 +63,56 @@ def formatear_preferencias_en_tabla(
     baja_depr_str = "No especificado"
     if baja_depr_val is not None:
         baja_depr_str = "Sí" if is_yes(baja_depr_val) else "No"
+      # Código Postal
+    cp_str = codigo_postal_usuario if codigo_postal_usuario and codigo_postal_usuario.strip() else "No proporcionado"
     
     # --- 1) Cabecera de preferencias ---
     texto = "✅ He entendido lo siguiente sobre tus preferencias:\n\n"
     texto += "| Preferencia              | Valor                      |\n"
-    texto += "|--------------------------|----------------------------|\n"
-    texto += f"| Apasionado del motor    | {'Sí' if is_yes(prefs_dict.get('apasionado_motor')) else 'No'} |\n" # Usar Sí/No directamente
-    texto += f"| Estética                | {estetica_str} |\n"
-    texto += f"| Principal del Hogar     | {coche_principal_str} |\n" # <-- Fila añadida
-    texto += f"| Uso                     | {uso_prof_str} |\n"
+    texto += "|--------------------------|----------------------------|\n" 
+    texto += f"| Código Postal              | {cp_str} |\n"
+    # --- NUEVA SECCIÓN PARA INFO CLIMA ---
+    # Solo mostrar si hay datos climáticos y el CP fue válido y encontrado
+    if info_clima_dict and info_clima_dict.get("cp_valido_encontrado", False):
+        climas_activos = []
+        # Nombres más amigables para mostrar en la tabla
+        mapa_nombres_clima = {
+            "MUNICIPIO_ZBE": "Zona de Bajas Emisiones (ZBE)",
+            "ZONA_LLUVIAS": "Zona con Lluvias Frecuentes",
+            "ZONA_NIEBLAS": "Zona con Nieblas Frecuentes",
+            "ZONA_NIEVE": "Zona con Nieve Frecuente",
+            "ZONA_CLIMA_MONTA": "Zona de Clima de Montaña",
+            "ZONA_GLP": "Disponibilidad GLP Común",
+            "ZONA_GNV": "Disponibilidad GNV Común"
+        }
+        for clave_clima, nombre_amigable in mapa_nombres_clima.items():
+            if info_clima_dict.get(clave_clima) is True: # Comprobar explícitamente True
+                climas_activos.append(nombre_amigable)
+        
+        if climas_activos:
+            texto += f"| Condiciones Zona| {', '.join(climas_activos)} |\n"
+        else:
+            texto += f"| Condiciones Zona| Generales / No específicas |\n"
+    elif cp_str != "No proporcionado": # Se dio CP pero no se encontraron datos de zona
+         texto += f"| Condiciones Zona   | No disponibles para este CP |\n"
+    # --- FIN SECCIÓN INFO CLIMA ---
+    texto += f"| Apasionado del motor    | {'Sí' if is_yes(prefs_dict.get('apasionado_motor')) else 'No'} \n" # Usar Sí/No directamente
+    texto += f"| Estética                | {estetica_str} \n"
+    texto += f"| Principal del Hogar     | {coche_principal_str} \n" # <-- Fila añadida
+    texto += f"| Uso                     | {uso_prof_str} \n"
     if is_yes(uso_prof_val):
         tipo_uso_val_str = prefs_dict.get("tipo_uso_profesional") 
         tipo_uso_display_str = "No especificado" # Default para esta sección
         if tipo_uso_val_str and tipo_uso_val_str.strip():
             tipo_uso_display_str = tipo_uso_val_str.capitalize()
         texto+=f"|   ↳ Tipo Profesional  | {tipo_uso_display_str} \n" # AHORA ESTÁ DENTRO DEL IF  
-    texto += f"| Tipo de coche           | {'Eléctrico' if is_yes(prefs_dict.get('solo_electricos')) else 'No necesariamente eléctrico'} |\n"
+    texto += f"| Tipo de coche           | {'Eléctrico' if is_yes(prefs_dict.get('solo_electricos')) else 'No necesariamente eléctrico'} \n"
     texto += f"| Diseño exclusivo        | {dise_exclusivo_str} |\n"
-    texto += f"| Altura                  | {'Mayor a 1.90 m' if is_yes(prefs_dict.get('altura_mayor_190')) else 'Menor a 1.90 m'} |\n"
-    texto += f"| Peso                    | {'Mayor a 100 kg' if is_yes(prefs_dict.get('peso_mayor_100')) else 'Menor a 100 kg'}   |\n"
-    texto += f"| Transmisión preferida   | {transm_str}      |\n"
-    texto += f"| Aventura                | {aventura_str}    |\n"
-    texto += f"| Prioriza Baja Depreciación| {baja_depr_str} |\n"
+    texto += f"| Altura                  | {'Mayor a 1.90 m' if is_yes(prefs_dict.get('altura_mayor_190')) else 'Menor a 1.90 m'} \n"
+    texto += f"| Peso                    | {'Mayor a 100 kg' if is_yes(prefs_dict.get('peso_mayor_100')) else 'Menor a 100 kg'}  \n"
+    texto += f"| Transmisión preferida   | {transm_str}      \n"
+    texto += f"| Aventura                | {aventura_str}    \n"
+    texto += f"| Prioriza Baja Depreciación| {baja_depr_str} \n"
     
     # Mostrar los nuevos ratings 0-10
     if any(prefs_dict.get(f"rating_{cat}") is not None for cat in ["fiabilidad_durabilidad", "seguridad", "comodidad", "impacto_ambiental", "costes_uso", "tecnologia_conectividad"]):
@@ -116,7 +149,7 @@ def formatear_preferencias_en_tabla(
         texto += f"| Tipo de mecánica     | {mech} |\n"
         texto += f"| Tipo de carrocería   | {card} |\n" # Asegúrate que tipo_carroceria esté en FiltrosInferidos
         texto += f"| Estética mínima      | {filtros_dict.get('estetica_min','No definido')} |\n"
-        texto += f"| Premium mínima       | {filtros_dict.get('premium_min','No definido')} |\n"
+        texto += f"| Premium mínima       | {filtros_dict.get('premium_min','No definido')}  |\n"
         texto += f"| Singularidad mínima  | {filtros_dict.get('singular_min','No definido')} |\n"
 
     # --- AÑADIR FILAS PARA RECOMENDACIÓN MODO 1 ---
