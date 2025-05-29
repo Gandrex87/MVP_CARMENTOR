@@ -20,6 +20,7 @@ from utils.conversion import is_yes
 from utils.bq_logger import log_busqueda_a_bigquery 
 import traceback 
 import pandas as pd
+import json # Para construir el contexto del prompt
 
 # En graph/nodes.py
 
@@ -724,99 +725,208 @@ def preguntar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
               print("DEBUG (Preguntar Filtros) ► Mensaje final duplicado.")
 
      return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
- 
+
+# #Inferir filtros técnicos iniciales y aplicar post-procesamiento_V1_FUNCIONAL
+# def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Llama al LLM para inferir filtros técnicos iniciales, luego aplica
+#     post-procesamiento usando preferencias e información climática.
+#     """
+#     print("--- Ejecutando Nodo: inferir_filtros_node ---")
+#     historial = state.get("messages", []) # Necesitamos el historial para el LLM
+#     preferencias = state.get("preferencias_usuario") 
+#     filtros_actuales = state.get("filtros_inferidos") 
+#     info_clima_obj = state.get("info_clima_usuario")
+
+#     if not preferencias: 
+#         print("ERROR (Filtros) ► Nodo 'inferir_filtros_node' sin preferencias.")
+#         return {**state} 
+
+#     print("DEBUG (Filtros) ► Preferencias de usuario disponibles. Procediendo...")
+
+#     # Inicializar variables por si falla el try
+#     filtros_post = filtros_actuales 
+#     mensaje_validacion = None
+
+#     # 2. Preparar prompt (como lo tenías)
+#     try:
+#         preferencias_dict = preferencias.model_dump(mode='json')
+#         prompt_filtros = system_prompt_filtros_template.format(
+#             preferencias_contexto=str(preferencias_dict) 
+#         )
+#         print(f"DEBUG (Filtros) ► Prompt para llm_solo_filtros (parcial): {prompt_filtros[:500]}...") 
+#     except Exception as e_prompt:
+#         # ... (manejo de error de prompt como lo tenías) ...
+#         # Guardar el error como pregunta pendiente podría ser una opción
+#         mensaje_validacion = f"Error interno preparando la consulta de filtros: {e_prompt}"
+#         # Salimos temprano si falla el prompt
+#         return {**state, "filtros_inferidos": filtros_actuales, "pregunta_pendiente": mensaje_validacion}
+
+#     # 3. Llamar al LLM (como lo tenías)
+#     try:
+#         response: ResultadoSoloFiltros = llm_solo_filtros.invoke(
+#             [prompt_filtros, *historial], 
+#             config={"configurable": {"tags": ["llm_solo_filtros"]}}
+#         )
+#         print(f"DEBUG (Filtros) ► Respuesta llm_solo_filtros: {response}")
+#         filtros_nuevos = response.filtros_inferidos
+#         mensaje_validacion = response.mensaje_validacion # Guardar para usarlo después
+
+#         # 4. Aplicar post-procesamiento (como lo tenías)
+#         try:
+#             # Pasar filtros_nuevos (del LLM) y preferencias (del estado)
+#             resultado_post_proc = aplicar_postprocesamiento_filtros(filtros_nuevos, preferencias,info_clima=info_clima_obj)     # <-- PASAR INFO CLIMA )
+#             if resultado_post_proc is not None:
+#                 filtros_post = resultado_post_proc
+#             else:
+#                  print("WARN (Filtros) ► aplicar_postprocesamiento_filtros devolvió None.")
+#                  filtros_post = filtros_nuevos # Fallback
+#             print(f"DEBUG (Filtros) ► Filtros TRAS post-procesamiento: {filtros_post}")
+#         except Exception as e_post:
+#             print(f"ERROR (Filtros) ► Fallo en postprocesamiento de filtros: {e_post}")
+#             filtros_post = filtros_nuevos # Fallback
+
+#     # Manejar errores de la llamada LLM y post-procesamiento
+#     except ValidationError as e_val:
+#         print(f"ERROR (Filtros) ► Error de Validación Pydantic en llm_solo_filtros: {e_val}")
+#         mensaje_validacion = f"Hubo un problema al procesar los filtros técnicos. (Detalle: {e_val})"
+#         filtros_post = filtros_actuales # Mantener filtros anteriores si falla validación LLM
+#     except Exception as e:
+#         print(f"ERROR (Filtros) ► Fallo al invocar llm_solo_filtros: {e}")
+#         mensaje_validacion = "Lo siento, tuve un problema técnico al determinar los filtros."
+#         filtros_post = filtros_actuales # Mantener filtros anteriores
+
+#     # 5. Actualizar el estado 'filtros_inferidos' (como lo tenías)
+#     if filtros_actuales:
+#          # Usar el resultado del post-procesamiento (o el fallback)
+#          update_data = filtros_post.model_dump(exclude_unset=True)
+#          filtros_actualizados = filtros_actuales.model_copy(update=update_data)
+#     else:
+#          filtros_actualizados = filtros_post     
+#     print(f"DEBUG (Filtros) ► Estado filtros_inferidos actualizado: {filtros_actualizados}")
+
+#     # --- CAMBIOS AQUÍ ---
+#     # 6. Definir 'pregunta_para_siguiente_nodo' basado en 'mensaje_validacion'
+#     pregunta_para_siguiente_nodo = None
+#     if mensaje_validacion and mensaje_validacion.strip():
+#         pregunta_para_siguiente_nodo = mensaje_validacion.strip()
+#         #print(f"DEBUG (Filtros) ► Guardando pregunta pendiente: {pregunta_para_siguiente_nodo}")
+#     else:
+#         print(f"DEBUG (Filtros) ► No hay pregunta de validación pendiente.")
+        
+#     # 7. Devolver estado actualizado: SIN modificar 'messages', CON 'pregunta_pendiente'
+#     return {
+#         **state,
+#         "filtros_inferidos": filtros_actualizados,
+#         # "messages": historial_con_nuevo_mensaje, # <-- ELIMINADO / COMENTADO
+#         "pregunta_pendiente": pregunta_para_siguiente_nodo # <-- AÑADIDO y definido correctamente
+#     }
+
+
 def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Infiere filtros técnicos, aplica post-procesamiento, actualiza el estado 
-    'filtros_inferidos' y guarda la pregunta/confirmación en 'pregunta_pendiente'.
+    Llama al LLM para inferir filtros técnicos iniciales, luego aplica
+    post-procesamiento usando preferencias e información climática.
+    Actualiza 'filtros_inferidos' y 'pregunta_pendiente' en el estado.
     """
     print("--- Ejecutando Nodo: inferir_filtros_node ---")
-    historial = state.get("messages", []) # Necesitamos el historial para el LLM
-    preferencias = state.get("preferencias_usuario") 
-    filtros_actuales = state.get("filtros_inferidos") 
+    historial = state.get("messages", [])
+    preferencias_obj = state.get("preferencias_usuario")
+    info_clima_obj = state.get("info_clima_usuario")
+    # No necesitamos filtros_actuales del estado aquí, ya que este nodo
+    # es el responsable de generar/inferir los filtros iniciales.
 
-    if not preferencias: 
-        print("ERROR (Filtros) ► Nodo 'inferir_filtros_node' sin preferencias.")
-        return {**state} 
+    # Verificar pre-condiciones
+    if not preferencias_obj:
+        print("ERROR (Filtros) ► Nodo 'inferir_filtros_node' ejecutado pero 'preferencias_usuario' no existe. No se puede inferir.")
+        return {
+            "filtros_inferidos": FiltrosInferidos(), # Devolver un objeto vacío
+            "pregunta_pendiente": "No pude procesar los filtros porque falta información del perfil."
+        }
 
-    print("DEBUG (Filtros) ► Preferencias de usuario disponibles. Procediendo...")
+    print("DEBUG (Filtros) ► Preferencias de usuario e info_clima disponibles. Procediendo...")
 
-    # Inicializar variables por si falla el try
-    filtros_post = filtros_actuales 
-    mensaje_validacion = None
-
-    # 2. Preparar prompt (como lo tenías)
+    # 1. Preparar el prompt para llm_solo_filtros
+    #    Incluimos preferencias y, si existe, info_clima en el contexto.
+    prompt_contexto_str = ""
     try:
-        preferencias_dict = preferencias.model_dump(mode='json')
-        prompt_filtros = system_prompt_filtros_template.format(
-            preferencias_contexto=str(preferencias_dict) 
+        prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
+        prompt_contexto_str = f"<preferencias_usuario>{json.dumps(prefs_dict, indent=2)}</preferencias_usuario>\n"
+        if info_clima_obj:
+            clima_dict = info_clima_obj.model_dump(mode='json', exclude_none=False)
+            prompt_contexto_str += f"<info_clima>{json.dumps(clima_dict, indent=2)}</info_clima>\n"
+        
+        prompt_filtros_formateado = system_prompt_filtros_template.format(
+            contexto_preferencias=prompt_contexto_str
         )
-        print(f"DEBUG (Filtros) ► Prompt para llm_solo_filtros (parcial): {prompt_filtros[:500]}...") 
+        # print(f"DEBUG (Filtros) ► Prompt para llm_solo_filtros (parcial): {prompt_filtros_formateado[:700]}...") 
     except Exception as e_prompt:
-        # ... (manejo de error de prompt como lo tenías) ...
-        # Guardar el error como pregunta pendiente podría ser una opción
-        mensaje_validacion = f"Error interno preparando la consulta de filtros: {e_prompt}"
-        # Salimos temprano si falla el prompt
-        return {**state, "filtros_inferidos": filtros_actuales, "pregunta_pendiente": mensaje_validacion}
+        print(f"ERROR (Filtros) ► Fallo al formatear el prompt de filtros: {e_prompt}")
+        return {
+            "filtros_inferidos": FiltrosInferidos(),
+            "pregunta_pendiente": f"Error interno preparando la consulta de filtros: {e_prompt}"
+        }
 
-    # 3. Llamar al LLM (como lo tenías)
+    # 2. Llamar al LLM para inferir filtros iniciales
+    filtros_inferidos_por_llm: Optional[FiltrosInferidos] = None
+    mensaje_llm = "Lo siento, tuve un problema técnico al determinar los filtros." # Default
+
     try:
         response: ResultadoSoloFiltros = llm_solo_filtros.invoke(
-            [prompt_filtros, *historial], 
+            [prompt_filtros_formateado, *historial], 
             config={"configurable": {"tags": ["llm_solo_filtros"]}}
         )
         print(f"DEBUG (Filtros) ► Respuesta llm_solo_filtros: {response}")
-        filtros_nuevos = response.filtros_inferidos
-        mensaje_validacion = response.mensaje_validacion # Guardar para usarlo después
-
-        # 4. Aplicar post-procesamiento (como lo tenías)
-        try:
-            # Pasar filtros_nuevos (del LLM) y preferencias (del estado)
-            resultado_post_proc = aplicar_postprocesamiento_filtros(filtros_nuevos, preferencias)
-            if resultado_post_proc is not None:
-                filtros_post = resultado_post_proc
-            else:
-                 print("WARN (Filtros) ► aplicar_postprocesamiento_filtros devolvió None.")
-                 filtros_post = filtros_nuevos # Fallback
-            print(f"DEBUG (Filtros) ► Filtros TRAS post-procesamiento: {filtros_post}")
-        except Exception as e_post:
-            print(f"ERROR (Filtros) ► Fallo en postprocesamiento de filtros: {e_post}")
-            filtros_post = filtros_nuevos # Fallback
-
-    # Manejar errores de la llamada LLM y post-procesamiento
+        filtros_inferidos_por_llm = response.filtros_inferidos # Este es un objeto FiltrosInferidos
+        mensaje_llm = response.mensaje_validacion
+        
     except ValidationError as e_val:
         print(f"ERROR (Filtros) ► Error de Validación Pydantic en llm_solo_filtros: {e_val}")
-        mensaje_validacion = f"Hubo un problema al procesar los filtros técnicos. (Detalle: {e_val})"
-        filtros_post = filtros_actuales # Mantener filtros anteriores si falla validación LLM
+        mensaje_llm = f"Hubo un problema al procesar los filtros técnicos (formato inválido): {e_val}. ¿Podrías aclarar?"
+        filtros_inferidos_por_llm = FiltrosInferidos() # Usar uno vacío para post-procesamiento
     except Exception as e:
         print(f"ERROR (Filtros) ► Fallo al invocar llm_solo_filtros: {e}")
-        mensaje_validacion = "Lo siento, tuve un problema técnico al determinar los filtros."
-        filtros_post = filtros_actuales # Mantener filtros anteriores
+        traceback.print_exc()
+        filtros_inferidos_por_llm = FiltrosInferidos() # Usar uno vacío
 
-    # 5. Actualizar el estado 'filtros_inferidos' (como lo tenías)
-    if filtros_actuales:
-         # Usar el resultado del post-procesamiento (o el fallback)
-         update_data = filtros_post.model_dump(exclude_unset=True)
-         filtros_actualizados = filtros_actuales.model_copy(update=update_data)
-    else:
-         filtros_actualizados = filtros_post     
-    print(f"DEBUG (Filtros) ► Estado filtros_inferidos actualizado: {filtros_actualizados}")
+    # 3. Aplicar post-procesamiento
+    # Asegurar que filtros_inferidos_por_llm sea un objeto, no None, para pasarlo
+    if filtros_inferidos_por_llm is None:
+        filtros_inferidos_por_llm = FiltrosInferidos()
+    
+    print(f"DEBUG (Filtros) ► Filtros ANTES de post-procesamiento: {filtros_inferidos_por_llm}")
+    filtros_finales_postprocesados: Optional[FiltrosInferidos] = None
+    try:
+        filtros_finales_postprocesados = aplicar_postprocesamiento_filtros(
+            filtros=filtros_inferidos_por_llm,
+            preferencias=preferencias_obj,
+            info_clima=info_clima_obj 
+        )
+        print(f"DEBUG (Filtros) ► Filtros TRAS post-procesamiento: {filtros_finales_postprocesados}")
+    except Exception as e_post:
+        print(f"ERROR (Filtros) ► Fallo en postprocesamiento de filtros: {e_post}")
+        traceback.print_exc()
+        # Si el post-procesamiento falla, usamos los filtros del LLM (o uno vacío si LLM falló)
+        filtros_finales_postprocesados = filtros_inferidos_por_llm 
+        mensaje_llm = f"Hubo un problema aplicando reglas a los filtros: {e_post}"
 
-    # --- CAMBIOS AQUÍ ---
-    # 6. Definir 'pregunta_para_siguiente_nodo' basado en 'mensaje_validacion'
+
+    # 4. Preparar el estado a devolver
+    # Si después de todo, filtros_finales_postprocesados es None, inicializar a uno vacío.
+    estado_filtros_a_guardar = filtros_finales_postprocesados if filtros_finales_postprocesados is not None else FiltrosInferidos()
+    
+    print(f"DEBUG (Filtros) ► Estado filtros_inferidos a guardar: {estado_filtros_a_guardar}")
+
     pregunta_para_siguiente_nodo = None
-    if mensaje_validacion and mensaje_validacion.strip():
-        pregunta_para_siguiente_nodo = mensaje_validacion.strip()
-        #print(f"DEBUG (Filtros) ► Guardando pregunta pendiente: {pregunta_para_siguiente_nodo}")
+    if mensaje_llm and mensaje_llm.strip():
+        pregunta_para_siguiente_nodo = mensaje_llm.strip()
+        # print(f"DEBUG (Filtros) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
     else:
-        print(f"DEBUG (Filtros) ► No hay pregunta de validación pendiente.")
+        print(f"DEBUG (Filtros) ► No hay mensaje de validación/pregunta pendiente del LLM de filtros.")
         
-    # 7. Devolver estado actualizado: SIN modificar 'messages', CON 'pregunta_pendiente'
     return {
-        **state,
-        "filtros_inferidos": filtros_actualizados,
-        # "messages": historial_con_nuevo_mensaje, # <-- ELIMINADO / COMENTADO
-        "pregunta_pendiente": pregunta_para_siguiente_nodo # <-- AÑADIDO y definido correctamente
+        "filtros_inferidos": estado_filtros_a_guardar,
+        "pregunta_pendiente": pregunta_para_siguiente_nodo
     }
 
 
@@ -1008,6 +1118,7 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
              "aplicar_logica_distintivo_ambiental": False, # <-- Default para el nuevo flag
              "codigo_postal_usuario": codigo_postal_usuario_val,
              "info_clima_usuario": info_clima_obj,
+             "es_municipio_zbe": False, # Default para el nuevo flag
              "es_zona_nieblas_estado": False, #flags clima para el estado (aunque no se usen directamente en BQ, es bueno tenerlos)
              "es_zona_nieve_estado": False,
              "es_zona_clima_monta_estado": False,
@@ -1099,7 +1210,13 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
         es_nieblas = info_clima_obj.ZONA_NIEBLAS or False
         es_nieve = info_clima_obj.ZONA_NIEVE or False
         es_monta = info_clima_obj.ZONA_CLIMA_MONTA or False
-    # --- FIN PREPARAR FLAGS ---
+    
+    # --- NUEVA LÓGICA PARA FLAG ZBE ---
+    flag_es_municipio_zbe = False # Default
+    if info_clima_obj and info_clima_obj.cp_valido_encontrado and info_clima_obj.MUNICIPIO_ZBE is True:
+        flag_es_municipio_zbe = True
+        print(f"DEBUG (Finalizar) ► CP en MUNICIPIO_ZBE. Activando flag es_municipio_zbe.")
+    # --- FIN NUEVA LÓGICA FLAG ZBE ---
     
     # 2. Cálculo de Pesos
     print("DEBUG (Finalizar) ► Calculando pesos...")
@@ -1163,6 +1280,7 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_penalizar_low_cost_comodidad": flag_penalizar_low_cost_comodidad, # Añade/Sobrescribe
         "flag_penalizar_deportividad_comodidad": flag_penalizar_deportividad_comodidad, # Añade/Sobrescribe
         "flag_penalizar_antiguo_por_tecnologia": flag_penalizar_antiguo_tec,
+        "es_municipio_zbe": flag_es_municipio_zbe,
         "aplicar_logica_distintivo_ambiental": flag_aplicar_logica_distintivo,
         "codigo_postal_usuario": codigo_postal_usuario_val, 
         "info_clima_usuario": info_clima_obj, # Propagar el objeto completo
@@ -1189,6 +1307,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     flag_penalizar_dep_comod = state.get("flag_penalizar_deportividad_comodidad", False)
     flag_penalizar_antiguo_tec_val = state.get("flag_penalizar_antiguo_por_tecnologia", False)
     flag_aplicar_distintivo_val = state.get("aplicar_logica_distintivo_ambiental", False)
+    flag_es_zbe_val = state.get("es_municipio_zbe", False)
 
 
     thread_id = "unknown_thread"
@@ -1221,6 +1340,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         filtros_para_bq['flag_penalizar_deportividad_comodidad'] = flag_penalizar_dep_comod
         filtros_para_bq['flag_penalizar_antiguo_por_tecnologia'] = flag_penalizar_antiguo_tec_val
         filtros_para_bq['aplicar_logica_distintivo_ambiental'] = flag_aplicar_distintivo_val
+        filtros_para_bq['es_municipio_zbe'] = flag_es_zbe_val
         
         k_coches = 7 
         print(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
@@ -1356,6 +1476,10 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_penalizar_low_cost_comodidad": flag_penalizar_lc_comod,
         "flag_penalizar_deportividad_comodidad": flag_penalizar_dep_comod, 
         "flag_penalizar_antiguo_por_tecnologia": flag_penalizar_antiguo_tec_val,
+        "es_municipio_zbe": flag_es_zbe_val, # <-- Incluido en el return
         "aplicar_logica_distintivo_ambiental": flag_aplicar_distintivo_val,
         "tabla_resumen_criterios": tabla_resumen_criterios # Persiste si se necesita
     }
+    
+    
+

@@ -6,6 +6,7 @@
 # Ademas se refactoriza compute_raw_weights para que trate batalla e indice_altura_interior como preferencias suaves, cuya importancia (peso) dependerá de si el usuario indicó ser alto (altura_mayor_190='sí').
 
 
+
 from typing import Optional, Dict, Any # Añadir tipos
 # Importar is_yes y Enums
 from .conversion import is_yes
@@ -14,6 +15,8 @@ from graph.perfil.state import PerfilUsuario # Importar para type hint
 
 # En utils/weights.py
 
+MAX_SINGLE_RAW_WEIGHT = 10.0 # Definir el tope máximo para un peso crudo individual
+MIN_SINGLE_RAW_WEIGHT = 0.0  # Definir el tope mínimo
 # ... (AVENTURA_RAW como lo definiste) ...
 AVENTURA_RAW = {
   "ninguna":   {"altura_libre_suelo":  0,   "traccion":  0,  "reductoras":  0},
@@ -81,7 +84,7 @@ def compute_raw_weights(
         raw["batalla"] = 1.0 
         raw["indice_altura_interior"] = 1.0 
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir dims por altura: {raw}")
-
+    
     # Peso para 'ancho' basado en 'priorizar_ancho'
     if priorizar_ancho: 
         raw["ancho"] = 5.0  
@@ -172,7 +175,7 @@ def compute_raw_weights(
     if rating_cu is not None and rating_cu >= UMBRAL_COSTES_USO_PARA_EXTRAS:
         print(f"DEBUG (Weights) ► Costes de Uso alto ({rating_cu}). Activando pesos para bajo consumo, bajo coste uso y mantenimiento.")
         raw["fav_bajo_consumo"] += 5.0 # Refuerza el peso de bajo consumo (ej: 7.0) ¡AJUSTArR!
-        raw["fav_bajo_coste_uso_directo"] = 9.0    # Peso específico para columna costes_de_uso, ¡AJUSTAR!
+        raw["fav_bajo_coste_uso_directo"] = 7.0    # Peso específico para columna costes_de_uso, ¡AJUSTAR!
         raw["fav_bajo_coste_mantenimiento_directo"] = 7.0 # Peso específico para columna costes_mantenimiento, ¡AJUSTAR!
     
     # --- LÓGICA PARA PESOS DE ARRASTRE DE REMOLQUE ---
@@ -192,19 +195,21 @@ def compute_raw_weights(
     # Aseguramos que las claves existan antes de sumarles
     raw["rating_seguridad"] = raw.get("rating_seguridad", 0.0) 
     raw["traccion"] = raw.get("traccion", 0.0) 
-
+    current_seguridad_rating = raw.get("rating_seguridad", 0.0) # Obtener el peso base del rating
     if es_zona_nieblas:
-        raw["rating_seguridad"] += AJUSTE_PESO_SEGURIDAD_POR_NIEBLA
-        print(f"DEBUG (Weights) ► Zona Nieblas: Ajustando peso rating_seguridad a {raw['rating_seguridad']}")
+        current_seguridad_rating += AJUSTE_PESO_SEGURIDAD_POR_NIEBLA
+    raw["rating_seguridad"] = max(MIN_SINGLE_RAW_WEIGHT, min(MAX_SINGLE_RAW_WEIGHT, current_seguridad_rating))
+    print(f"DEBUG (Weights) ► Zona Nieblas ({es_zona_nieblas}): Peso crudo final rating_seguridad = {raw['rating_seguridad']}")
     
+    # Tracción por Nieve y Montaña
+    current_traccion_weight = raw.get("traccion", 0.0) # Obtener peso base de tracción (de aventura)
     if es_zona_nieve:
-        raw["traccion"] += AJUSTE_PESO_TRACCION_POR_NIEVE
-        print(f"DEBUG (Weights) ► Zona Nieve: Ajustando peso traccion a {raw['traccion']}")
-        
+        current_traccion_weight += AJUSTE_PESO_TRACCION_POR_NIEVE
     if es_zona_clima_monta:
-        raw["traccion"] += AJUSTE_PESO_TRACCION_POR_MONTA # Se suma al ajuste por nieve si ambos son True
-        print(f"DEBUG (Weights) ► Zona Clima Montaña: Ajustando peso traccion a {raw['traccion']}")
-    # --- FIN NUEVA LÓGICA CLIMA ---
+        current_traccion_weight += AJUSTE_PESO_TRACCION_POR_MONTA
+    raw["traccion"] = max(MIN_SINGLE_RAW_WEIGHT, min(MAX_SINGLE_RAW_WEIGHT, current_traccion_weight))
+    print(f"DEBUG (Weights) ► Zona Nieve ({es_zona_nieve}), Zona Montaña ({es_zona_clima_monta}): Peso crudo final traccion = {raw['traccion']}")
+    # --- FIN AJUSTES POR CLIMA ----
     
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}

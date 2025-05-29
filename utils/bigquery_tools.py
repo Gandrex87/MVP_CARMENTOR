@@ -3,8 +3,6 @@
 # modo_adquisicion_recomendado = "Contado" y un valor en precio_max_contado_recomendado.
 # modo_adquisicion_recomendado = "Financiado" y un valor en cuota_max_calculada.
 # En utils/bigquery_search.py
-
-
 import logging
 import traceback
 from typing import Optional, List, Dict, Any , Tuple
@@ -45,20 +43,22 @@ MIN_MAX_RANGES = {
 }
 PENALTY_PUERTAS_BAJAS = -0.10
 # --- NUEVAS PENALIZACIONES (AJUSTA ESTOS VALORES) ---
-PENALTY_LOW_COST_POR_COMODIDAD = -0.15 # Cuánto restar si es muy low-cost y se quiere confort
-PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.15 # Cuánto restar si es muy deportivo y se quiere confort
+PENALTY_LOW_COST_POR_COMODIDAD = -0.10 # Cuánto restar si es muy low-cost y se quiere confort
+PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.10 # Cuánto restar si es muy deportivo y se quiere confort
 # --- UMBRALES PARA PENALIZACIÓN (AJUSTA ESTOS VALORES, 0-1 después de escalar) ---
-UMBRAL_LOW_COST_PENALIZABLE = 0.7 # Penalizar si acceso_low_cost_scaled >= 0.7
-UMBRAL_DEPORTIVIDAD_PENALIZABLE = 0.7 # Penalizar si deportividad_scaled >= 0.7
+UMBRAL_LOW_COST_PENALIZABLE = 0.5 # Penalizar si acceso_low_cost_scaled >= 0.5
+UMBRAL_DEPORTIVIDAD_PENALIZABLE = 0.5 # Penalizar si deportividad_scaled >= 0.5
 # --- NUEVAS CONSTANTES PARA PENALIZACIÓN GRADUAL POR ANTIGÜEDAD ---
-PENALTY_ANTIGUEDAD_MAS_10_ANOS = -0.30
-PENALTY_ANTIGUEDAD_7_A_10_ANOS = -0.20
-PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -0.10
+PENALTY_ANTIGUEDAD_MAS_10_ANOS = -0.15
+PENALTY_ANTIGUEDAD_7_A_10_ANOS = -0.10
+PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -0.05
 
 # --- NUEVAS CONSTANTES PARA BONIFICACIÓN/PENALIZACIÓN DISTINTIVO AMBIENTAL ---
-BONUS_DISTINTIVO_ECO_CERO_C = 0.20  # Cuánto sumar si es C, ECO o CERO
-PENALTY_DISTINTIVO_NA_B = -0.50   # Cuánto restar si es NA o B
-BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 0.20 #
+BONUS_DISTINTIVO_ECO_CERO_C = 0.10  # ¡Pendiente ajustar!
+PENALTY_DISTINTIVO_NA_B = -0.15   # ¡Pendiente ajustar!
+BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 0.10 #¡Pendiente ajustar!
+BONUS_ZBE_DISTINTIVO_FAVORABLE = 0.10 # ¡Pendiente ajustar!
+PENALTY_ZBE_DISTINTIVO_DESFAVORABLE = -0.10 # ¡Pendiente ajustar!
 # --------------------------------------------------------------------------
 
 def buscar_coches_bq( # Renombrada para claridad
@@ -116,6 +116,7 @@ def buscar_coches_bq( # Renombrada para claridad
     flag_penalizar_deportividad_comod = bool(filtros.get("flag_penalizar_deportividad_comodidad", False))
     flag_penalizar_antiguo_tec_val = bool(filtros.get("flag_penalizar_antiguo_por_tecnologia", False))
     flag_aplicar_logica_distintivo_val = bool(filtros.get("aplicar_logica_distintivo_ambiental", False))
+    flag_es_municipio_zbe_val = bool(filtros.get("es_municipio_zbe", False))
 
     # Desempaquetar Min/Max (todos necesarios para la CTE ScaledData)
     min_est, max_est = MIN_MAX_RANGES["estetica"]
@@ -255,6 +256,17 @@ def buscar_coches_bq( # Renombrada para claridad
              ELSE 0.0
            END)
         -- --- FIN NUEVA LÓGICA 'ocasion' ---
+        -- --- NUEVA LÓGICA PARA DISTINTIVO AMBIENTAL POR ZBE ---
+        + (CASE
+             WHEN @flag_es_municipio_zbe = TRUE THEN -- Solo si el flag ZBE está activo
+                 CASE
+                     WHEN UPPER(distintivo_ambiental) IN ('CERO', '0', 'ECO', 'C') THEN {BONUS_ZBE_DISTINTIVO_FAVORABLE}
+                     WHEN UPPER(distintivo_ambiental) IN ('B', 'NA') THEN {PENALTY_ZBE_DISTINTIVO_DESFAVORABLE}
+                     ELSE 0.0 
+                 END
+             ELSE 0.0 -- Si no es ZBE, no se aplica esta bonificación/penalización específica
+           END)
+        -- --- FIN NUEVA LÓGICA ZBE ---
       ) AS score_total
     FROM ScaledData
     WHERE 1=1 
@@ -297,6 +309,7 @@ def buscar_coches_bq( # Renombrada para claridad
         bigquery.ScalarQueryParameter("flag_penalizar_deportividad_comodidad", "BOOL", flag_penalizar_deportividad_comod),
         bigquery.ScalarQueryParameter("flag_penalizar_antiguo_tec", "BOOL", flag_penalizar_antiguo_tec_val),
         bigquery.ScalarQueryParameter("flag_aplicar_logica_distintivo", "BOOL", flag_aplicar_logica_distintivo_val),
+        bigquery.ScalarQueryParameter("flag_es_municipio_zbe", "BOOL", flag_es_municipio_zbe_val),
         # --- FIN NUEVOS PARÁMETROS ---
         bigquery.ScalarQueryParameter("k", "INT64", k)
     ]
@@ -412,4 +425,9 @@ def buscar_coches_bq( # Renombrada para claridad
         logging.error(f"❌ (Paso a Paso) Error al ejecutar la query en BigQuery: {e}")
         traceback.print_exc()
         return [], sql, log_params_for_logging # Devolver SQL y params incluso si falla
+    
+    
+    
+ 
+
 

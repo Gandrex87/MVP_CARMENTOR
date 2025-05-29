@@ -13,9 +13,7 @@ def formatear_preferencias_en_tabla(
     filtros: FiltrosInput = None, 
     economia: EconomiaInput = None,
     codigo_postal_usuario: Optional[str] = None,
-    info_clima_usuario: Optional[Dict[str, Any]] = None # <-- NUEVO PARÁMETRO
-    
-    
+    info_clima_usuario: Optional[Dict[str, Any]] = None # <-- NUEVO PARÁMETRO   
 ) -> str:
     """
     Devuelve una tabla Markdown con:

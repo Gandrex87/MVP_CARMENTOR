@@ -168,6 +168,7 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_penalizar_deportividad_comodidad: Optional[bool]
     flag_penalizar_antiguo_por_tecnologia: Optional[bool]
     aplicar_logica_distintivo_ambiental: Optional[bool]
+    es_municipio_zbe: Optional[bool] 
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
 
 
