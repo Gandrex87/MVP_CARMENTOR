@@ -39,7 +39,11 @@ MIN_MAX_RANGES = {
     "costes_mantenimiento": (1.0, 10.0) ,
     "par": (41.0, 967.0), 
     "capacidad_remolque_con_freno": (100.0, 3600.0), 
-    "capacidad_remolque_sin_freno": (35.0, 1250.0),   
+    "capacidad_remolque_sin_freno": (35.0, 1250.0), 
+     # --- NUEVOS RANGOS PARA GARAJE/APARCAMIENTO (¡USA TUS VALORES EXACTOS!) ---
+    "superficie_planta": (2.9, 14.0), # m^2, ej: (largo_min * ancho_min)/10^6
+    "diametro_giro": (7.0, 15.6),     # metros
+    "alto_vehiculo": (1052.0, 2940.0)  # mm, para la altura total del vehículo
 }
 PENALTY_PUERTAS_BAJAS = -0.10
 # --- NUEVAS PENALIZACIONES (AJUSTA ESTOS VALORES) ---
@@ -64,7 +68,7 @@ PENALTY_ZBE_DISTINTIVO_DESFAVORABLE = -0.10 # ¡Pendiente ajustar!
 def buscar_coches_bq( # Renombrada para claridad
     filtros: Optional[FiltrosDict],
     pesos: Optional[PesosDict], 
-    k: int = 7
+    k: int
 ) -> Tuple[List[Dict[str, Any]], str, List[Dict[str, Any]]]: #Devuelve: una tupla con (lista de coches, string SQL, lista de parámetros formateados).
     
     if not filtros: filtros = {}
@@ -85,6 +89,7 @@ def buscar_coches_bq( # Renombrada para claridad
         "batalla": pesos.get("batalla", 0.0),
         "indice_altura_interior": pesos.get("indice_altura_interior", 0.0),
         "ancho": pesos.get("ancho", 0.0),
+        "ancho_general_score": pesos.get("ancho_general_score", 0.0), # Para el peso que favorece MÁS ancho      
         "traccion": pesos.get("traccion", 0.0),
         "reductoras": pesos.get("reductoras", 0.0),
         # --- NUEVOS PESOS DE RATINGS (claves deben coincidir con compute_raw_weights) ---
@@ -107,6 +112,12 @@ def buscar_coches_bq( # Renombrada para claridad
         "par_motor_remolque_score": pesos.get("par_motor_remolque_score", 0.0),
         "cap_remolque_cf_score": pesos.get("cap_remolque_cf_score", 0.0),
         "cap_remolque_sf_score": pesos.get("cap_remolque_sf_score", 0.0),
+          # --- NUEVOS PESOS PARA GARAJE/APARCAMIENTO (claves deben coincidir con compute_raw_weights) ---
+        "fav_menor_superficie_planta": pesos.get("fav_menor_superficie_planta", 0.0),
+        "fav_menor_diametro_giro": pesos.get("fav_menor_diametro_giro", 0.0),
+        "fav_menor_largo_garage": pesos.get("fav_menor_largo_garage", 0.0),
+        "fav_menor_ancho_garage": pesos.get("fav_menor_ancho_garage", 0.0),
+        "fav_menor_alto_garage": pesos.get("fav_menor_alto_garage", 0.0),
         
     }
 
@@ -145,6 +156,10 @@ def buscar_coches_bq( # Renombrada para claridad
     min_par, max_par = MIN_MAX_RANGES["par"]
     min_cap_cf, max_cap_cf = MIN_MAX_RANGES["capacidad_remolque_con_freno"]
     min_cap_sf, max_cap_sf = MIN_MAX_RANGES["capacidad_remolque_sin_freno"]
+    # --- NUEVOS MIN/MAX ---
+    min_sup_planta, max_sup_planta = MIN_MAX_RANGES["superficie_planta"]
+    min_diam_giro, max_diam_giro = MIN_MAX_RANGES["diametro_giro"]
+    min_alto_veh, max_alto_veh = MIN_MAX_RANGES["alto_vehiculo"] # Para la altura total del vehículo
 
     sql = f"""
     WITH ScaledData AS (
@@ -177,6 +192,12 @@ def buscar_coches_bq( # Renombrada para claridad
             COALESCE(SAFE_DIVIDE(COALESCE(autonomia_uso_maxima, {min_auton}) - {min_auton}, NULLIF({max_auton} - {min_auton}, 0)), 0) AS autonomia_uso_maxima_scaled,
             -- Mapeos existentes --
             CASE WHEN traccion = 'ALL' THEN 1.0 WHEN traccion = 'RWD' THEN 0.5 ELSE 0.0 END AS traccion_scaled,
+            -- --- NUEVOS CAMPOS ESCALADOS PARA GARAJE/APARCAMIENTO (INVERTIDOS) ---
+            COALESCE(SAFE_DIVIDE({max_sup_planta} - COALESCE(superficie_planta, {max_sup_planta}), NULLIF({max_sup_planta} - {min_sup_planta}, 0)), 0) AS menor_superficie_planta_scaled,
+            COALESCE(SAFE_DIVIDE({max_diam_giro} - COALESCE(diametro_giro, {max_diam_giro}), NULLIF({max_diam_giro} - {min_diam_giro}, 0)), 0) AS menor_diametro_giro_scaled,
+            COALESCE(SAFE_DIVIDE({max_largo} - COALESCE(largo, {max_largo}), NULLIF({max_largo} - {min_largo}, 0)), 0) AS menor_largo_garage_scaled, -- Reutiliza min/max de largo general
+            COALESCE(SAFE_DIVIDE({max_anc} - COALESCE(ancho, {max_anc}), NULLIF({max_anc} - {min_anc}, 0)), 0) AS menor_ancho_garage_scaled, -- Reutiliza min/max de ancho general
+            COALESCE(SAFE_DIVIDE({max_alto_veh} - COALESCE(alto, {max_alto_veh}), NULLIF({max_alto_veh} - {min_alto_veh}, 0)), 0) AS menor_alto_garage_scaled,
             -- --- NUEVOS CAMPOS ESCALADOS (INVERTIDOS) ---
             COALESCE(SAFE_DIVIDE({max_peso_kg} - COALESCE(peso, {max_peso_kg}), NULLIF({max_peso_kg} - {min_peso_kg}, 0)), 0) AS bajo_peso_scaled, -- Invertido
             COALESCE(SAFE_DIVIDE({max_consumo} - COALESCE(indice_consumo_energia, {max_consumo}), NULLIF({max_consumo} - {min_consumo}, 0)), 0) AS bajo_consumo_scaled, -- Invertido
@@ -187,13 +208,14 @@ def buscar_coches_bq( # Renombrada para claridad
             (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END) AS puertas_penalty
         FROM
             `thecarmentor-mvp2.web_cars.match_coches_pruebas`
+             
     )
     SELECT
       -- Añade las nuevas columnas BQ si quieres ver sus valores originales:
       nombre, ID , modelo, cambio_automatico, tipo_mecanica, tipo_carroceria, 
       indice_altura_interior, estetica, premium, singular,  seguridad, comodidad, acceso_low_cost, deportividad, tecnologia, devaluacion, altura_libre_suelo, maletero_minimo, maletero_maximo,
       traccion, reductoras, plazas, precio_compra_contado, largo, autonomia_uso_maxima, distintivo_ambiental, anos_vehiculo, ocasion,
-      peso AS peso_original_kg, indice_consumo_energia AS consumo_original, costes_de_uso, costes_mantenimiento,par, capacidad_remolque_con_freno,capacidad_remolque_sin_freno,
+      peso AS peso_original_kg, indice_consumo_energia AS consumo_original, costes_de_uso, costes_mantenimiento,par, capacidad_remolque_con_freno,capacidad_remolque_sin_freno, superficie_planta, diametro_giro, alto,
       
       ( 
         estetica_scaled * @peso_estetica 
@@ -202,7 +224,7 @@ def buscar_coches_bq( # Renombrada para claridad
         + altura_scaled * @peso_altura
         + batalla_scaled * @peso_batalla 
         + indice_altura_scaled * @peso_indice_altura
-        + ancho_scaled * @peso_ancho 
+        + ancho_scaled *  @peso_ancho_general_score -- Para el ancho que suma (pasajeros, objetos especiales)
         + traccion_scaled * @peso_traccion
         + reductoras_scaled * @peso_reductoras
         + puertas_penalty
@@ -228,6 +250,12 @@ def buscar_coches_bq( # Renombrada para claridad
         + par_scaled * @peso_par_motor_remolque_score
         + cap_remolque_cf_scaled * @peso_cap_remolque_cf_score
         + cap_remolque_sf_scaled * @peso_cap_remolque_sf_score
+        -- --- NUEVOS TÉRMINOS DE SCORE PARA GARAJE/APARCAMIENTO ---
+        + menor_superficie_planta_scaled * @peso_fav_menor_superficie_planta
+        + menor_diametro_giro_scaled * @peso_fav_menor_diametro_giro
+        + menor_largo_garage_scaled * @peso_fav_menor_largo_garage
+        + menor_ancho_garage_scaled * @peso_fav_menor_ancho_garage
+        + menor_alto_garage_scaled * @peso_fav_menor_alto_garage
         -- PENALIZACIONES POR COMODIDAD y  ANTIGÜEDAD--
         + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
         + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND deportividad_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
@@ -270,9 +298,7 @@ def buscar_coches_bq( # Renombrada para claridad
       ) AS score_total
     FROM ScaledData
     WHERE 1=1 
-    """
-    
-    
+    """  
     # --- Parámetros Iniciales (solo pesos para el score y flags) ---
     params = [
         bigquery.ScalarQueryParameter("peso_estetica",   "FLOAT64", pesos_completos["estetica"]),
@@ -281,7 +307,7 @@ def buscar_coches_bq( # Renombrada para claridad
         bigquery.ScalarQueryParameter("peso_altura", "FLOAT64", pesos_completos["altura_libre_suelo"]),
         bigquery.ScalarQueryParameter("peso_batalla", "FLOAT64", pesos_completos["batalla"]),
         bigquery.ScalarQueryParameter("peso_indice_altura", "FLOAT64", pesos_completos["indice_altura_interior"]),
-        bigquery.ScalarQueryParameter("peso_ancho", "FLOAT64", pesos_completos["ancho"]),
+        bigquery.ScalarQueryParameter("peso_ancho_general_score", "FLOAT64", pesos_completos["ancho_general_score"]),
         bigquery.ScalarQueryParameter("peso_traccion", "FLOAT64", pesos_completos["traccion"]),
         bigquery.ScalarQueryParameter("peso_reductoras", "FLOAT64", pesos_completos["reductoras"]),
         bigquery.ScalarQueryParameter("penalizar_puertas", "BOOL", penalizar_puertas_val),
@@ -305,6 +331,13 @@ def buscar_coches_bq( # Renombrada para claridad
         bigquery.ScalarQueryParameter("peso_par_motor_remolque_score", "FLOAT64", pesos_completos["par_motor_remolque_score"]),
         bigquery.ScalarQueryParameter("peso_cap_remolque_cf_score", "FLOAT64", pesos_completos["cap_remolque_cf_score"]),
         bigquery.ScalarQueryParameter("peso_cap_remolque_sf_score", "FLOAT64", pesos_completos["cap_remolque_sf_score"]),
+        # --- NUEVOS PARÁMETROS DE PESO ---
+        bigquery.ScalarQueryParameter("peso_fav_menor_superficie_planta", "FLOAT64", pesos_completos["fav_menor_superficie_planta"]),
+        bigquery.ScalarQueryParameter("peso_fav_menor_diametro_giro", "FLOAT64", pesos_completos["fav_menor_diametro_giro"]),
+        bigquery.ScalarQueryParameter("peso_fav_menor_largo_garage", "FLOAT64", pesos_completos["fav_menor_largo_garage"]),
+        bigquery.ScalarQueryParameter("peso_fav_menor_ancho_garage", "FLOAT64", pesos_completos["fav_menor_ancho_garage"]),
+        bigquery.ScalarQueryParameter("peso_fav_menor_alto_garage", "FLOAT64", pesos_completos["fav_menor_alto_garage"]),
+        # --- FIN NUEVOS PARÁMETROS ---
         bigquery.ScalarQueryParameter("flag_penalizar_low_cost_comodidad", "BOOL", flag_penalizar_low_cost_comod),
         bigquery.ScalarQueryParameter("flag_penalizar_deportividad_comodidad", "BOOL", flag_penalizar_deportividad_comod),
         bigquery.ScalarQueryParameter("flag_penalizar_antiguo_tec", "BOOL", flag_penalizar_antiguo_tec_val),

@@ -68,18 +68,18 @@ def formatear_preferencias_en_tabla(
     texto = "✅ He entendido lo siguiente sobre tus preferencias:\n\n"
     texto += "| Preferencia              | Valor                      |\n"
     texto += "|--------------------------|----------------------------|\n" 
-    texto += f"| Código Postal              | {cp_str} |\n"
+    texto +=f"| Código Postal           | {cp_str} |\n"
     # --- NUEVA SECCIÓN PARA INFO CLIMA ---
     # Solo mostrar si hay datos climáticos y el CP fue válido y encontrado
     if info_clima_dict and info_clima_dict.get("cp_valido_encontrado", False):
         climas_activos = []
         # Nombres más amigables para mostrar en la tabla
         mapa_nombres_clima = {
-            "MUNICIPIO_ZBE": "Zona de Bajas Emisiones (ZBE)",
-            "ZONA_LLUVIAS": "Zona con Lluvias Frecuentes",
-            "ZONA_NIEBLAS": "Zona con Nieblas Frecuentes",
-            "ZONA_NIEVE": "Zona con Nieve Frecuente",
-            "ZONA_CLIMA_MONTA": "Zona de Clima de Montaña",
+            "MUNICIPIO_ZBE": "Zona Bajas Emisiones (ZBE)",
+            "ZONA_LLUVIAS": "Zona Lluvias Frecuentes",
+            "ZONA_NIEBLAS": "Zona Nieblas Frecuentes",
+            "ZONA_NIEVE": "Zona Nieve Frecuente",
+            "ZONA_CLIMA_MONTA": "Zona Clima de Montaña",
             "ZONA_GLP": "Disponibilidad GLP Común",
             "ZONA_GNV": "Disponibilidad GNV Común"
         }
@@ -88,11 +88,11 @@ def formatear_preferencias_en_tabla(
                 climas_activos.append(nombre_amigable)
         
         if climas_activos:
-            texto += f"| Condiciones Zona| {', '.join(climas_activos)} |\n"
+            texto += f"|Condiciones Zona| {', '.join(climas_activos)} |\n"
         else:
-            texto += f"| Condiciones Zona| Generales / No específicas |\n"
+            texto += f"|Condiciones Zona| Generales / No específicas |\n"
     elif cp_str != "No proporcionado": # Se dio CP pero no se encontraron datos de zona
-         texto += f"| Condiciones Zona   | No disponibles para este CP |\n"
+         texto += f"|Condiciones Zona   | No disponibles para este CP |\n"
     # --- FIN SECCIÓN INFO CLIMA ---
     texto += f"| Apasionado del motor    | {'Sí' if is_yes(prefs_dict.get('apasionado_motor')) else 'No'} \n" # Usar Sí/No directamente
     texto += f"| Estética                | {estetica_str} \n"

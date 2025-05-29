@@ -3,7 +3,7 @@ from typing import List, Optional, Annotated, Literal
 from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, model_validator
-from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesional
+from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesional, DimensionProblematica
 from typing import Literal, Optional
 
 
@@ -35,6 +35,24 @@ class PerfilUsuario(BaseModel):
     transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'")
     necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'")    
     arrastra_remolque: Optional[str] = Field(default=None, description="¿Va a arrastrar remolque pesado o caravana? Responde 'sí' o 'no'" )
+     # --- NUEVOS CAMPOS PARA GARAJE/APARCAMIENTO ---
+    tiene_garage: Optional[str] = Field(
+        default=None,
+        description="¿Tiene garaje o plaza de aparcamiento propia? Responde 'sí' o 'no'"
+    )
+    problemas_aparcar_calle: Optional[str] = Field(
+        default=None,
+        description="Si no tiene garaje, ¿suele tener problemas para aparcar en la calle? Responde 'sí' o 'no'"
+    )
+    espacio_sobra_garage: Optional[str] = Field(
+        default=None,
+        description="Si tiene garaje, ¿tiene espacio de sobra? Responde 'sí' o 'no'"
+    )
+    problema_dimension_garage: Optional[List[DimensionProblematica]] = Field( # <-- Lista de Enums
+            default=None,
+            description="Si no tiene espacio de sobra en garaje, ¿cuál es la dimensión problemática principal (largo, ancho, alto)? Puede ser una lista."
+        )
+    # --- FIN NUEVOS CAMPOS ---
     aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
     solo_electricos: Optional[str] = Field(default=None, description="¿Quiere solo coches eléctricos? Responde 'sí' o 'no'")
     prioriza_baja_depreciacion: Optional[str] = Field(default=None, description="¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'")

@@ -24,6 +24,12 @@ AVENTURA_RAW = {
   "extrema":   {"altura_libre_suelo":  8,   "traccion": 8,  "reductoras":  8},
 }
 
+# --- VALORES DE PESO CRUDO PARA NUEVAS PREFERENCIAS DE GARAJE/APARCAMIENTO (¡AJUSTA ESTOS!) ---
+PESO_FAV_MENOR_SUPERFICIE = 7.0 #fav_menor_superficie_planta
+PESO_FAV_MENOR_DIAMETRO_GIRO = 7.0 #fav_menor_diametro_giro
+PESO_FAV_MENOR_DIMENSION_GARAJE = 6.0 # Para largo, ancho, alto problemáticos fav_menor_largo_garage
+PESO_BASE_BAJO_PARA_DIMENSIONES = 0.5 # Peso si no es una preocupación explícita
+
 # --- VALORES DE AJUSTE DE PESO CRUDO POR CLIMA (¡AJUSTA ESTOS!) ---
 AJUSTE_PESO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
 AJUSTE_PESO_TRACCION_POR_NIEVE = 5.0   # Cuánto sumar al peso crudo de tracción si hay nieve
@@ -72,7 +78,6 @@ def compute_raw_weights(
     raw["reductoras"] = float(aventura_weights_map.get("reductoras", 0.0))
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir aventura: {raw}")
 
-    #
     # Pesos basados en altura_mayor_190
     altura_pref_val = preferencias.get("altura_mayor_190") if preferencias else None # <-- USO DE .get()
     if is_yes(altura_pref_val):
@@ -85,13 +90,14 @@ def compute_raw_weights(
         raw["indice_altura_interior"] = 1.0 
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir dims por altura: {raw}")
     
-    # Peso para 'ancho' basado en 'priorizar_ancho'
+    # Peso para 'ancho' basado en 'priorizar_ancho' (influenciado por priorizar_ancho de pasajeros Z>=2)
+    # Este peso favorece MÁS ancho. Lo mantendremos separado del "fav_menor_ancho_garage".
     if priorizar_ancho: 
-        raw["ancho"] = 5.0  
-        print(f"DEBUG (Weights) ► Priorizar Ancho=True. Asignando peso crudo alto a ancho: {raw['ancho']}")
+        raw["ancho_general_score"] = 5.0  
+        print(f"DEBUG (Weights) ► Priorizar Ancho=True. Asignando peso crudo alto a ancho_general_score: {raw['ancho_general_score']}")
     else:
-        raw["ancho"] = 1.0  
-        print(f"DEBUG (Weights) ► Priorizar Ancho=False/None. Asignando peso crudo bajo a ancho: {raw['ancho']}")
+        raw["ancho_general_score"] = 1.0  
+        print(f"DEBUG (Weights) ► Priorizar Ancho=False/None. Asignando peso crudo bajo a ancho_general_score: {raw['ancho_general_score']}")
         
     # --- NUEVO PESO CRUDO PARA DEPRECIACIÓN ---
     if is_yes(preferencias.get("prioriza_baja_depreciacion")):
@@ -99,8 +105,7 @@ def compute_raw_weights(
     else: # 'no' o None
         raw["devaluacion"] = 1.0 # Si 'no' o no especificado, peso crudo de 1.0
     print(f"DEBUG (Weights) ► Peso crudo para devaluacion (basado en prioriza_baja_depreciacion='{preferencias.get('prioriza_baja_depreciacion')}'): {raw['devaluacion']}")
-   
-    # --- NUEVA LÓGICA PARA RATINGS DIRECTOS 0-10 ---
+
     # 5. Añadir pesos crudos directamente de los ratings del usuario    
     # Añadir pesos crudos directamente de los ratings del usuario
     if preferencias: # Verificar si el diccionario preferencias existe
@@ -209,11 +214,41 @@ def compute_raw_weights(
         current_traccion_weight += AJUSTE_PESO_TRACCION_POR_MONTA
     raw["traccion"] = max(MIN_SINGLE_RAW_WEIGHT, min(MAX_SINGLE_RAW_WEIGHT, current_traccion_weight))
     print(f"DEBUG (Weights) ► Zona Nieve ({es_zona_nieve}), Zona Montaña ({es_zona_clima_monta}): Peso crudo final traccion = {raw['traccion']}")
-    # --- FIN AJUSTES POR CLIMA ----
+    # --- NUEVA LÓGICA PARA PESOS DE GARAJE/APARCAMIENTO ---
+    # Inicializar los nuevos pesos con un valor base bajo
+    raw["fav_menor_superficie_planta"] = PESO_BASE_BAJO_PARA_DIMENSIONES 
+    raw["fav_menor_diametro_giro"] = PESO_BASE_BAJO_PARA_DIMENSIONES
+    raw["fav_menor_largo_garage"] = PESO_BASE_BAJO_PARA_DIMENSIONES 
+    raw["fav_menor_ancho_garage"] = PESO_BASE_BAJO_PARA_DIMENSIONES 
+    raw["fav_menor_alto_garage"] = PESO_BASE_BAJO_PARA_DIMENSIONES  
+
+    tiene_garage_val = preferencias.get("tiene_garage")
+    
+    if tiene_garage_val is not None:
+        if not is_yes(tiene_garage_val): # NO tiene garaje
+            if is_yes(preferencias.get("problemas_aparcar_calle")):
+                raw["fav_menor_superficie_planta"] = PESO_FAV_MENOR_SUPERFICIE
+                print(f"DEBUG (Weights) ► Problemas aparcar calle. Favoreciendo menor superficie_planta con peso: {PESO_FAV_MENOR_SUPERFICIE}")
+        else: # SÍ tiene garaje
+            if is_yes(preferencias.get("espacio_sobra_garage")) is False: # Espacio NO sobra (es 'no' o None)
+                raw["fav_menor_diametro_giro"] = PESO_FAV_MENOR_DIAMETRO_GIRO
+                print(f"DEBUG (Weights) ► Garaje ajustado. Favoreciendo menor diametro_giro con peso: {PESO_FAV_MENOR_DIAMETRO_GIRO}")
+                
+                problema_dimension_lista = preferencias.get("problema_dimension_garage") # Esto es List[DimensionProblematica.value] o None
+                if isinstance(problema_dimension_lista, list):
+                    if "largo" in problema_dimension_lista:
+                        raw["fav_menor_largo_garage"] = PESO_FAV_MENOR_DIMENSION_GARAJE
+                        print(f"DEBUG (Weights) ► Problema LARGO en garaje. Favoreciendo menor largo con peso: {PESO_FAV_MENOR_DIMENSION_GARAJE}")
+                    if "ancho" in problema_dimension_lista:
+                        raw["fav_menor_ancho_garage"] = PESO_FAV_MENOR_DIMENSION_GARAJE
+                        print(f"DEBUG (Weights) ► Problema ANCHO en garaje. Favoreciendo menor ancho con peso: {PESO_FAV_MENOR_DIMENSION_GARAJE}")
+                    if "alto" in problema_dimension_lista:
+                        raw["fav_menor_alto_garage"] = PESO_FAV_MENOR_DIMENSION_GARAJE
+                        print(f"DEBUG (Weights) ► Problema ALTO en garaje. Favoreciendo menor alto con peso: {PESO_FAV_MENOR_DIMENSION_GARAJE}")
+    # --- FIN NUEVA LÓGICA ---
     
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}
-    
     #print(f"DEBUG (Weights) ► Pesos Crudos FINALES: {raw_float}")
     return raw_float
 

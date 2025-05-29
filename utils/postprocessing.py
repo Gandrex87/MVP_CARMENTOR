@@ -67,24 +67,24 @@ def aplicar_postprocesamiento_filtros(
     utilizando PerfilUsuario e InfoClimaUsuario como contexto.
     Devuelve una instancia de FiltrosInferidos con cambios (o la original si no hay cambios).
     """
-    logging.debug("\n--- DEBUG DENTRO PostProc Filtros ---") # Usar logging
+    logging.debug("\n--- DEBUG DENTRO PostProc Filtros ---")
     logging.debug(f"Recibido Prefs: {preferencias}")
     logging.debug(f"Recibido Filtros (antes): {filtros}")
     logging.debug(f"Recibido Info Clima: {info_clima}")
     
-    if filtros is None: # Si no hay objeto de filtros base, no podemos hacer nada
+    if filtros is None:
          logging.debug("DEBUG (PostProc Filtros) ► Objeto FiltrosInferidos de entrada es None. No se aplica post-procesamiento.")
          return None 
     
-    # Trabajar sobre copias para no modificar el objeto original del estado directamente
-    # a menos que sea la intención (lo cual es, al final, si hay cambios).
+    # Trabajar sobre copias para no modificar el objeto original
     filtros_actualizado = filtros.model_copy(deep=True)
-    cambios_efectuados_en_este_nodo = False # Flag para saber si este nodo hizo algún cambio
+    cambios_efectuados_en_este_nodo = False
 
     # --- Regla: Tipo de mecánica default si 'solo_electricos' es 'no' y falta tipo_mecanica ---
-    if preferencias and isinstance(preferencias.solo_electricos, str) and \
-       preferencias.solo_electricos.strip().lower() == 'no' and \
-       _es_nulo_o_vacio(filtros_actualizado.tipo_mecanica):
+    if (preferencias and 
+        isinstance(preferencias.solo_electricos, str) and 
+        preferencias.solo_electricos.strip().lower() == 'no' and 
+        _es_nulo_o_vacio(filtros_actualizado.tipo_mecanica)):
         
         logging.debug("DEBUG (PostProc Filtros) ► Aplicando regla: solo_electricos='no' y sin tipo_mecanica -> asignando default no eléctrico")
         lista_mecanicas_default = [ 
@@ -93,19 +93,17 @@ def aplicar_postprocesamiento_filtros(
             TipoMecanica.MHEVG, TipoMecanica.MHEVD,
             TipoMecanica.GLP, TipoMecanica.GNV
         ]
-        if filtros_actualizado.tipo_mecanica != lista_mecanicas_default: # Comprobar si realmente cambia
+        if filtros_actualizado.tipo_mecanica != lista_mecanicas_default:
             filtros_actualizado.tipo_mecanica = lista_mecanicas_default
             cambios_efectuados_en_este_nodo = True
 
     # --- Regla: Forzar BEV/REEV si 'solo_electricos' es 'sí' ---
-    # Esta regla tiene prioridad sobre la anterior si solo_electricos es 'sí'
+    # Esta regla tiene prioridad sobre la anterior
     if preferencias and is_yes(preferencias.solo_electricos):
         expected_electricas_enums = [TipoMecanica.BEV, TipoMecanica.REEV]
-        # Comparar listas de Enums directamente (el orden importa si no se ordenan antes)
-        # o convertir a sets de strings de values para comparación insensible al orden.
         current_mecanicas_enums = filtros_actualizado.tipo_mecanica or []
         
-        # Para una comparación robusta insensible al orden:
+        # Comparación robusta insensible al orden
         current_values_set = {m.value for m in current_mecanicas_enums if hasattr(m, 'value')}
         expected_values_set = {m.value for m in expected_electricas_enums}
 
@@ -113,70 +111,129 @@ def aplicar_postprocesamiento_filtros(
             logging.debug(f"DEBUG (PostProc Filtros) ► Aplicando regla: solo_electricos='sí'. Estableciendo tipo_mecanica a BEV, REEV.")
             filtros_actualizado.tipo_mecanica = expected_electricas_enums
             cambios_efectuados_en_este_nodo = True
-            
-    # --- LÓGICA PARA FILTRAR GLP/GNV POR ZONA ---
-    # Esta lógica se aplica DESPUÉS de las reglas anteriores sobre tipo_mecanica
-    if info_clima and info_clima.cp_valido_encontrado: 
-        mecanicas_permitidas_actual = list(filtros_actualizado.tipo_mecanica) if filtros_actualizado.tipo_mecanica else []
-        mecanicas_modificadas_por_clima = list(mecanicas_permitidas_actual) # Copia para modificar
 
+    # --- LÓGICA PARA FILTRAR GLP/GNV POR ZONA ---
+    # Trabajar con la lista actual de mecánicas (no con lista_mecanicas_default)
+    mecanicas_trabajo = list(filtros_actualizado.tipo_mecanica) if filtros_actualizado.tipo_mecanica else []
+    
+    if info_clima and info_clima.cp_valido_encontrado: 
+        # Gestión de GLP
         if not info_clima.ZONA_GLP: 
-            if TipoMecanica.GLP in mecanicas_modificadas_por_clima:
-                logging.debug(f"DEBUG (PostProc Filtros) ► CP no en ZONA_GLP. Eliminando GLP de tipo_mecanica.")
-                mecanicas_modificadas_por_clima.remove(TipoMecanica.GLP)
-        
-        if not info_clima.ZONA_GNV: 
-            if TipoMecanica.GNV in mecanicas_modificadas_por_clima:
-                logging.debug(f"DEBUG (PostProc Filtros) ► CP no en ZONA_GNV. Eliminando GNV de tipo_mecanica.")
-                mecanicas_modificadas_por_clima.remove(TipoMecanica.GNV)
+            if TipoMecanica.GLP in mecanicas_trabajo:
+                logging.debug(f"PostProc: CP no en ZONA_GLP. Eliminando GLP.")
+                mecanicas_trabajo.remove(TipoMecanica.GLP)
+        elif (not is_yes(preferencias.solo_electricos if preferencias else None) and 
+              TipoMecanica.GLP not in mecanicas_trabajo):
+            logging.debug(f"PostProc: CP en ZONA_GLP y no solo_electricos. Asegurando GLP.")
+            mecanicas_trabajo.append(TipoMecanica.GLP)
             
-        if len(mecanicas_modificadas_por_clima) != len(mecanicas_permitidas_actual):
-            filtros_actualizado.tipo_mecanica = mecanicas_modificadas_por_clima if mecanicas_modificadas_por_clima else None 
-            cambios_efectuados_en_este_nodo = True
+        # Gestión de GNV
+        if not info_clima.ZONA_GNV: 
+            if TipoMecanica.GNV in mecanicas_trabajo:
+                logging.debug(f"PostProc: CP no en ZONA_GNV. Eliminando GNV.")
+                mecanicas_trabajo.remove(TipoMecanica.GNV)
+        elif (not is_yes(preferencias.solo_electricos if preferencias else None) and 
+              TipoMecanica.GNV not in mecanicas_trabajo):
+            logging.debug(f"PostProc: CP en ZONA_GNV y no solo_electricos. Asegurando GNV.")
+            mecanicas_trabajo.append(TipoMecanica.GNV)
     elif info_clima: 
          logging.debug(f"DEBUG (PostProc Filtros) ► No se aplicarán filtros GLP/GNV por zona debido a info_clima no concluyente (cp_valido_encontrado={info_clima.cp_valido_encontrado}).")
     else: 
          logging.debug(f"DEBUG (PostProc Filtros) ► No hay info_clima disponible. No se aplicarán filtros GLP/GNV por zona.")
-    # --- FIN LÓGICA GLP/GNV ---  
+
+    # --- LÓGICA ADICIONAL PARA ZBE ---
+    if (info_clima and info_clima.cp_valido_encontrado and 
+        info_clima.MUNICIPIO_ZBE and preferencias):
+        
+        logging.debug(f"PostProc: Municipio ZBE. Ajustando mecánicas.")
+        
+        # Eliminar DIESEL en ZBE con excepciones
+        if TipoMecanica.DIESEL in mecanicas_trabajo:
+            es_carga_pesada = (is_yes(preferencias.uso_profesional) and 
+                             hasattr(preferencias, 'tipo_uso_profesional') and
+                             getattr(preferencias.tipo_uso_profesional, 'value', '') == 'carga')
+            es_aventura_extrema = (hasattr(preferencias, 'aventura') and 
+                                 getattr(preferencias.aventura, 'value', '') == 'extrema')
+            
+            if not (es_carga_pesada or es_aventura_extrema):  # Corregido: OR en lugar de AND
+                logging.debug(f"PostProc: ZBE - Eliminando DIESEL.")
+                mecanicas_trabajo.remove(TipoMecanica.DIESEL)
+        
+        # Asegurar opciones limpias si no es solo eléctricos
+        if not is_yes(preferencias.solo_electricos):
+            mecanicas_limpias_para_zbe = [
+                TipoMecanica.BEV, TipoMecanica.REEV, TipoMecanica.PHEVG, 
+                TipoMecanica.PHEVD, TipoMecanica.HEVG, TipoMecanica.HEVD, 
+                TipoMecanica.GLP, TipoMecanica.GNV
+            ]
+            for mec in mecanicas_limpias_para_zbe:
+                if mec not in mecanicas_trabajo:
+                    mecanicas_trabajo.append(mec)
+
+    # --- REVISIÓN FINAL SI solo_electricos='no' y la lista es muy restrictiva ---
+    if (preferencias and 
+        isinstance(preferencias.solo_electricos, str) and 
+        preferencias.solo_electricos.strip().lower() == 'no'):
+        
+        # Si solo quedaron alternativas de gas
+        if (len(mecanicas_trabajo) <= 2 and 
+            all(mec in [TipoMecanica.GLP, TipoMecanica.GNV] for mec in mecanicas_trabajo)):
+            
+            logging.warning(f"PostProc: solo_electricos='no' pero solo quedaron alternativas de gas: {mecanicas_trabajo}. Ampliando.")
+            mecanicas_base_adicionales = [TipoMecanica.GASOLINA, TipoMecanica.HEVG, TipoMecanica.PHEVG]
+            for mec_base in mecanicas_base_adicionales:
+                if mec_base not in mecanicas_trabajo:
+                    mecanicas_trabajo.append(mec_base) 
+                        
+        elif not mecanicas_trabajo:  # Si quedó vacía
+            logging.warning(f"PostProc: solo_electricos='no' y lista de mecánicas quedó vacía. Aplicando default amplio.")
+            mecanicas_trabajo = [
+                TipoMecanica.GASOLINA, TipoMecanica.DIESEL, TipoMecanica.PHEVG, TipoMecanica.PHEVD, 
+                TipoMecanica.HEVG, TipoMecanica.HEVD, TipoMecanica.MHEVG, TipoMecanica.MHEVD,
+                TipoMecanica.GLP, TipoMecanica.GNV
+            ]
+
+    # Aplicar la lista final de mecánicas (eliminar duplicados)
+    final_mecanicas_unicas = []
+    for mec in mecanicas_trabajo:
+        if mec not in final_mecanicas_unicas:
+            final_mecanicas_unicas.append(mec)
+    
+    # Solo actualizar si hay cambios reales
+    if filtros_actualizado.tipo_mecanica != final_mecanicas_unicas:
+        filtros_actualizado.tipo_mecanica = final_mecanicas_unicas if final_mecanicas_unicas else None
+        cambios_efectuados_en_este_nodo = True
 
     # --- Regla: Estética mínima según valora_estetica ---
     if preferencias:
-        valora_estetica_val = preferencias.valora_estetica
-        estetica_target = 1.0 
-        if is_yes(valora_estetica_val): estetica_target = 5.0
+        estetica_target = 5.0 if is_yes(preferencias.valora_estetica) else 1.0
         
         if filtros_actualizado.estetica_min != estetica_target:
-            logging.debug(f"DEBUG (PostProc Filtros) ► Aplicando regla estetica: de {filtros_actualizado.estetica_min} a {estetica_target} (valora_estetica='{valora_estetica_val}')")
+            logging.debug(f"DEBUG (PostProc Filtros) ► Aplicando regla estetica: de {filtros_actualizado.estetica_min} a {estetica_target}")
             filtros_actualizado.estetica_min = estetica_target
             cambios_efectuados_en_este_nodo = True
             
-    # --- Regla: Premium mínima según apasionado_motor - Apasionado SÍ ---
+    # --- Regla: Premium mínima según apasionado_motor ---
     if preferencias:
-        premium_min_target = 1.0 # Tu valor base para "no apasionado" o None
-        if is_yes(preferencias.apasionado_motor):
-            premium_min_target = 3.0 # Tu valor para "apasionado"
+        premium_min_target = 3.0 if is_yes(preferencias.apasionado_motor) else 1.0
         
         if filtros_actualizado.premium_min != premium_min_target:
-            logging.debug(f"DEBUG (PostProc Filtros) ► Aplicando regla premium: de {filtros_actualizado.premium_min} a {premium_min_target} (apasionado_motor='{preferencias.apasionado_motor}')")
+            logging.debug(f"DEBUG (PostProc Filtros) ► Aplicando regla premium: de {filtros_actualizado.premium_min} a {premium_min_target}")
             filtros_actualizado.premium_min = premium_min_target
             cambios_efectuados_en_este_nodo = True
 
-    # --- Regla: Singularidad mínima - Exclusivo SÍ (Aditiva) ---
+    # --- Regla: Singularidad mínima (Aditiva) ---
     if preferencias:
         singular_min_calculado = 0.0 
+        
         # Contribución de apasionado_motor
-        if is_yes(preferencias.apasionado_motor):
-            singular_min_calculado += 3.0
-        else: # 'no' o None
-            singular_min_calculado += 1.0 # Tu base para no apasionado era 1.0
+        singular_min_calculado += 3.0 if is_yes(preferencias.apasionado_motor) else 1.0
         
         # Contribución de prefiere_diseno_exclusivo
-        if is_yes(preferencias.prefiere_diseno_exclusivo):
-            singular_min_calculado += 3.0
-        else: # 'no' o None
-            singular_min_calculado += 1.0 # Tu base para no exclusivo era 1.0
+        singular_min_calculado += 3.0 if is_yes(preferencias.prefiere_diseno_exclusivo) else 1.0
         
-        singular_min_calculado = max(0.0, min(10.0, singular_min_calculado)) # Clamp
+        # Clamp entre 0 y 10
+        singular_min_calculado = max(0.0, min(10.0, singular_min_calculado))
 
         if filtros_actualizado.singular_min != singular_min_calculado:
             logging.debug(f"DEBUG (PostProc Filtros) ► Aplicando regla singular (aditiva): de {filtros_actualizado.singular_min} a {singular_min_calculado}")
@@ -185,10 +242,10 @@ def aplicar_postprocesamiento_filtros(
 
     if cambios_efectuados_en_este_nodo:
         logging.debug(f"--- FIN DEBUG PostProc Filtros --- Filtros actualizados finales: {filtros_actualizado}")
+        return filtros_actualizado
     else:
         logging.debug("--- FIN DEBUG PostProc Filtros --- No se realizaron cambios significativos en los filtros.")
-        
-    return filtros_actualizado
+        return filtros  # Devolver el original si no hay cambios
 
 
 

@@ -21,6 +21,7 @@ from utils.bq_logger import log_busqueda_a_bigquery
 import traceback 
 import pandas as pd
 import json # Para construir el contexto del prompt
+from typing import Literal, Optional
 
 # En graph/nodes.py
 
@@ -320,7 +321,7 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     # se definirá en la arista condicional que salga de este nodo.
     return {**state} 
 
-from typing import Literal, Optional
+
 def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     """Genera una pregunta específica basada en el primer campo obligatorio que falta."""
     if prefs is None: 
@@ -340,6 +341,19 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if is_yes(prefs.transporta_carga_voluminosa) and prefs.necesita_espacio_objetos_especiales is None:
         return "¿Y ese transporte de carga incluye objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos para bebé, sillas de ruedas, instrumentos musicales, etc?"
     if prefs.arrastra_remolque is None: return "¿Vas a arrastrar remolque pesado o caravana?"
+     # --- NUEVA LÓGICA DE PREGUNTAS PARA GARAJE/APARCAMIENTO ---
+    if prefs.tiene_garage is None:
+        return "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?"
+    if prefs.tiene_garage is not None and not is_yes(prefs.tiene_garage): # Si respondió 'no' a tiene_garage
+        if prefs.problemas_aparcar_calle is None:
+            return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?"
+    elif prefs.tiene_garage is not None and is_yes(prefs.tiene_garage): # Si respondió 'sí' a tiene_garage
+        if prefs.espacio_sobra_garage is None:
+            return "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
+        if prefs.espacio_sobra_garage is not None and not is_yes(prefs.espacio_sobra_garage): # Si respondió 'no' a espacio_sobra_garage
+            if prefs.problema_dimension_garage is None or not prefs.problema_dimension_garage: # Si es None o lista vacía
+                return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? Podría ser el largo, el ancho, o la altura del coche. (Puedes mencionar una o varias, ej: 'largo y ancho')"
+    # --- FIN NUEVA LÓGICA DE PREGUNTAS ---
     if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
     # --- FIN NUEVAS PREGUNTAS DE CARGA ---
     if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?"
@@ -352,8 +366,7 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if prefs.rating_impacto_ambiental is None: return "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección (0-10)?" 
     if prefs.rating_tecnologia_conectividad is None: return "En cuanto a la Tecnología y Conectividad del coche, ¿qué tan relevante es para ti (0-10)?"
     if prefs.rating_costes_uso is None: return "finalmente, ¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? (0-10)?" 
-    # --- FIN NUEVAS PREGUNTAS DE RATING ---
-    
+    # --- FIN NUEVAS PREGUNTAS DE RATING --- 
     return "¿Podrías darme algún detalle más sobre tus preferencias?" # Fallback muy genérico 
 
 def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
@@ -726,102 +739,6 @@ def preguntar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
 
      return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
 
-# #Inferir filtros técnicos iniciales y aplicar post-procesamiento_V1_FUNCIONAL
-# def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Llama al LLM para inferir filtros técnicos iniciales, luego aplica
-#     post-procesamiento usando preferencias e información climática.
-#     """
-#     print("--- Ejecutando Nodo: inferir_filtros_node ---")
-#     historial = state.get("messages", []) # Necesitamos el historial para el LLM
-#     preferencias = state.get("preferencias_usuario") 
-#     filtros_actuales = state.get("filtros_inferidos") 
-#     info_clima_obj = state.get("info_clima_usuario")
-
-#     if not preferencias: 
-#         print("ERROR (Filtros) ► Nodo 'inferir_filtros_node' sin preferencias.")
-#         return {**state} 
-
-#     print("DEBUG (Filtros) ► Preferencias de usuario disponibles. Procediendo...")
-
-#     # Inicializar variables por si falla el try
-#     filtros_post = filtros_actuales 
-#     mensaje_validacion = None
-
-#     # 2. Preparar prompt (como lo tenías)
-#     try:
-#         preferencias_dict = preferencias.model_dump(mode='json')
-#         prompt_filtros = system_prompt_filtros_template.format(
-#             preferencias_contexto=str(preferencias_dict) 
-#         )
-#         print(f"DEBUG (Filtros) ► Prompt para llm_solo_filtros (parcial): {prompt_filtros[:500]}...") 
-#     except Exception as e_prompt:
-#         # ... (manejo de error de prompt como lo tenías) ...
-#         # Guardar el error como pregunta pendiente podría ser una opción
-#         mensaje_validacion = f"Error interno preparando la consulta de filtros: {e_prompt}"
-#         # Salimos temprano si falla el prompt
-#         return {**state, "filtros_inferidos": filtros_actuales, "pregunta_pendiente": mensaje_validacion}
-
-#     # 3. Llamar al LLM (como lo tenías)
-#     try:
-#         response: ResultadoSoloFiltros = llm_solo_filtros.invoke(
-#             [prompt_filtros, *historial], 
-#             config={"configurable": {"tags": ["llm_solo_filtros"]}}
-#         )
-#         print(f"DEBUG (Filtros) ► Respuesta llm_solo_filtros: {response}")
-#         filtros_nuevos = response.filtros_inferidos
-#         mensaje_validacion = response.mensaje_validacion # Guardar para usarlo después
-
-#         # 4. Aplicar post-procesamiento (como lo tenías)
-#         try:
-#             # Pasar filtros_nuevos (del LLM) y preferencias (del estado)
-#             resultado_post_proc = aplicar_postprocesamiento_filtros(filtros_nuevos, preferencias,info_clima=info_clima_obj)     # <-- PASAR INFO CLIMA )
-#             if resultado_post_proc is not None:
-#                 filtros_post = resultado_post_proc
-#             else:
-#                  print("WARN (Filtros) ► aplicar_postprocesamiento_filtros devolvió None.")
-#                  filtros_post = filtros_nuevos # Fallback
-#             print(f"DEBUG (Filtros) ► Filtros TRAS post-procesamiento: {filtros_post}")
-#         except Exception as e_post:
-#             print(f"ERROR (Filtros) ► Fallo en postprocesamiento de filtros: {e_post}")
-#             filtros_post = filtros_nuevos # Fallback
-
-#     # Manejar errores de la llamada LLM y post-procesamiento
-#     except ValidationError as e_val:
-#         print(f"ERROR (Filtros) ► Error de Validación Pydantic en llm_solo_filtros: {e_val}")
-#         mensaje_validacion = f"Hubo un problema al procesar los filtros técnicos. (Detalle: {e_val})"
-#         filtros_post = filtros_actuales # Mantener filtros anteriores si falla validación LLM
-#     except Exception as e:
-#         print(f"ERROR (Filtros) ► Fallo al invocar llm_solo_filtros: {e}")
-#         mensaje_validacion = "Lo siento, tuve un problema técnico al determinar los filtros."
-#         filtros_post = filtros_actuales # Mantener filtros anteriores
-
-#     # 5. Actualizar el estado 'filtros_inferidos' (como lo tenías)
-#     if filtros_actuales:
-#          # Usar el resultado del post-procesamiento (o el fallback)
-#          update_data = filtros_post.model_dump(exclude_unset=True)
-#          filtros_actualizados = filtros_actuales.model_copy(update=update_data)
-#     else:
-#          filtros_actualizados = filtros_post     
-#     print(f"DEBUG (Filtros) ► Estado filtros_inferidos actualizado: {filtros_actualizados}")
-
-#     # --- CAMBIOS AQUÍ ---
-#     # 6. Definir 'pregunta_para_siguiente_nodo' basado en 'mensaje_validacion'
-#     pregunta_para_siguiente_nodo = None
-#     if mensaje_validacion and mensaje_validacion.strip():
-#         pregunta_para_siguiente_nodo = mensaje_validacion.strip()
-#         #print(f"DEBUG (Filtros) ► Guardando pregunta pendiente: {pregunta_para_siguiente_nodo}")
-#     else:
-#         print(f"DEBUG (Filtros) ► No hay pregunta de validación pendiente.")
-        
-#     # 7. Devolver estado actualizado: SIN modificar 'messages', CON 'pregunta_pendiente'
-#     return {
-#         **state,
-#         "filtros_inferidos": filtros_actualizados,
-#         # "messages": historial_con_nuevo_mensaje, # <-- ELIMINADO / COMENTADO
-#         "pregunta_pendiente": pregunta_para_siguiente_nodo # <-- AÑADIDO y definido correctamente
-#     }
-
 
 def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     """
@@ -1095,8 +1012,6 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
     tabla_final_md = "Error al generar el resumen." # Default
     info_clima_obj = state.get("info_clima_usuario") # Es un objeto InfoClimaUsuario o None
 
-    
-
     # Verificar pre-condiciones
     if not preferencias_obj or not filtros_obj or not economia_obj: # info_pasajeros es opcional para este check
          print("ERROR (Finalizar) ► Faltan datos esenciales (perfil/filtros/economia) para finalizar.")
@@ -1342,7 +1257,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         filtros_para_bq['aplicar_logica_distintivo_ambiental'] = flag_aplicar_distintivo_val
         filtros_para_bq['es_municipio_zbe'] = flag_es_zbe_val
         
-        k_coches = 7 
+        k_coches = 10 
         print(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
         print(f"DEBUG (Buscar BQ) ► Filtros para BQ: {filtros_para_bq}") 
         print(f"DEBUG (Buscar BQ) ► Pesos para BQ: {pesos_finales}") 

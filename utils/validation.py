@@ -13,7 +13,7 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         return False
     campos_obligatorios = [
         "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100",
-        "transporta_carga_voluminosa", "arrastra_remolque","aventura",  "solo_electricos",  "prioriza_baja_depreciacion","transmision_preferida","rating_fiabilidad_durabilidad", 
+        "transporta_carga_voluminosa", "arrastra_remolque","aventura", "tiene_garage",  "solo_electricos",  "prioriza_baja_depreciacion","transmision_preferida","rating_fiabilidad_durabilidad", 
         "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_tecnologia_conectividad", "rating_costes_uso"
     ] # por ahora no va 
     for campo in campos_obligatorios:
@@ -22,17 +22,35 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         if valor is None or (isinstance(valor, str) and not valor.strip()):
              print(f"DEBUG (Validation Perfil) ► Campo '{campo}' está vacío/None.")
              return False
-    # Si uso_profesional es 'sí', entonces tipo_uso_profesional también es obligatorio
-    if is_yes(prefs.uso_profesional): # Usar is_yes para manejar 'sí', 'si', etc.
-        if prefs.tipo_uso_profesional is None or \
-           not str(prefs.tipo_uso_profesional).strip(): # Verificar que no sea cadena vacía si es str
-            print("DEBUG (Validation Perfil) ► 'uso_profesional' es 'sí', pero 'tipo_uso_profesional' está vacío/None. Perfil INCOMPLETO.")
+    # 1. tipo_uso_profesional
+    if is_yes(prefs.uso_profesional): 
+        if prefs.tipo_uso_profesional is None: # El tipo es Enum, Pydantic maneja valores inválidos
+            print("DEBUG (Validation Perfil) ► 'uso_profesional' es 'sí', pero 'tipo_uso_profesional' es None. Perfil INCOMPLETO.")
             return False
-    # --- NUEVA COMPROBACIÓN CONDICIONAL PARA ESPACIO OBJETOS ESPECIALES ---
+    # 2. necesita_espacio_objetos_especiales
     if is_yes(prefs.transporta_carga_voluminosa):
-        if prefs.necesita_espacio_objetos_especiales is None:
-            print("DEBUG (Validation Perfil) ► 'transporta_carga_voluminosa' es 'sí', pero 'necesita_espacio_objetos_especiales' es None. Perfil INCOMPLETO.")
+        if prefs.necesita_espacio_objetos_especiales is None or \
+           (isinstance(prefs.necesita_espacio_objetos_especiales, str) and not prefs.necesita_espacio_objetos_especiales.strip()):
+            print("DEBUG (Validation Perfil) ► 'transporta_carga_voluminosa' es 'sí', pero 'necesita_espacio_objetos_especiales' es None/vacío. Perfil INCOMPLETO.")
             return False
+    # 3. Lógica de Garaje/Aparcamiento
+    if prefs.tiene_garage is not None: # Solo si ya se respondió a 'tiene_garage'
+        if is_yes(prefs.tiene_garage): # Si SÍ tiene garaje
+            if prefs.espacio_sobra_garage is None or \
+               (isinstance(prefs.espacio_sobra_garage, str) and not prefs.espacio_sobra_garage.strip()):
+                print("DEBUG (Validation Perfil) ► 'tiene_garage' es 'sí', pero 'espacio_sobra_garage' es None/vacío. Perfil INCOMPLETO.")
+                return False
+            if is_yes(prefs.espacio_sobra_garage) is False: # Si NO tiene espacio de sobra
+                # problema_dimension_garage es List[DimensionProblematica] o None
+                if prefs.problema_dimension_garage is None or not prefs.problema_dimension_garage: # Si es None o lista vacía
+                    print("DEBUG (Validation Perfil) ► 'espacio_sobra_garage' es 'no', pero 'problema_dimension_garage' es None/vacío. Perfil INCOMPLETO.")
+                    return False
+        else: # Si NO tiene garaje (tiene_garage es 'no')
+            if prefs.problemas_aparcar_calle is None or \
+               (isinstance(prefs.problemas_aparcar_calle, str) and not prefs.problemas_aparcar_calle.strip()):
+                print("DEBUG (Validation Perfil) ► 'tiene_garage' es 'no', pero 'problemas_aparcar_calle' es None/vacío. Perfil INCOMPLETO.")
+                return False
+    # Si prefs.tiene_garage es None, ya fue capturado por el bucle de campos_base_obligatorios
     print("DEBUG (Validation Perfil) ► Todos los campos obligatorios del perfil están presentes.")
     return True
 
