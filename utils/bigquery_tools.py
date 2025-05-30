@@ -7,66 +7,21 @@ import logging
 import traceback
 from typing import Optional, List, Dict, Any , Tuple
 from google.cloud import bigquery
-
+from config.settings import ( 
+    MIN_MAX_RANGES,PENALTY_PUERTAS_BAJAS,PENALTY_LOW_COST_POR_COMODIDAD,
+    PENALTY_DEPORTIVIDAD_POR_COMODIDAD,UMBRAL_LOW_COST_PENALIZABLE_SCALED, # Renombrado para claridad
+    UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED, # Renombrado
+    PENALTY_ANTIGUEDAD_MAS_10_ANOS, PENALTY_ANTIGUEDAD_7_A_10_ANOS,
+    PENALTY_ANTIGUEDAD_5_A_7_ANOS, BONUS_DISTINTIVO_ECO_CERO_C,
+    PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,
+    BONUS_ZBE_DISTINTIVO_FAVORABLE,PENALTY_ZBE_DISTINTIVO_DESFAVORABLE
+)
 # Definiciones de tipo (pueden estar al inicio del módulo)
 FiltrosDict = Dict[str, Any] 
 PesosDict = Dict[str, float]
 
-# Definir aquí los rangos mínimos y máximos para cada característica/Valores de bd
-MIN_MAX_RANGES = {
-    "estetica": (1.0, 10.0),
-    "premium": (1.0, 10.0),
-    "singular": (1.0, 10.0),
-    "altura_libre_suelo": (79.0, 314.0), 
-    "batalla": (1650.0, 4035.0),        
-    "indice_altura_interior": (0.9, 2.7), 
-    "ancho": (1410.0, 2164.0),
-    "fiabilidad": (1.0, 10.0), # Asumiendo una escala de 1-10 para fiabilidad en BQ
-    "durabilidad": (1.0, 10.0), # Asumiendo una escala de 1-10 para durabilidad en BQ
-    "seguridad": (1.0, 10.0),   # Asumiendo una escala de 1-10 para seguridad en BQ
-    "comodidad": (1.0, 10.0),   # Asumiendo una escala de 1-10 para comodidad en BQ
-    "tecnologia": (1.0, 10.0),  # Asumiendo una escala de 1-10 para tecnologia en BQ
-    "acceso_low_cost": (1.0, 10.0), # Asume una escala, donde más alto = más low_cost
-    "deportividad": (1.0, 10.0),    # Asume una escala, donde más alto = más deportivo
-    "devaluacion": (0.0, 10.0), # Asumiendo una escala de 0-10 para depreciación en BQ
-    "maletero_minimo": (11.0, 15000.0), # Ejemplo en litros, ¡USA TUS VALORES!
-    "maletero_maximo": (11.0, 15000.0), # Ejemplo en litros, ¡USA TUS VALORES!
-    "largo": (2450.0, 6400.0) ,       # Ejemplo en mm, ¡USA TUS VALORES!
-    "autonomia_uso_maxima": (30.8, 1582.4), # --- NUEVO RANGO PARA AUTONOMÍA ---
-    "peso": (470.0, 3500.0), 
-    "indice_consumo_energia": (7.4, 133.0),
-    "costes_de_uso": (3.0, 31.0), 
-    "costes_mantenimiento": (1.0, 10.0) ,
-    "par": (41.0, 967.0), 
-    "capacidad_remolque_con_freno": (100.0, 3600.0), 
-    "capacidad_remolque_sin_freno": (35.0, 1250.0), 
-     # --- NUEVOS RANGOS PARA GARAJE/APARCAMIENTO (¡USA TUS VALORES EXACTOS!) ---
-    "superficie_planta": (2.9, 14.0), # m^2, ej: (largo_min * ancho_min)/10^6
-    "diametro_giro": (7.0, 15.6),     # metros
-    "alto_vehiculo": (1052.0, 2940.0),  # mm, para la altura total del vehículo
-     # --- NUEVOS RANGOS PARA CARACTERÍSTICAS DE DEPORTIVIDAD ---
-    "relacion_peso_potencia": (1.8, 28.3), # kg/CV, un valor menor es mejor, por lo que el escalado debe ser invertido. 
-    "potencia_maxima": (41.0, 789.0),    # CV, más es mejor
-    "aceleracion_0_100": (2.5, 34.0)     # segundos, un valor menor es mejor, por lo que el escalado debe ser invertido.
-}
-PENALTY_PUERTAS_BAJAS = -0.10
-# --- NUEVAS PENALIZACIONES (AJUSTA ESTOS VALORES) ---
-PENALTY_LOW_COST_POR_COMODIDAD = -0.10 # Cuánto restar si es muy low-cost y se quiere confort
-PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.10 # Cuánto restar si es muy deportivo y se quiere confort
-# --- UMBRALES PARA PENALIZACIÓN (AJUSTA ESTOS VALORES, 0-1 después de escalar) ---
-UMBRAL_LOW_COST_PENALIZABLE = 0.5 # Penalizar si acceso_low_cost_scaled >= 0.5
-UMBRAL_DEPORTIVIDAD_PENALIZABLE = 0.5 # Penalizar si deportividad_scaled >= 0.5
-# --- NUEVAS CONSTANTES PARA PENALIZACIÓN GRADUAL POR ANTIGÜEDAD ---
-PENALTY_ANTIGUEDAD_MAS_10_ANOS = -0.15
-PENALTY_ANTIGUEDAD_7_A_10_ANOS = -0.10
-PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -0.05
 
-# --- NUEVAS CONSTANTES PARA BONIFICACIÓN/PENALIZACIÓN DISTINTIVO AMBIENTAL ---
-BONUS_DISTINTIVO_ECO_CERO_C = 0.10  # ¡Pendiente ajustar!
-PENALTY_DISTINTIVO_NA_B = -0.15   # ¡Pendiente ajustar!
-BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 0.10 #¡Pendiente ajustar!
-BONUS_ZBE_DISTINTIVO_FAVORABLE = 0.10 # ¡Pendiente ajustar!
-PENALTY_ZBE_DISTINTIVO_DESFAVORABLE = -0.10 # ¡Pendiente ajustar!
+
 # --------------------------------------------------------------------------
 
 def buscar_coches_bq( # Renombrada para claridad
@@ -288,8 +243,8 @@ def buscar_coches_bq( # Renombrada para claridad
         + menor_aceleracion_scaled * @peso_fav_menor_aceleracion_score
         -- --- FIN NUEVOS TÉRMINOS ---
         -- PENALIZACIONES POR COMODIDAD y  ANTIGÜEDAD--
-        + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
-        + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND deportividad_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
+        + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE_SCALED} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
+        + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND deportividad_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
         + (CASE WHEN @flag_penalizar_antiguo_tec = TRUE THEN
                  CASE
                      WHEN anos_vehiculo > 10 THEN {PENALTY_ANTIGUEDAD_MAS_10_ANOS}

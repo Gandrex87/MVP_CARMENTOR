@@ -22,6 +22,7 @@ import traceback
 import pandas as pd
 import json # Para construir el contexto del prompt
 from typing import Literal, Optional
+from config.settings import (UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG)
 
 # En graph/nodes.py
 
@@ -1092,34 +1093,31 @@ def finalizar_y_presentar_node(state: EstadoAnalisisPerfil) -> dict:
             filtros_actualizados.tipo_carroceria = ["Error RAG"] 
     
     # --- LÓGICA PARA FLAGS DE PENALIZACIÓN POR COMODIDAD (USANDO OBJETO Pydantic) ---
-    UMBRAL_COMODIDAD_PARA_PENALIZAR = 7 
     flag_penalizar_low_cost_comodidad = False
     flag_penalizar_deportividad_comodidad = False
 
     # Usamos el objeto preferencias_obj directamente aquí
     if preferencias_obj and preferencias_obj.rating_comodidad is not None:
-        if preferencias_obj.rating_comodidad >= UMBRAL_COMODIDAD_PARA_PENALIZAR:
+        if preferencias_obj.rating_comodidad >= UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS:
             flag_penalizar_low_cost_comodidad = True
             flag_penalizar_deportividad_comodidad = True
-            print(f"DEBUG (Finalizar) ► Rating Comodidad ({preferencias_obj.rating_comodidad}) >= {UMBRAL_COMODIDAD_PARA_PENALIZAR}. Activando flags de penalización.")
+            print(f"DEBUG (Finalizar) ► Rating Comodidad ({preferencias_obj.rating_comodidad}) >= {UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS}. Activando flags de penalización.")
     
     # --- NUEVA LÓGICA PARA FLAG DE PENALIZACIÓN POR ANTIGÜEDAD Y TECNOLOGÍA ---
-    UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD = 7 # Ejemplo, puedes ajustarlo
-
+    
     flag_penalizar_antiguo_tec = False 
     if preferencias_obj and preferencias_obj.rating_tecnologia_conectividad is not None:
-        if preferencias_obj.rating_tecnologia_conectividad >= UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD:
+        if preferencias_obj.rating_tecnologia_conectividad >= UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG:
             flag_penalizar_antiguo_tec = True
-            print(f"DEBUG (Finalizar) ► Rating Tecnología ({preferencias_obj.rating_tecnologia_conectividad}) >= {UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD}. Activando flag de penalización por antigüedad.")
+            print(f"DEBUG (Finalizar) ► Rating Tecnología ({preferencias_obj.rating_tecnologia_conectividad}) >= {UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG}. Activando flag de penalización por antigüedad.")
             
     # --- NUEVA LÓGICA PARA FLAG DE DISTINTIVO AMBIENTAL ---
-    UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA = 8 # ¡AJUSTA ESTE UMBRAL!
     flag_aplicar_logica_distintivo = False # Default
     
     if preferencias_obj and preferencias_obj.rating_impacto_ambiental is not None:
-        if preferencias_obj.rating_impacto_ambiental >= UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA:
+        if preferencias_obj.rating_impacto_ambiental >= UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG:
             flag_aplicar_logica_distintivo = True
-            print(f"DEBUG (Finalizar) ► Rating Impacto Ambiental ({preferencias_obj.rating_impacto_ambiental}) >= {UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA}. Activando lógica de distintivo ambiental.")
+            print(f"DEBUG (Finalizar) ► Rating Impacto Ambiental ({preferencias_obj.rating_impacto_ambiental}) >= {UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG}. Activando lógica de distintivo ambiental.")
    
     # --- PREPARAR FLAGS CLIMÁTICOS PARA compute_raw_weights ---
     es_nieblas = False
