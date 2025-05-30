@@ -51,5 +51,8 @@ class DimensionProblematica(str, Enum):
     ANCHO = "ancho"
     ALTO = "alto"
     
-
+class EstiloConduccion(str, Enum):
+    TRANQUILO = "tranquilo"
+    DEPORTIVO = "deportivo"
+    MIXTO     = "mixto"
     

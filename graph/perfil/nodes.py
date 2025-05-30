@@ -354,7 +354,11 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
             if prefs.problema_dimension_garage is None or not prefs.problema_dimension_garage: # Si es None o lista vacía
                 return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? Podría ser el largo, el ancho, o la altura del coche. (Puedes mencionar una o varias, ej: 'largo y ancho')"
     # --- FIN NUEVA LÓGICA DE PREGUNTAS ---
+    if prefs.tiene_punto_carga_propio is None:
+        return "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual? (Responde 'sí' o 'no')"
+    # --- FIN NUEVA PREGUNTA ---
     if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
+    if prefs.estilo_conduccion is None:return "¿Cómo describirías tu estilo de conducción habitual? Por ejemplo: tranquilo, deportivo, o una mezcla de ambos (mixto)."
     # --- FIN NUEVAS PREGUNTAS DE CARGA ---
     if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?"
     if prefs.transmision_preferida is None: return "En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n 1) Automático\n 2) Manual\n 3) Ambos, puedo considerar ambas opciones"

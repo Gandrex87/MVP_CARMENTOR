@@ -35,6 +35,28 @@ AJUSTE_PESO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de segurida
 AJUSTE_PESO_TRACCION_POR_NIEVE = 5.0   # Cuánto sumar al peso crudo de tracción si hay nieve
 AJUSTE_PESO_TRACCION_POR_MONTA = 2.0   # Cuánto sumar al peso crudo de tracción si es clima de montaña
 
+# --- NUEVAS CONSTANTES DE PESOS CRUDOS PARA ESTILO DE CONDUCCIÓN (¡AJUSTA ESTOS VALORES!) ---
+# Si estilo es DEPORTIVO
+PESO_DEPORTIVIDAD_ALTO = 5.0
+PESO_MENOR_REL_PESO_POTENCIA_ALTO = 7.0
+PESO_POTENCIA_MAXIMA_ALTO = 5.0
+PESO_PAR_MOTOR_DEPORTIVO_ALTO = 3.0 # Distinto de par para remolque
+PESO_MENOR_ACELERACION_ALTO = 6.0
+
+# Si estilo es MIXTO
+PESO_DEPORTIVIDAD_MEDIO = 2.5
+PESO_MENOR_REL_PESO_POTENCIA_MEDIO = 3.5
+PESO_POTENCIA_MAXIMA_MEDIO = 2.5
+PESO_PAR_MOTOR_DEPORTIVO_MEDIO = 1.5
+PESO_MENOR_ACELERACION_MEDIO = 3.0
+
+# Si estilo es TRANQUILO o no definido (base)
+PESO_DEPORTIVIDAD_BAJO = 1.0
+PESO_MENOR_REL_PESO_POTENCIA_BAJO = 0.5
+PESO_POTENCIA_MAXIMA_BAJO = 0.5
+PESO_PAR_MOTOR_DEPORTIVO_BAJO = 0.5
+PESO_MENOR_ACELERACION_BAJO = 1.0
+
 # --- Función compute_raw_weights CORREGIDA ---
 def compute_raw_weights(
     preferencias: Optional[PerfilUsuario], # <-- Cambiar Type Hint a PerfilUsuario
@@ -245,6 +267,36 @@ def compute_raw_weights(
                     if "alto" in problema_dimension_lista:
                         raw["fav_menor_alto_garage"] = PESO_FAV_MENOR_DIMENSION_GARAJE
                         print(f"DEBUG (Weights) ► Problema ALTO en garaje. Favoreciendo menor alto con peso: {PESO_FAV_MENOR_DIMENSION_GARAJE}")
+    
+    # --- NUEVA LÓGICA PARA PESOS DE ESTILO DE CONDUCCIÓN ---
+    estilo_conduccion_val_str = None
+    estilo_conduccion_input = preferencias.get("estilo_conduccion")
+    if hasattr(estilo_conduccion_input, "value"): # Si es Enum
+        estilo_conduccion_val_str = estilo_conduccion_input.value 
+    elif isinstance(estilo_conduccion_input, str): # Si ya es string
+        estilo_conduccion_val_str = estilo_conduccion_input.lower()
+
+    if estilo_conduccion_val_str == "deportivo":
+        print(f"DEBUG (Weights) ► Estilo Conducción 'deportivo'. Aplicando pesos altos de deportividad.")
+        raw["deportividad_style_score"] = PESO_DEPORTIVIDAD_ALTO
+        raw["fav_menor_rel_peso_potencia_score"] = PESO_MENOR_REL_PESO_POTENCIA_ALTO
+        raw["potencia_maxima_style_score"] = PESO_POTENCIA_MAXIMA_ALTO
+        raw["par_motor_style_score"] = PESO_PAR_MOTOR_DEPORTIVO_ALTO
+        raw["fav_menor_aceleracion_score"] = PESO_MENOR_ACELERACION_ALTO
+    elif estilo_conduccion_val_str == "mixto":
+        print(f"DEBUG (Weights) ► Estilo Conducción 'mixto'. Aplicando pesos medios de deportividad.")
+        raw["deportividad_style_score"] = PESO_DEPORTIVIDAD_MEDIO
+        raw["fav_menor_rel_peso_potencia_score"] = PESO_MENOR_REL_PESO_POTENCIA_MEDIO
+        raw["potencia_maxima_style_score"] = PESO_POTENCIA_MAXIMA_MEDIO
+        raw["par_motor_style_score"] = PESO_PAR_MOTOR_DEPORTIVO_MEDIO
+        raw["fav_menor_aceleracion_score"] = PESO_MENOR_ACELERACION_MEDIO
+    else: # "tranquilo" o None
+        print(f"DEBUG (Weights) ► Estilo Conducción 'tranquilo' o no definido. Aplicando pesos bajos de deportividad.")
+        raw["deportividad_style_score"] = PESO_DEPORTIVIDAD_BAJO
+        raw["fav_menor_rel_peso_potencia_score"] = PESO_MENOR_REL_PESO_POTENCIA_BAJO
+        raw["potencia_maxima_style_score"] = PESO_POTENCIA_MAXIMA_BAJO
+        raw["par_motor_style_score"] = PESO_PAR_MOTOR_DEPORTIVO_BAJO
+        raw["fav_menor_aceleracion_score"] = PESO_MENOR_ACELERACION_BAJO
     # --- FIN NUEVA LÓGICA ---
     
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
@@ -261,3 +313,6 @@ def normalize_weights(raw_weights: dict) -> dict:
     normalized = {k: (v / total) if isinstance(v, (int, float)) else 0.0 for k, v in raw_weights.items()}
     print(f"DEBUG (Normalize Weights) ► Pesos Normalizados: {normalized}")
     return normalized
+
+
+

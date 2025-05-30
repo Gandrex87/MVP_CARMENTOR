@@ -43,7 +43,11 @@ MIN_MAX_RANGES = {
      # --- NUEVOS RANGOS PARA GARAJE/APARCAMIENTO (¡USA TUS VALORES EXACTOS!) ---
     "superficie_planta": (2.9, 14.0), # m^2, ej: (largo_min * ancho_min)/10^6
     "diametro_giro": (7.0, 15.6),     # metros
-    "alto_vehiculo": (1052.0, 2940.0)  # mm, para la altura total del vehículo
+    "alto_vehiculo": (1052.0, 2940.0),  # mm, para la altura total del vehículo
+     # --- NUEVOS RANGOS PARA CARACTERÍSTICAS DE DEPORTIVIDAD ---
+    "relacion_peso_potencia": (1.8, 28.3), # kg/CV, un valor menor es mejor, por lo que el escalado debe ser invertido. 
+    "potencia_maxima": (41.0, 789.0),    # CV, más es mejor
+    "aceleracion_0_100": (2.5, 34.0)     # segundos, un valor menor es mejor, por lo que el escalado debe ser invertido.
 }
 PENALTY_PUERTAS_BAJAS = -0.10
 # --- NUEVAS PENALIZACIONES (AJUSTA ESTOS VALORES) ---
@@ -118,7 +122,11 @@ def buscar_coches_bq( # Renombrada para claridad
         "fav_menor_largo_garage": pesos.get("fav_menor_largo_garage", 0.0),
         "fav_menor_ancho_garage": pesos.get("fav_menor_ancho_garage", 0.0),
         "fav_menor_alto_garage": pesos.get("fav_menor_alto_garage", 0.0),
-        
+        "deportividad_style_score": pesos.get("deportividad_style_score", 0.0),
+        "fav_menor_rel_peso_potencia_score": pesos.get("fav_menor_rel_peso_potencia_score", 0.0),
+        "potencia_maxima_style_score": pesos.get("potencia_maxima_style_score", 0.0),
+        "par_motor_style_score": pesos.get("par_motor_style_score", 0.0),
+        "fav_menor_aceleracion_score": pesos.get("fav_menor_aceleracion_score", 0.0),       
     }
 
     # Flags de penalización (vienen en el dict 'filtros') --- FLAGS (DEBEN VENIR EN EL DICT 'filtros') ---
@@ -160,6 +168,10 @@ def buscar_coches_bq( # Renombrada para claridad
     min_sup_planta, max_sup_planta = MIN_MAX_RANGES["superficie_planta"]
     min_diam_giro, max_diam_giro = MIN_MAX_RANGES["diametro_giro"]
     min_alto_veh, max_alto_veh = MIN_MAX_RANGES["alto_vehiculo"] # Para la altura total del vehículo
+    min_deport, max_deport = MIN_MAX_RANGES["deportividad"] # Para la columna 'deportividad'
+    min_rel_pp, max_rel_pp = MIN_MAX_RANGES["relacion_peso_potencia"]
+    min_pot_max, max_pot_max = MIN_MAX_RANGES["potencia_maxima"]
+    min_acel, max_acel = MIN_MAX_RANGES["aceleracion_0_100"]
 
     sql = f"""
     WITH ScaledData AS (
@@ -203,7 +215,19 @@ def buscar_coches_bq( # Renombrada para claridad
             COALESCE(SAFE_DIVIDE({max_consumo} - COALESCE(indice_consumo_energia, {max_consumo}), NULLIF({max_consumo} - {min_consumo}, 0)), 0) AS bajo_consumo_scaled, -- Invertido
             COALESCE(SAFE_DIVIDE(COALESCE(par, {min_par}) - {min_par}, NULLIF({max_par} - {min_par}, 0)), 0) AS par_scaled,
             COALESCE(SAFE_DIVIDE(COALESCE(capacidad_remolque_con_freno, {min_cap_cf}) - {min_cap_cf}, NULLIF({max_cap_cf} - {min_cap_cf}, 0)), 0) AS cap_remolque_cf_scaled,
-            COALESCE(SAFE_DIVIDE(COALESCE(capacidad_remolque_sin_freno, {min_cap_sf}) - {min_cap_sf}, NULLIF({max_cap_sf} - {min_cap_sf}, 0)), 0) AS cap_remolque_sf_scaled, 
+            COALESCE(SAFE_DIVIDE(COALESCE(capacidad_remolque_sin_freno, {min_cap_sf}) - {min_cap_sf}, NULLIF({max_cap_sf} - {min_cap_sf}, 0)), 0) AS cap_remolque_sf_scaled,
+            -- --- NUEVOS CAMPOS ESCALADOS PARA DEPORTIVIDAD ---
+            -- 'deportividad' (columna BQ, más es mejor)
+            COALESCE(SAFE_DIVIDE(COALESCE(deportividad, {min_deport}) - {min_deport}, NULLIF({max_depor} - {min_depor}, 0)), 0) AS deportividad_style_scaled,
+            -- 'relacion_peso_potencia' (columna BQ, menor es mejor -> escalado invertido)
+            COALESCE(SAFE_DIVIDE({max_rel_pp} - COALESCE(relacion_peso_potencia, {max_rel_pp}), NULLIF({max_rel_pp} - {min_rel_pp}, 0)), 0) AS menor_rel_peso_potencia_scaled,
+            -- 'potencia_maxima' (columna BQ, más es mejor)
+            COALESCE(SAFE_DIVIDE(COALESCE(potencia_maxima, {min_pot_max}) - {min_pot_max}, NULLIF({max_pot_max} - {min_pot_max}, 0)), 0) AS potencia_maxima_style_scaled,
+            -- 'par' (columna BQ, ya la teníamos como par_scaled, podemos reutilizarla o crear par_style_scaled si el min/max es diferente)
+            -- Asumimos que reutilizamos par_scaled, que ya se calcula arriba con min_par, max_par
+            -- 'aceleracion_0_100' (columna BQ, menor es mejor -> escalado invertido)
+            COALESCE(SAFE_DIVIDE({max_acel} - COALESCE(aceleracion_0_100, {max_acel}), NULLIF({max_acel} - {min_acel}, 0)), 0) AS menor_aceleracion_scaled,
+            -- --- FIN NUEVOS CAMPOS ESCALADOS ---
             (CASE WHEN COALESCE(reductoras, FALSE) THEN 1.0 ELSE 0.0 END) AS reductoras_scaled,
             (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END) AS puertas_penalty
         FROM
@@ -256,6 +280,13 @@ def buscar_coches_bq( # Renombrada para claridad
         + menor_largo_garage_scaled * @peso_fav_menor_largo_garage
         + menor_ancho_garage_scaled * @peso_fav_menor_ancho_garage
         + menor_alto_garage_scaled * @peso_fav_menor_alto_garage
+        -- --- NUEVOS TÉRMINOS DE SCORE PARA ESTILO DE CONDUCCIÓN ---
+        + deportividad_style_scaled * @peso_deportividad_style_score
+        + menor_rel_peso_potencia_scaled * @peso_fav_menor_rel_peso_potencia_score
+        + potencia_maxima_style_scaled * @peso_potencia_maxima_style_score
+        + par_scaled * @peso_par_motor_style_score -- Reutiliza par_scaled, pero con su propio peso
+        + menor_aceleracion_scaled * @peso_fav_menor_aceleracion_score
+        -- --- FIN NUEVOS TÉRMINOS ---
         -- PENALIZACIONES POR COMODIDAD y  ANTIGÜEDAD--
         + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
         + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND deportividad_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
@@ -343,6 +374,12 @@ def buscar_coches_bq( # Renombrada para claridad
         bigquery.ScalarQueryParameter("flag_penalizar_antiguo_tec", "BOOL", flag_penalizar_antiguo_tec_val),
         bigquery.ScalarQueryParameter("flag_aplicar_logica_distintivo", "BOOL", flag_aplicar_logica_distintivo_val),
         bigquery.ScalarQueryParameter("flag_es_municipio_zbe", "BOOL", flag_es_municipio_zbe_val),
+        # --- NUEVOS PARÁMETROS DE PESO ---
+        bigquery.ScalarQueryParameter("peso_deportividad_style_score", "FLOAT64", pesos_completos["deportividad_style_score"]),
+        bigquery.ScalarQueryParameter("peso_fav_menor_rel_peso_potencia_score", "FLOAT64", pesos_completos["fav_menor_rel_peso_potencia_score"]),
+        bigquery.ScalarQueryParameter("peso_potencia_maxima_style_score", "FLOAT64", pesos_completos["potencia_maxima_style_score"]),
+        bigquery.ScalarQueryParameter("peso_par_motor_style_score", "FLOAT64", pesos_completos["par_motor_style_score"]),
+        bigquery.ScalarQueryParameter("peso_fav_menor_aceleracion_score", "FLOAT64", pesos_completos["fav_menor_aceleracion_score"]),
         # --- FIN NUEVOS PARÁMETROS ---
         bigquery.ScalarQueryParameter("k", "INT64", k)
     ]
