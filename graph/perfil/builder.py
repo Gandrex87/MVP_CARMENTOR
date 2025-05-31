@@ -2,14 +2,14 @@
 
 from langgraph.graph import StateGraph, START, END
 from graph.perfil.state import EstadoAnalisisPerfil # Ajusta la ruta si es necesario
-from graph.perfil.nodes import (preguntar_cp_inicial_node,   recopilar_cp_node,
-    validar_cp_node,
-    buscar_info_clima_node,
-    recopilar_preferencias_node,validar_preferencias_node,
-    inferir_filtros_node,validar_filtros_node,recopilar_economia_node, preguntar_economia_node,
-    validar_economia_node, finalizar_y_presentar_node, preguntar_preferencias_node,
-    preguntar_filtros_node, preguntar_economia_node,buscar_coches_finales_node,
-    recopilar_info_pasajeros_node, validar_info_pasajeros_node,  preguntar_info_pasajeros_node,aplicar_filtros_pasajeros_node)
+from graph.perfil.nodes import (preguntar_cp_inicial_node,   recopilar_cp_node, validar_cp_node, buscar_info_clima_node,
+    recopilar_preferencias_node,validar_preferencias_node, inferir_filtros_node,validar_filtros_node,recopilar_economia_node, preguntar_economia_node,
+    validar_economia_node, preguntar_preferencias_node, preguntar_filtros_node, preguntar_economia_node,buscar_coches_finales_node,
+    recopilar_info_pasajeros_node, validar_info_pasajeros_node,  preguntar_info_pasajeros_node,aplicar_filtros_pasajeros_node, calcular_recomendacion_economia_modo1_node,
+    obtener_tipos_carroceria_rag_node,
+    calcular_flags_dinamicos_node,
+    calcular_pesos_finales_node,
+    formatear_tabla_resumen_node)
 from .memory import get_memory 
 from graph.perfil.condition import (ruta_decision_cp, ruta_decision_economia, ruta_decision_filtros, ruta_decision_perfil,ruta_decision_pasajeros, 
                                     decidir_ruta_inicial, route_based_on_state_node)
@@ -45,7 +45,11 @@ def build_sequential_agent_graph():
     workflow.add_node("preguntar_economia", preguntar_economia_node) 
     
     # Etapa 4 y 5: Finalización y BQ
-    workflow.add_node("finalizar_y_presentar", finalizar_y_presentar_node)
+    workflow.add_node("calcular_recomendacion_economia_modo1", calcular_recomendacion_economia_modo1_node)
+    workflow.add_node("obtener_tipos_carroceria_rag", obtener_tipos_carroceria_rag_node)
+    workflow.add_node("calcular_flags_dinamicos", calcular_flags_dinamicos_node)
+    workflow.add_node("calcular_pesos_finales", calcular_pesos_finales_node)
+    workflow.add_node("formatear_tabla_resumen", formatear_tabla_resumen_node)
     workflow.add_node("buscar_coches_finales", buscar_coches_finales_node)
 
 # 2. Definir punto de entrada FIJO al ROUTER
@@ -61,22 +65,18 @@ def build_sequential_agent_graph():
             "recopilar_info_pasajeros": "recopilar_info_pasajeros",
             "inferir_filtros": "inferir_filtros",
             "recopilar_economia": "recopilar_economia", 
-            "finalizar_y_presentar": "finalizar_y_presentar",
+            "iniciar_finalizacion": "calcular_recomendacion_economia_modo1",
+            # "formatear_tabla_resumen": "formatear_tabla_resumen", # Ya no es un destino directo del router
             "buscar_coches_finales": "buscar_coches_finales",
         }
     )
-
-    # 3. Conectar las etapas en el orden CORRECTO (Perfil -> Pasajeros -> Filtros -> Economía -> Finalizar -> BQ)
-
 # --- NUEVA ETAPA 0: CÓDIGO POSTAL ---
     # El router ya puede dirigir a recopilar_cp.
     # Si es el primerísimo turno, llm_cp_extractor en recopilar_cp hará la pregunta inicial.
     # preguntar_cp_inicial_node es para cuando se necesita re-preguntar explícitamente.
     workflow.add_edge("recopilar_cp", "validar_cp")
     workflow.add_conditional_edges("validar_cp", ruta_decision_cp, # Nueva función condicional
-        {
-            "repreguntar_cp": "preguntar_cp_inicial", 
-            "buscar_clima": "buscar_info_clima"})
+        { "repreguntar_cp": "preguntar_cp_inicial", "buscar_clima": "buscar_info_clima"})
     workflow.add_edge("preguntar_cp_inicial", END) 
     # Después de buscar clima (o si se omitió CP), va al inicio de la etapa de Perfil
     workflow.add_edge("buscar_info_clima", "recopilar_preferencias") 
@@ -115,13 +115,17 @@ def build_sequential_agent_graph():
     workflow.add_conditional_edges( "validar_economia",ruta_decision_economia, 
         {
             "necesita_pregunta_economia": "preguntar_economia", # Usa el nodo genérico
-            "pasar_a_finalizar": "finalizar_y_presentar" 
+             "iniciar_finalizacion": "calcular_recomendacion_economia_modo1" 
         }
     )
     workflow.add_edge("preguntar_economia", END) 
+    workflow.add_edge("calcular_recomendacion_economia_modo1", "obtener_tipos_carroceria_rag")
+    workflow.add_edge("obtener_tipos_carroceria_rag", "calcular_flags_dinamicos")
+    workflow.add_edge("calcular_flags_dinamicos", "calcular_pesos_finales")
+    workflow.add_edge("calcular_pesos_finales", "formatear_tabla_resumen")
+    workflow.add_edge("formatear_tabla_resumen", 'buscar_coches_finales') # <-- Termina el turno para mostrar la tabla
 
-    # Etapa 4 y 5: Finalización y Búsqueda
-    workflow.add_edge("finalizar_y_presentar", "buscar_coches_finales") 
+    # Etapa 5: Finalización y Búsqueda
     workflow.add_edge("buscar_coches_finales", END) 
 
     # 4. Compilar

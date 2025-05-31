@@ -95,7 +95,7 @@ def ruta_decision_economia(state: EstadoAnalisisPerfil) -> str:
     if check_economia_completa(economia):
         print("DEBUG (Condición Economía) ► Economía COMPLETA. Avanzando a finalizar.")
         # Clave para ir al nodo final
-        return "pasar_a_finalizar" 
+        return "iniciar_finalizacion"
     else:
         print("DEBUG (Condición Economía) ► Economía INCOMPLETA. Se necesita pregunta.")
         # Clave para ir al nuevo nodo que pregunta
@@ -149,11 +149,12 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
          print("DEBUG Router: Decisión -> recopilar_economia")
          return "recopilar_economia" 
     elif pesos is None: 
-        print("DEBUG Router: Decisión -> finalizar_y_presentar")
-        return "finalizar_y_presentar"
-    elif coches is None: 
+        # Si falta algún paso de la secuencia de finalización (cálculo de econ modo1, rag, flags, pesos)
+        print("DEBUG Router: Decisión -> iniciar_finalizacion (va a calcular_recomendacion_economia_modo1)")
+        return "iniciar_finalizacion"
+    elif coches is None: # Si todo lo anterior está completo y los pesos están, pero no hay coches
         print("DEBUG Router: Decisión -> buscar_coches_finales")
         return "buscar_coches_finales"
-    else:
-        print("DEBUG Router: Decisión -> Conversación Completa. Reiniciando (recopilar_cp).")
-        return "recopilar_cp" # Reiniciar desde el principio (CP)
+    else: # Conversación completa y coches ya buscados, reiniciar para una nueva consulta
+        print("DEBUG Router: Decisión -> Conversación Completa con coches. Reiniciando (recopilar_cp).")
+        return "recopilar_cp"

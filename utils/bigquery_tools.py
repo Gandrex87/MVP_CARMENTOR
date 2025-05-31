@@ -16,13 +16,10 @@ from config.settings import (
     PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,
     BONUS_ZBE_DISTINTIVO_FAVORABLE,PENALTY_ZBE_DISTINTIVO_DESFAVORABLE
 )
+
 # Definiciones de tipo (pueden estar al inicio del módulo)
 FiltrosDict = Dict[str, Any] 
 PesosDict = Dict[str, float]
-
-
-
-# --------------------------------------------------------------------------
 
 def buscar_coches_bq( # Renombrada para claridad
     filtros: Optional[FiltrosDict],

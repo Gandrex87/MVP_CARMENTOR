@@ -201,3 +201,9 @@ SOLO_ELECTRICOS_SYNONYMS_RAG = ["cero emisiones", "sostenible", "bajo consumo en
 ALTA_COMODIDAD_CARROCERIA_SYNONYMS_RAG = ["comodidad y confort","derivado de 2VOL o 3VOL", "monovolumen espacioso"]
 NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS_RAG = ["maletero amplio", "portón trasero grande", "modularidad"]
 CLIMA_MONTA_CARROCERIA_SYNONYMS_RAG = ["todoterreno", "SUV robusto"]
+
+#graph/nodes.py
+#funcion calcular_flags_dinamicos_node
+UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS = 7
+UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG = 7
+UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG = 8
