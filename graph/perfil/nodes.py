@@ -22,7 +22,7 @@ import traceback
 import pandas as pd
 import logging
 import json # Para construir el contexto del prompt
-from typing import Literal, Optional 
+from typing import Literal, Optional ,Dict, Any
 from config.settings import (UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG)
 
 # En graph/nodes.py
@@ -1296,66 +1296,6 @@ def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
 
     return {"pesos": pesos_calculados_normalizados}
 
-# def formatear_tabla_resumen_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Formatea la tabla resumen final de criterios y la añade como AIMessage
-#     al historial. Actualiza state['tabla_resumen_criterios'] y state['messages'].
-#     Este nodo se espera que vaya a 'buscar_coches_finales_node' después.
-#     """
-#     print("--- Ejecutando Nodo: formatear_tabla_resumen_node ---")
-#     logging.debug("--- Ejecutando Nodo: formatear_tabla_resumen_node ---")
-
-#     historial = state.get("messages", [])
-#     preferencias_obj = state.get("preferencias_usuario")
-#     filtros_actualizados_obj = state.get("filtros_inferidos") # Este es el objeto completo y actualizado
-#     economia_obj = state.get("economia")
-#     codigo_postal_val = state.get("codigo_postal_usuario")
-#     info_clima_obj = state.get("info_clima_usuario")
-
-#     tabla_final_md = "Error al generar el resumen de criterios." # Default
-
-#     # Verificar que los datos necesarios para el formateador existan
-#     if not preferencias_obj or not filtros_actualizados_obj or not economia_obj:
-#         logging.error("ERROR (FormatearTabla) ► Faltan datos esenciales (preferencias, filtros o economía) para formatear la tabla.")
-#         tabla_final_md = "Lo siento, falta información para generar el resumen completo de tus preferencias."
-#     else:
-#         try:
-#             # Convertir objetos Pydantic a diccionarios para el formateador, si este los espera así.
-#             # La versión de formatear_preferencias_en_tabla en el Canvas "utils/formatters.py - Añadir Info Clima a Tabla"
-#             # (ID: formatters_py_clima_tabla) espera diccionarios.
-#             prefs_dict_para_tabla = preferencias_obj.model_dump(mode='json', exclude_none=False)
-#             filtros_dict_para_tabla = filtros_actualizados_obj.model_dump(mode='json', exclude_none=False)
-#             econ_dict_para_tabla = economia_obj.model_dump(mode='json', exclude_none=False)
-#             info_clima_dict_para_tabla = info_clima_obj.model_dump(mode='json', exclude_none=False) if info_clima_obj else {}
-
-
-#             tabla_final_md = formatear_preferencias_en_tabla(
-#                 preferencias=prefs_dict_para_tabla, 
-#                 filtros=filtros_dict_para_tabla, 
-#                 economia=econ_dict_para_tabla,
-#                 codigo_postal_usuario=codigo_postal_val,
-#                 info_clima_usuario=info_clima_dict_para_tabla 
-#             )
-#             logging.debug("\n--- TABLA RESUMEN GENERADA (DEBUG) ---\n" + tabla_final_md + "\n--------------------------------------\n")
-#         except Exception as e_format:
-#             logging.error(f"ERROR (FormatearTabla) ► Fallo formateando la tabla: {e_format}")
-#             traceback.print_exc() 
-#             tabla_final_md = "Hubo un inconveniente al generar el resumen de tus preferencias."
-
-#     # Crear y añadir el AIMessage con la tabla (o el mensaje de error)
-#     final_ai_msg = AIMessage(content=tabla_final_md)
-#     historial_final = list(historial)
-#     if not historial_final or historial_final[-1].content != final_ai_msg.content:
-#         historial_final.append(final_ai_msg)
-#     else:
-#         logging.debug("DEBUG (FormatearTabla) ► Mensaje de tabla resumen duplicado, no se añade.")
-
-#     return {
-#         "messages": historial_final,
-#         "tabla_resumen_criterios": tabla_final_md,
-#         "pregunta_pendiente": None # Este nodo no deja preguntas pendientes
-#     }
-
 def formatear_tabla_resumen_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Formatea la tabla resumen final de criterios y la guarda en
@@ -1403,6 +1343,8 @@ def formatear_tabla_resumen_node(state: EstadoAnalisisPerfil) -> dict:
 
   # --- Fin Etapa 4 ---
 
+from utils.simple_explanation import _generar_explicacion_simple_coche
+
 
 def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     """
@@ -1416,11 +1358,10 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     # --- OBTENER TABLA RESUMEN DEL ESTADO ---
     tabla_resumen_criterios_md = state.get("tabla_resumen_criterios", "No se pudo generar el resumen de criterios.")
     # --- FIN OBTENER TABLA ---
-
+    preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario
     filtros_finales_obj = state.get("filtros_inferidos") 
     pesos_finales = state.get("pesos")
-    economia_obj = state.get("economia") 
-    
+    economia_obj = state.get("economia")
     penalizar_puertas_flag = state.get("penalizar_puertas_bajas", False)
     flag_penalizar_lc_comod = state.get("flag_penalizar_low_cost_comodidad", False)
     flag_penalizar_dep_comod = state.get("flag_penalizar_deportividad_comodidad", False)
@@ -1479,32 +1420,77 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
 
             if coches_encontrados:
                 mensaje_coches = f"¡Listo! Basado en todo lo que hablamos, aquí tienes {len(coches_encontrados)} coche(s) que podrían interesarte:\n\n"
-                try:
-                    df_coches = pd.DataFrame(coches_encontrados)
-                    columnas_deseadas = [ # Define tus columnas deseadas
-                        'nombre', 'marca', 'precio_compra_contado', 'score_total',
-                        'tipo_carroceria', 'tipo_mecanica', 'traccion', 'reductoras' 
-                        # ... añade más columnas si las necesitas en la tabla de coches ...
-                    ]
-                    columnas_a_mostrar = [col for col in columnas_deseadas if col in df_coches.columns]
+                
+                coches_para_df = []
+                for i, coche_dict_completo in enumerate(coches_encontrados):
+                    # Preparar datos para el DataFrame (solo columnas a mostrar al usuario)
+                    coche_display_info = {
+                        "Nº": i + 1,
+                        "nombre": coche_dict_completo.get('nombre', 'N/D'),
+                        "marca": coche_dict_completo.get('marca', ''),
+                        "precio_compra_contado": coche_dict_completo.get('precio_compra_contado'),
+                        "score_total": coche_dict_completo.get('score_total'),
+                        # Añade aquí otras columnas básicas que quieras en la tabla principal
+                        "tipo_carroceria": coche_dict_completo.get('tipo_carroceria'),
+                        "tipo_mecanica": coche_dict_completo.get('tipo_mecanica'),
+                    }
+                    coches_para_df.append(coche_display_info)
+
+                    # Generar explicación para este coche
+                    explicacion_coche = _generar_explicacion_simple_coche(
+                        coche_dict_completo, # Pasar el dict completo con los _scaled
+                        pesos_finales,
+                        preferencias_obj,
+                        n_top_factores=2 # Mostrar los 2 motivos principales
+                    )
+                    # Añadir la explicación al string del mensaje
+                    # (Formato más integrado con la tabla)
+                    mensaje_coches += f"\n**{i+1}. {coche_dict_completo.get('nombre', 'Coche Desconocido')}**"
+                    if coche_dict_completo.get('precio_compra_contado') is not None:
+                        precio_f = f"{coche_dict_completo.get('precio_compra_contado'):,.0f}€".replace(",",".")
+                        mensaje_coches += f" - {precio_f}"
+                    if coche_dict_completo.get('score_total') is not None:
+                        score_f = f"{coche_dict_completo.get('score_total'):.3f}"
+                        mensaje_coches += f" (Score: {score_f})"
+                    mensaje_coches += f"\n   *Por qué podría interesarte:* {explicacion_coche}\n"
+
+
+                # Si quieres una tabla resumen de los coches (además de la explicación individual)
+                # df_coches_display = pd.DataFrame(coches_para_df)
+                # columnas_deseadas_tabla = ['Nº', 'nombre', 'marca', 'precio_compra_contado', 'score_total', 'tipo_carroceria', 'tipo_mecanica']
+                # # ... (formateo de columnas del df_coches_display) ...
+                # tabla_coches_md = df_coches_display[columnas_deseadas_tabla].to_markdown(index=False)
+                # mensaje_coches += "\n" + tabla_coches_md + "\n"
+                
+                mensaje_coches += "\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles?"
+                # try:
+                #     df_coches = pd.DataFrame(coches_encontrados)
+                #     columnas_deseadas = [ # Define tus columnas deseadas
+                #         'nombre', 'marca', 'precio_compra_contado', 'score_total',
+                #         'tipo_carroceria', 'tipo_mecanica', 'traccion', 'reductoras' 
+                #         # ... añade más columnas si las necesitas en la tabla de coches ...
+                #     ]
+                #     columnas_a_mostrar = [col for col in columnas_deseadas if col in df_coches.columns]
                     
-                    if columnas_a_mostrar:
-                        if 'precio_compra_contado' in df_coches.columns:
-                            df_coches['precio_compra_contado'] = df_coches['precio_compra_contado'].apply(lambda x: f"{x:,.0f}€".replace(",",".") if isinstance(x, (int, float)) else "N/A")
-                        if 'score_total' in df_coches.columns:
-                             df_coches['score_total'] = df_coches['score_total'].apply(lambda x: f"{x:.3f}" if isinstance(x, float) else x)
-                        tabla_coches_md = df_coches[columnas_a_mostrar].to_markdown(index=False)
-                        mensaje_coches += tabla_coches_md
-                    else:
-                        mensaje_coches += "No se pudieron formatear los detalles de los coches."
-                except Exception as e_format_coches:
-                    logging.error(f"ERROR (Buscar BQ) ► Falló el formateo de la tabla de coches: {e_format_coches}")
-                    mensaje_coches += "Hubo un problema al mostrar los detalles. Aquí una lista simple:\n"
-                    for i, coche in enumerate(coches_encontrados):
-                        nombre = coche.get('nombre', 'N/D'); precio = coche.get('precio_compra_contado')
-                        precio_str = f"{precio:,.0f}€".replace(",",".") if isinstance(precio, (int, float)) else "N/A"
-                        mensaje_coches += f"{i+1}. {nombre} - {precio_str}\n"
-                mensaje_coches += "\n\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles o hacemos otra búsqueda?"
+                #     if columnas_a_mostrar:
+                #         if 'precio_compra_contado' in df_coches.columns:
+                #             df_coches['precio_compra_contado'] = df_coches['precio_compra_contado'].apply(lambda x: f"{x:,.0f}€".replace(",",".") if isinstance(x, (int, float)) else "N/A")
+                #         if 'score_total' in df_coches.columns:
+                #              df_coches['score_total'] = df_coches['score_total'].apply(lambda x: f"{x:.3f}" if isinstance(x, float) else x)
+                #         tabla_coches_md = df_coches[columnas_a_mostrar].to_markdown(index=False)
+                #         mensaje_coches += tabla_coches_md
+                #     else:
+                #         mensaje_coches += "No se pudieron formatear los detalles de los coches."
+                # except Exception as e_format_coches:
+                #     logging.error(f"ERROR (Buscar BQ) ► Falló el formateo de la tabla de coches: {e_format_coches}")
+                #     mensaje_coches += "Hubo un problema al mostrar los detalles. Aquí una lista simple:\n"
+                #     for i, coche in enumerate(coches_encontrados):
+                #         nombre = coche.get('nombre', 'N/D'); precio = coche.get('precio_compra_contado')
+                #         precio_str = f"{precio:,.0f}€".replace(",",".") if isinstance(precio, (int, float)) else "N/A"
+                #         mensaje_coches += f"{i+1}. {nombre} - {precio_str}\n"
+                # mensaje_coches += "\n\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles o hacemos otra búsqueda?"
+                
+                
             else:
                 # ... (Tu lógica de sugerencias heurísticas para mensaje_coches) ...
                 mensaje_coches = "He aplicado todos tus filtros, pero no encontré coches que coincidan exactamente. ¿Quizás quieras redefinir algún criterio?"
