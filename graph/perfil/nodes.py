@@ -1343,7 +1343,7 @@ def formatear_tabla_resumen_node(state: EstadoAnalisisPerfil) -> dict:
 
   # --- Fin Etapa 4 ---
 
-from utils.simple_explanation import _generar_explicacion_simple_coche
+from utils.explanation_generator import generar_explicacion_coche_con_llm # <-- NUEVO IMPORT
 
 
 def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
@@ -1401,7 +1401,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         filtros_para_bq['aplicar_logica_distintivo_ambiental'] = flag_aplicar_distintivo_val
         filtros_para_bq['es_municipio_zbe'] = flag_es_zbe_val
         
-        k_coches = 7 
+        k_coches = 3 
         logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
         logging.debug(f"DEBUG (Buscar BQ) ► Filtros para BQ: {filtros_para_bq}") 
         logging.debug(f"DEBUG (Buscar BQ) ► Pesos para BQ: {pesos_finales}") 
@@ -1423,26 +1423,19 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
                 
                 coches_para_df = []
                 for i, coche_dict_completo in enumerate(coches_encontrados):
-                    # Preparar datos para el DataFrame (solo columnas a mostrar al usuario)
-                    coche_display_info = {
-                        "Nº": i + 1,
-                        "nombre": coche_dict_completo.get('nombre', 'N/D'),
-                        "marca": coche_dict_completo.get('marca', ''),
-                        "precio_compra_contado": coche_dict_completo.get('precio_compra_contado'),
-                        "score_total": coche_dict_completo.get('score_total'),
-                        # Añade aquí otras columnas básicas que quieras en la tabla principal
-                        "tipo_carroceria": coche_dict_completo.get('tipo_carroceria'),
-                        "tipo_mecanica": coche_dict_completo.get('tipo_mecanica'),
-                    }
-                    coches_para_df.append(coche_display_info)
-
-                    # Generar explicación para este coche
-                    explicacion_coche = _generar_explicacion_simple_coche(
-                        coche_dict_completo, # Pasar el dict completo con los _scaled
-                        pesos_finales,
-                        preferencias_obj,
-                        n_top_factores=2 # Mostrar los 2 motivos principales
+                    # --- LLAMAR AL NUEVO GENERADOR DE EXPLICACIONES ---
+                    explicacion_coche = generar_explicacion_coche_con_llm(
+                        coche_dict_completo=coche_dict_completo,
+                        preferencias_usuario=preferencias_obj,
+                        pesos_normalizados=pesos_finales,
+                        flag_penalizar_lc_comod=flag_penalizar_lc_comod,
+                        flag_penalizar_dep_comod=flag_penalizar_dep_comod,
+                        flag_penalizar_ant_tec=flag_penalizar_antiguo_tec_val,
+                        flag_es_zbe=flag_es_zbe_val,
+                        flag_aplicar_dist_gen=flag_aplicar_distintivo_val,
+                        flag_penalizar_puertas = penalizar_puertas_flag,                 
                     )
+                    # --- FIN LLAMADA ---
                     # Añadir la explicación al string del mensaje
                     # (Formato más integrado con la tabla)
                     mensaje_coches += f"\n**{i+1}. {coche_dict_completo.get('nombre', 'Coche Desconocido')}**"

@@ -6,29 +6,47 @@ db-dtypes
 pandas
 
 # LangChain Ecosystem
-langgraph
-langchain-core
-langchain-community
-langchain_google_vertexai
+
 trustcall
-langchain-openai
+openai==1.69.0
+
+langchain==0.3.25
+langchain-community==0.3.20
+langchain-core==0.3.63
+langchain-google-vertexai==2.0.24
+langchain-openai==0.3.18
+langchain-text-splitters==0.3.8
+langgraph==0.2.76
+langgraph-checkpoint==2.0.23
+langgraph-prebuilt==0.1.7
+langgraph-sdk==0.1.60
+langsmith==0.3.19
+
 
 # Data Handling
-python-dotenv
-pandas
+python-dotenv==1.1.0
+pandas==2.2.3
 tabulate
 Pillow
 matplotlib
 tavily-python
 ipython
 
-Flask
-Flask-SocketIO
-pytest
-pdfplumber
+fastapi==0.115.12
+Flask==3.1.0
+Flask-SocketIO==5.5.1
+pytest==8.3.5
+pdfplumber==0.11.6
+uvicorn==0.34.3
 
 
+requests==2.32.3
+requests-toolbelt==1.0.0
 
+
+psycopg2-binary>=2.9
+asyncpg>=0.27
+sqlalchemy>=1.4
 
 
 

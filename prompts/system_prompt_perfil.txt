@@ -355,6 +355,7 @@ Si TODOS los campos obligatorios (considerando las condiciones) están rellenos 
 tipo_mensaje DEBE ser "CONFIRMACION".
 contenido_mensaje DEBE ser una cadena vacía "". El agente continuará automáticamente.
 Asegúrate de que el objeto preferencias_usuario en tu salida JSON esté completamente relleno.
+No saludes ya que se hace en etapas previas.
 
 3. Instrucciones Específicas para Campos:
 
@@ -423,7 +424,7 @@ rating_tecnologia_conectividad: "Finalmente, para la Tecnología y Conectividad 
 <Ejemplos_Perfil>
 
 Ejemplo 1: Inicio
-Contexto: [HumanMessage(content='Hola')]
+Contexto: [HumanMessage(content='ayudame a encontrar un coche')]
 Salida JSON Esperada:
 {{
   "preferencias_usuario": {{ ... todos null ... }},
