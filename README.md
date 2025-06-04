@@ -1,155 +1,204 @@
-# Mentor: Agente IA Recomendador de Vehículos con LangGraph 🚗💬
+# CarBlau:  Asistente IA experto para Encontrar el Coche Ideal 🚙💬
 
-Este repositorio contiene el código fuente de "Mentor", un agente conversacional basado en LLMs (Modelos Grandes de Lenguaje) construido con Python y el framework **LangGraph**. El objetivo principal del agente es entender las necesidades, preferencias y situación económica de un usuario a través de una conversación turno a turno para, finalmente, poder recomendarle tipos de vehículos que se ajusten a su perfil.
+## 1. Introducción
 
-## ✨ Características Principales
+**CarBlau** es un agente conversacional avanzado diseñado para ayudar a los usuarios a encontrar el vehículo que mejor se adapte a sus necesidades, preferencias y contexto particular. A través de una serie de preguntas interactivas, CarBlau recopila información detallada sobre el perfil del usuario, sus prioridades, situación de aparcamiento, condiciones climáticas de su zona, y presupuesto, para luego realizar una búsqueda inteligente en una base de datos de vehículos y presentar recomendaciones personalizadas con explicaciones claras.
 
-* **Conversación Multi-Turno:** Mantiene el contexto y recopila información a lo largo de varios intercambios con el usuario.
-* **Recopilación Estructurada de Datos:** Utiliza LLMs con salida estructurada (validada por Pydantic) para extraer información clave en diferentes etapas.
-* **Flujo Multi-Etapa:** La conversación sigue un flujo lógico definido:
-    1.  **Perfil de Usuario:** Recopila preferencias generales (altura, peso, uso profesional, estética, eléctricos, transmisión, pasión por motor, nivel de aventura).
-    2.  **Filtros Técnicos:** Infiere filtros técnicos basados en el perfil (batalla mínima, índice altura interior, estética mínima, tipo de mecánica, premium/singularidad mínima).
-    3.  **Perfil Económico:** Recopila información económica según dos modos (asesoramiento financiero o presupuesto definido por el usuario).
-    4.  **Finalización y Recomendación:**
-        * Utiliza **RAG (Retrieval-Augmented Generation)** sobre un documento PDF para recomendar tipos de carrocería adecuados.
-        * Calcula **pesos numéricos** basados en las preferencias para una posible ponderación futura de recomendaciones.
-        * Presenta un **resumen final** en formato tabla Markdown.
-* **Manejo Robusto de Conversación:** Implementa el patrón "Nodo Pregunta -> END" en LangGraph para asegurar un flujo conversacional estable turno a turno, incluso cuando se requieren aclaraciones.
-* **Manejo de Errores:** Captura errores de validación de los LLMs y solicita aclaraciones al usuario.
-* **Modularidad:** Código organizado en módulos para el grafo, utilidades (procesamiento, validación, formato, RAG, pesos), prompts y estado.
-* **Pruebas Unitarias:** Incluye pruebas (usando `pytest` y `unittest.mock`) para verificar la lógica de los nodos individuales del grafo.
+El objetivo principal es simular la experiencia de hablar con un vendedor de coches experto y empático, pero con la potencia del análisis de datos y la inteligencia artificial para ofrecer resultados altamente relevantes.
 
-## 🏗️ Arquitectura y Tecnologías
+## 2. Características Destacadas
 
-El agente está construido sobre **LangGraph**, una extensión de LangChain para crear aplicaciones LLM stateful y cíclicas.
+* **Recopilación Detallada de Preferencias:** El agente indaga sobre más de 25 aspectos del perfil del usuario, incluyendo:
+    * Dimensiones del conductor (altura, peso).
+    * Uso del vehículo (profesional, personal, coche principal).
+    * Necesidades de espacio (carga voluminosa, objetos especiales, remolque).
+    * Situación de aparcamiento (garaje, problemas en calle, dimensiones del garaje).
+    * Preferencias estéticas y de exclusividad.
+    * Tipo de motorización y transmisión.
+    * Estilo de conducción y nivel de aventura.
+    * Importancia de la baja depreciación.
+    * **Ratings 0-10** para 6 características clave: Fiabilidad/Durabilidad, Seguridad, Comodidad, Impacto Medioambiental, Costes de Uso/Mantenimiento (actualmente opcional), y Tecnología/Conectividad.
+* **Adaptación al Contexto Geográfico y Climático:**
+    * Solicita el código postal del usuario al inicio.
+    * Consulta una base de datos para identificar características de la zona: ZBE (Zona de Bajas Emisiones), disponibilidad de GLP/GNV, y condiciones climáticas (lluvia, nieve, niebla, montaña).
+* **Inferencia de Filtros Técnicos:** Traduce las preferencias del usuario en filtros técnicos iniciales para la búsqueda (ej: `estetica_min`, `tipo_mecanica`, `premium_min`, `singular_min`).
+* **Recomendación de Tipos de Carrocería con RAG:** Utiliza un sistema de Generación Aumentada por Recuperación (RAG) sobre una base de conocimiento de tipos de carrocería para sugerir las más adecuadas según el perfil.
+* **Cálculo de Pesos Dinámicos:** Asigna pesos de importancia a múltiples características del vehículo basándose en todas las preferencias recopiladas, incluyendo los ratings explícitos y las condiciones climáticas.
+* **Lógica de Scoring Avanzada en BigQuery:**
+    * Aplica Min-Max Scaling a las características de los coches.
+    * Calcula un `score_total` para cada vehículo mediante una suma ponderada.
+    * Implementa **penalizaciones y bonificaciones condicionales** (ej: por distintivo ambiental en ZBE, por antigüedad si se valora la tecnología, por características del coche que entran en conflicto con altas prioridades del usuario como la comodidad).
+* **Explicaciones Personalizadas ("Por Qué este Coche"):** Para cada coche recomendado, el agente (opcionalmente usando un LLM) puede generar una breve explicación de por qué es una buena opción para ese usuario específico, basándose en los factores que más contribuyeron a su score.
+* **Manejo de Conversación Flexible:**
+    * Capacidad para guiar al usuario si no entiende una pregunta o un término.
+    * Manejo de errores de validación de Pydantic para entradas incorrectas (ej: ratings fuera de rango), solicitando al usuario que reformule.
+* **API con FastAPI:** Expone la funcionalidad del agente a través de una API RESTful, lista para ser integrada con frontends o consumida por otros servicios.
+* **Persistencia de Conversaciones:** Diseñado para usar un checkpointer persistente (como PostgreSQL con `AsyncPostgresSaver`) para mantener el estado de las conversaciones, esencial para producción.
 
-* **Orquestación:** Se utiliza `langgraph.graph.StateGraph` para definir el flujo de la aplicación.
-* **Estado:** El estado de la conversación se gestiona con un `TypedDict` que contiene modelos Pydantic (`PerfilUsuario`, `FiltrosInferidos`, `EconomiaUsuario`) y el historial de mensajes (`add_messages`).
-* **Nodos:** Funciones Python que encapsulan la lógica de cada paso (llamar a LLMs, validar, aplicar reglas, preguntar, finalizar).
-* **Aristas:** Conexiones entre nodos, incluyendo `add_edge` (flujo directo) y `add_conditional_edges` (enrutamiento basado en el estado y funciones de validación).
-* **LLMs:** Se integra con modelos de OpenAI (inicialmente `gpt-4o-mini`, con posibilidad de usar `gpt-4o` para tareas complejas como la economía) a través de LangChain. Se utiliza `with_structured_output` para obtener respuestas JSON validadas con Pydantic.
-* **RAG:** Utiliza `pdfplumber` para leer datos de carrocerías desde un PDF, `langchain_openai.OpenAIEmbeddings` para generar embeddings y `langchain_community.vectorstores.FAISS` para crear y consultar un almacén vectorial.
-* **Persistencia:** Utiliza `langgraph.checkpoint.memory.MemorySaver` para mantener el estado de la conversación en memoria (adecuado para desarrollo/pruebas).
-* **Pruebas:** `pytest` y `unittest.mock`.
-* **Otros:** Pydantic (modelado de datos y validación), Python estándar.
+## 3. ¿Cómo Funciona? (Flujo de Interacción)
 
-## 📂 Estructura del Proyecto (Ejemplo)
+El agente opera a través de un grafo de estados (LangGraph) que gestiona el flujo de la conversación por etapas:
 
-```python
-├── graph/                  # Lógica principal del grafo LangGraph
-│   ├── perfil/             # Nodos, builder, state, etc. específicos (o todo junto)
-│   │   ├── init.py
-│   │   ├── builder.py      # Define y compila el StateGraph
-│   │   ├── nodes.py        # Funciones de los nodos (recopilar, validar, preguntar, inferir, finalizar)
-│   │   ├── state.py        # Definición del TypedDict y modelos Pydantic (Perfil, Filtros, Economia, Resultados LLM)
-│   │   └── memory.py       # Configuración del checkpointer (MemorySaver)
-│   └── init.py
-├── utils/                  # Funciones de utilidad reutilizables
-│   ├── init.py
-│   ├── conversion.py     # Funciones de normalización, is_yes, get_enum_names
-│   ├── enums.py          # Definiciones de los Enums (TipoMecanica, NivelAventura, etc.)
-│   ├── formatters.py     # formatear_preferencias_en_tabla
-│   ├── postprocessing.py # aplicar_postprocesamiento_perfil, aplicar_postprocesamiento_filtros
-│   ├── preprocessing.py  # (Opcional) extraer_preferencias_iniciales
-│   ├── rag_carroceria.py # Lógica RAG para obtener carrocerías
-│   ├── rag_reader.py     # Lector del PDF para RAG
-│   ├── validation.py     # Funciones check_*_completeness
-│   └── weights.py        # Lógica para calcular pesos
-├── prompts/                # Archivos de texto con los prompts del sistema
-│   ├── init.py
-│   ├── loader.py         # (Opcional) Lógica para cargar prompts
-│   ├── system_prompt_perfil.txt
-│   ├── system_prompt_filtros_template.txt
-│   └── system_prompt_economia_structured.txt
-├── tests/                  # Pruebas unitarias/integración
-│   ├── init.py
-│   ├── test_nodes.py       # Pruebas para los nodos del grafo
-│   ├── test_utils.py       # Pruebas para funciones de utilidad (opcional)
-│   └── test_formatters.py  # Pruebas para la función de formato
-├── .env                    # Archivo para variables de entorno (¡añadir a .gitignore!)
-├── requirements.txt        # Dependencias del proyecto
-├── main_conversation.py    # (Ejemplo) Script principal para interactuar con el agente
-└── README.md               # Este archivo
+1.  **Recopilación de Código Postal y Clima:**
+    * El agente saluda y solicita el código postal (CP) del usuario.
+    * Valida el formato del CP.
+    * Consulta la base de datos `zonas_climas` (en BigQuery) para obtener información sobre ZBE, disponibilidad de GLP/GNV, y condiciones climáticas predominantes (lluvia, nieve, niebla, montaña) asociadas a ese CP. Esta información se guarda en el estado.
+
+2.  **Perfil del Usuario (Preferencias Generales y Ratings):**
+    * El agente realiza una serie de preguntas para construir un perfil detallado, cubriendo los 25+ campos mencionados anteriormente (altura, uso, aventura, ratings 0-10, garaje, remolque, etc.).
+    * Las preguntas se hacen de forma secuencial y condicional (ej: solo se pregunta por el tipo de uso profesional si el uso es profesional).
+    * El LLM (`llm_solo_perfil`) extrae la información y actualiza el objeto `PerfilUsuario` en el estado.
+
+3.  **Información de Pasajeros:**
+    * Se pregunta sobre la frecuencia de viaje con acompañantes, número de niños en silla (X) y otros pasajeros (Z).
+    * Esta información se usa en `aplicar_filtros_pasajeros_node` para calcular:
+        * `plazas_min` (filtro duro para BQ).
+        * `penalizar_puertas_bajas` (flag para el score si X >= 1 y frecuencia es "frecuente").
+        * `priorizar_ancho` (flag para los pesos si Z >= 2).
+
+4.  **Inferencia de Filtros Técnicos y Post-procesamiento:**
+    * El nodo `inferir_filtros_node` llama a `llm_solo_filtros`. Este LLM recibe el `PerfilUsuario` completo y la `InfoClimaUsuario` como contexto.
+    * Infiere valores iniciales para `estetica_min`, `tipo_mecanica`, `premium_min`, `singular_min`.
+    * Luego, `aplicar_postprocesamiento_filtros` refina estos filtros:
+        * Ajusta `estetica_min`, `premium_min`, `singular_min` según reglas de negocio (ej: basado en `apasionado_motor`, `valora_estetica`).
+        * Modifica la lista de `tipo_mecanica` basándose en `solo_electricos` y la `InfoClimaUsuario` (ej: quita/añade GLP/GNV si la zona no/sí es compatible; ajusta por ZBE).
+
+5.  **Preferencias Económicas:**
+    * El agente pregunta al usuario si prefiere asesoramiento financiero (Modo 1) o definir él mismo el presupuesto (Modo 2).
+    * Según la elección, se recopilan los datos necesarios (ingresos/ahorro/años para Modo 1; pago contado o cuota para Modo 2).
+
+6.  **Generación de Criterios Finales (Secuencia de Nodos Refactorizada):**
+    * `calcular_recomendacion_economia_modo1_node`: Si es Modo 1, calcula el presupuesto recomendado y actualiza los filtros.
+    * `obtener_tipos_carroceria_rag_node`: Llama a `get_recommended_carrocerias`. Esta función construye una query semántica (usando `preferencias_usuario`, `info_pasajeros`, `info_clima`) y la envía al RAG para obtener una lista de `tipo_carroceria` adecuados.
+    * `calcular_flags_dinamicos_node`: Calcula todos los flags booleanos (ej: `flag_penalizar_low_cost_comodidad`, `flag_penalizar_antiguo_por_tecnologia`, `aplicar_logica_distintivo_ambiental`, `es_municipio_zbe`) basados en las preferencias y el clima.
+    * `calcular_pesos_finales_node`: Llama a `compute_raw_weights` (que usa todas las preferencias, ratings, y flags climáticos para generar pesos crudos) y luego a `normalize_weights` para obtener los pesos finales que suman 1.0.
+    * `formatear_tabla_resumen_node`: Genera una tabla Markdown con el resumen de todo el contexto y preferencias recopiladas. (En el flujo actual, este mensaje se combina con los resultados de los coches).
+
+7.  **Búsqueda de Coches en BigQuery (`buscar_coches_finales_node`):**
+    * Este nodo recibe la tabla resumen, los filtros finales y los pesos.
+    * Llama a `buscar_coches_bq`.
+    * `buscar_coches_bq` construye una query SQL dinámica:
+        * Aplica Min-Max Scaling a las características numéricas de los coches.
+        * Aplica filtros `WHERE` (plazas, tipo mecánica, tipo carrocería, precio/cuota, etc.).
+        * Calcula un `score_total` sumando las características escaladas ponderadas por los pesos del usuario, y añadiendo las bonificaciones/penalizaciones condicionales (por distintivo ambiental, ZBE, antigüedad, puertas, etc.).
+        * Ordena por `score_total` y devuelve los `k` mejores coches, incluyendo sus características escaladas.
+    * (Opcional) Se llama a `generar_explicacion_coche_con_llm` para cada coche, usando los datos escalados, los pesos y las preferencias para crear una justificación personalizada.
+    * Se construye un `AIMessage` final que incluye la tabla resumen de criterios y la lista de coches recomendados (con sus explicaciones).
+    * Se loguea la búsqueda completa a una tabla de BigQuery.
+
+## 4. Lógica de Scoring y Personalización
+
+El corazón de la personalización reside en cómo se traducen las preferencias del usuario en un `score_total` para cada coche.
+
+* **Pesos Dinámicos:** La función `compute_raw_weights` asigna "pesos crudos" a más de 30 características potenciales (estética, seguridad, comodidad, par motor, bajo consumo, etc.) basándose en:
+    * Ratings explícitos del usuario (0-10).
+    * Respuestas sí/no a preguntas clave (ej: `apasionado_motor`, `prioriza_baja_depreciacion`, `arrastra_remolque`, problemas de garaje).
+    * Condiciones contextuales (ej: `altura_mayor_190` afecta peso de `batalla`; `info_clima` afecta peso de `traccion` y `seguridad`).
+    Estos pesos crudos se normalizan para que sumen 1.0, determinando la importancia relativa de cada factor en el score final.
+* **Min-Max Scaling:** Las características numéricas de los coches en BigQuery se escalan a un rango [0, 1] para que sean comparables y puedan ser multiplicadas por los pesos normalizados. Para características donde "menos es mejor" (ej: consumo, peso, dimensiones de garaje), se usa un escalado invertido.
+* **Filtros Duros:** Se aplican en la cláusula `WHERE` de BigQuery para descartar coches que no cumplen requisitos básicos (ej: `plazas_min`, `precio_maximo`, `tipo_mecanica` y `tipo_carroceria` seleccionados por RAG).
+* **Bonificaciones y Penalizaciones Condicionales:** Se aplican ajustes directos (positivos o negativos) al `score_total` si se cumplen ciertas condiciones, activadas por flags:
+    * **Comodidad:** Si el usuario valora mucho la comodidad, los coches muy "low-cost" o muy "deportivos" reciben una penalización.
+    * **Tecnología vs. Antigüedad:** Si el usuario valora mucho la tecnología, los coches más antiguos (>5, >7, >10 años) reciben penalizaciones graduales.
+    * **Impacto Ambiental (General):** Si el usuario valora el bajo impacto ambiental, los coches con distintivo CERO/0/ECO/C reciben un bonus, y los B/NA una penalización. Los coches de "ocasión" también reciben un pequeño bonus.
+    * **Zona de Bajas Emisiones (ZBE):** Si el CP del usuario está en ZBE, la bonificación/penalización por distintivo ambiental es más fuerte.
+
+## 5. Arquitectura y Tecnologías
+
+* **Lenguaje:** Python 3.11+
+* **Framework del Agente:** LangGraph (para construir el grafo de estados y la lógica conversacional).
+* **Motor LLM:** Configurado para usar modelos de OpenAI (ej: `gpt-4o-mini`) o Google Vertex AI (ej: `gemini-1.5-flash`) a través de las integraciones de LangChain. Se utiliza `with_structured_output(method="function_calling")` para las salidas JSON.
+* **API:** FastAPI con Uvicorn (para exponer el agente como un servicio web).
+* **Base de Datos de Vehículos:** Google BigQuery.
+* **Base de Conocimiento RAG:** Documento PDF procesado y almacenado en un índice vectorial FAISS con embeddings de OpenAI.
+* **Persistencia de Conversaciones:** Diseñado para `AsyncPostgresSaver` (LangGraph) con PostgreSQL (recomendado Cloud SQL para producción).
+* **Validación de Datos:** Pydantic.
+* **Manipulación de Datos:** Pandas (para formatear resultados de BQ).
+
+## 6. Estructura del Proyecto (Simplificada)
+
+```markdown
+/MVP_CARMENTOR
+|-- api/
+|   |-- main.py             # Aplicación FastAPI, endpoints
+|-- config/
+|   |-- llm.py              # Configuración e inicialización de LLMs
+|   |-- settings.py         # Constantes centralizadas (MIN_MAX_RANGES, umbrales, etc.)
+|-- graph/
+|   |-- perfil/
+|   |   |-- init.py
+|   |   |-- builder.py        # Construcción del grafo LangGraph
+|   |   |-- memory.py         # Configuración del Checkpointer (memoria)
+|   |   |-- nodes.py          # Definición de todos los nodos del grafo
+|   |   |-- state.py          # Modelos Pydantic para el estado y resultados LLM
+|-- prompts/
+|   |-- loader.py           # Utilidad para cargar prompts desde archivos
+|   |-- system_prompt_cp.txt
+|   |-- system_prompt_perfil.txt
+|   |-- system_prompt_pasajeros.txt
+|   |-- system_prompt_filtros_template.txt
+|   |-- system_prompt_economia.txt
+|   |-- system_prompt_explicacion_coche.txt
+|-- utils/
+|   |-- bigquery_tools.py   # Lógica para buscar coches en BQ (función buscar_coches_bq)
+|   |-- bq_data_lookups.py  # Lógica para buscar datos de clima en BQ
+|   |-- conversion.py       # Funciones de ayuda (ej: is_yes)
+|   |-- enums.py            # Definiciones de todos los Enums
+|   |-- explanation_generator.py # Lógica para generar "Por Qué este Coche"
+|   |-- formatters.py       # Lógica para formatear tablas resumen
+|   |-- postprocessing.py   # Lógica de post-procesamiento de filtros
+|   |-- rag_carroceria.py   # Lógica RAG para tipos de carrocería
+|   |-- rag_reader.py       # (Asumido) Lector de PDF y creador de Vector Store
+|   |-- vector_store_module.py # (Asumido) Acceso al Vector Store
+|   |-- weights.py          # Lógica para calcular pesos crudos y normalizados
+|-- tests/                    # Pruebas unitarias y de integración
+|   |-- ...
+|-- .env                      # Variables de entorno (API keys, credenciales BBDD) - NO SUBIR A GIT
+|-- requirements.txt          # Dependencias Python
+|-- Dockerfile                # (Para producción) Definición de la imagen Docker
 ```
+... otros archivos ...
 
-## 📈 Estado Actual
+## 7. Configuración y Ejecución (Desarrollo Local)
 
-* El flujo secuencial del grafo (Perfil -> Filtros -> Economía -> Finalización) está implementado y funcional.
-* Los nodos individuales y las funciones de utilidad clave tienen pruebas unitarias que pasan.
-* El patrón "Nodo Pregunta -> END" asegura una conversación estable turno a turno.
-* El manejo de errores para ValidationErrors del LLM de economía está implementado.
-Áreas de Mejora / Próximos Pasos:
-Fiabilidad LLM Economía: Monitorizar y potencialmente seguir afinando el prompt system_prompt_economia_structured.txt o confirmar que el modelo más potente (gpt-4o) resuelve los ValidationError de forma consistente.
-* Calidad RAG: Revisar la lógica de construcción de la query y los resultados de get_recommended_carrocerias para asegurar que las recomendaciones de carrocería sean pertinentes.
-* Lógica de Pesos: Validar si el cálculo de pesos refleja adecuadamente la importancia de los atributos.
-* Pruebas End-to-End: Realizar más pruebas de conversación completas con diferentes perfiles de usuario.
-  
-## Pensando en pasos futuros para despliegue
+1.  **Clonar el Repositorio.**
+2.  **Crear y Activar un Entorno Virtual:**
+    ```bash
+    python -m venv car_env
+    source car_env/bin/activate  # macOS/Linux
+    # car_env\Scripts\activate  # Windows
+    ```
+3.  **Instalar Dependencias:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  **Configurar Variables de Entorno:**
+    * Crear un archivo `.env` en la raíz del proyecto.
+    * Añadir las claves API necesarias (ej: `OPENAI_API_KEY`) y las credenciales para la base de datos del checkpointer (ej: `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME`).
+    * Configurar `GCLOUD_PROJECT` si se usa Vertex AI.
+5.  **Base de Datos para Checkpointer (PostgreSQL):**
+    * Asegurarse de tener una instancia de PostgreSQL accesible.
+    * Para desarrollo local con Cloud SQL, ejecutar el [Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/connect-auth-proxy) y configurar `DB_HOST=127.0.0.1` en el `.env`.
+6.  **Base de Datos de Vehículos (BigQuery):**
+    * Asegurarse de tener acceso al proyecto y dataset de BigQuery con la tabla de coches.
+    * Autenticarse con Google Cloud: `gcloud auth application-default login`.
+7.  **Vector Store (FAISS):**
+    * Asegurarse de que el índice FAISS (`faiss_carroceria_index`) exista y sea accesible por `get_vectorstore()`.
+8.  **Iniciar la API FastAPI:**
+    ```bash
+    uvicorn api.main:app --reload
+    ```
+    La API estará disponible en `http://127.0.0.1:8000` y la documentación interactiva en `http://127.0.0.1:8000/docs`.
 
-¡Excelente! Pensar en cómo llevar tu agente a producción es un paso muy importante. Usar FastAPI y luego desplegarlo en Cloud Run es una excelente elección y una ruta muy común y efectiva para aplicaciones basadas en Python como la tuya.
+## 8. Próximos Pasos y Mejoras Futuras
 
-Aquí te presento un desglose conceptual de cómo sería ese proceso y qué implicaciones tendría:
+* **Despliegue en Cloud Run:** Contenerizar la aplicación FastAPI con Docker y desplegarla.
+* * **Generar Frontend simple:** Que permita realizar pruebas a los usuarios.
+* **Refinamiento Continuo de Prompts:** Ajustar los prompts de los LLMs para mejorar la naturalidad y precisión de las extracciones y generaciones.
+* **Mejora de la Lógica RAG:** Optimizar los documentos y la query para obtener recomendaciones de `tipo_carroceria` aún más precisas.
+* **Pruebas de Usuario:** Realizar pruebas con usuarios reales para obtener feedback y refinar la experiencia.
+* **Ampliación de la Base de Conocimiento:** Añadir más datos de coches y refinar las características en BigQuery y en la Base de datos principal de 149.000 coches.
+* **Implementar "Explicación de Términos/Preguntas"** para mejorar la UX.
+* **Implementar "Ampliar Información del Coche Bajo Demanda"** usando herramientas de búsqueda web.
 
-Hoja de Ruta Conceptual para la Puesta en Producción:
-
-### Encapsular la Lógica del Agente:
-
-Tu grafo LangGraph (build_sequential_agent_graph()) y la lógica de conversación (run_conversation o una versión adaptada) necesitan ser accesibles de una forma que una API pueda llamar.
-
-* Crear una API con FastAPI:
-
-  * Propósito: FastAPI actuará como la "puerta de entrada" a tu agente. Recibirá solicitudes HTTP (por ejemplo, de un frontend, una app móvil, u otro servicio) y las pasará a tu agente LangGraph.
-  * Endpoints Clave:
-POST /conversation/start: Podría iniciar una nueva conversación, generar un thread_id (si no se proporciona uno) y devolver el primer mensaje del agente.
-POST /conversation/{thread_id}/message: Recibe un mensaje del usuario para un thread_id existente, lo pasa al grafo LangGraph, y devuelve la respuesta del agente.
-  * (Opcional) GET /conversation/{thread_id}/history: Para recuperar el historial de una conversación.
-  * Manejo de Estado: La persistencia de la conversación (el thread_id y el estado asociado) es crucial.
-  * Checkpointer: El MemorySaver que usamos para desarrollo no es adecuado para producción porque se pierde si la instancia se reinicia. Necesitarás un checkpointer persistente. LangGraph ofrece integraciones con:
-Redis: Muy buena opción para estado en memoria rápido y persistente.
-PostgreSQL/SQLite (con SqliteSaver o PgSaver): Buenas si ya tienes una base de datos relacional o quieres una solución basada en archivos para empezar.
-LangServe: Aunque LangServe puede desplegar grafos LangGraph directamente, si quieres más control con FastAPI, usarías un checkpointer compatible.
-El thread_id será la clave para recuperar y guardar el estado de cada conversación.
-
-* Contenerización con Docker:
-
-  * Propósito: Empaquetar tu aplicación FastAPI (junto con todas sus dependencias Python, tu código LangGraph, prompts, etc.) en una imagen de contenedor Docker. Esto asegura que funcione de manera consistente en cualquier entorno.
-Dockerfile: Definirás las instrucciones para construir la imagen (instalar Python, copiar tu código, instalar requirements.txt, exponer el puerto de FastAPI, y el comando para iniciar el servidor Uvicorn con FastAPI).
-requirements.txt: Debe listar todas las librerías necesarias (fastapi, uvicorn, langgraph, langchain, langchain-openai, google-cloud-bigquery, python-dotenv, etc.).
-
-* Despliegue en Cloud Run:
-
-  * Propósito: Cloud Run es una plataforma serverless de Google Cloud que ejecuta contenedores Docker. Es ideal porque escala automáticamente (incluso a cero si no hay tráfico, ahorrando costes) y gestiona la infraestructura por ti.
-
-  * Pasos:
-    * Construir y Subir la Imagen Docker: Construyes tu imagen Docker localmente y la subes a un registro de contenedores como Google Artifact Registry (o Google Container Registry).
-    * Crear un Servicio en Cloud Run: Configuras un nuevo servicio en Cloud Run, apuntando a la imagen Docker que subiste.
-
-* Configuración:
-  * Variables de Entorno: Configura variables de entorno en Cloud Run para tus secretos (como OPENAI_API_KEY, credenciales de BQ si no usas ADC del entorno, configuración del checkpointer persistente).
-  * Conexión a BigQuery: Si tu Cloud Run necesita acceder a BigQuery, asegúrate de que la cuenta de servicio que usa Cloud Run tenga los permisos necesarios para BigQuery.
-  * Conexión al Checkpointer Persistente: Si usas Redis o una base de datos SQL para el checkpointer, Cloud Run necesitará poder conectarse a esa instancia (ej: a través de VPC Connector si está en una red privada).
-CPU y Memoria: Ajusta los recursos según la carga esperada.
-Escalado: Configura el mínimo y máximo de instancias.
-URL Pública: Cloud Run te dará una URL HTTPS pública para acceder a tu API.
-  * (Opcional pero Recomendado) API Gateway / Load Balancer:
-Para mayor seguridad, gestión de tráfico, SSL personalizado, etc., podrías poner Google Cloud API Gateway o un Load Balancer delante de tu servicio Cloud Run.
-
-* Consideraciones Adicionales:
-
-  * Manejo de Errores en la API: Tu API FastAPI debe manejar errores de forma elegante (ej: si el grafo falla, si un thread_id no existe) y devolver códigos de estado HTTP apropiados.
-  * Seguridad de la API: Considera cómo asegurarás tus endpoints (ej: claves API, autenticación si es necesario).
-Logging y Monitorización en Producción: Cloud Run se integra con Google Cloud Logging y Monitoring. Asegúrate de que tu aplicación FastAPI y LangGraph generen logs útiles. LangSmith sigue siendo invaluable aquí.
-  * Costes: Ten en cuenta los costes de Cloud Run, BigQuery, el servicio de checkpointer (Redis/SQL), y las llamadas a la API de OpenAI.
-  * Actualizaciones: Define un proceso para actualizar tu aplicación (construir nueva imagen Docker, desplegar nueva revisión en Cloud Run).
-
-### ¿Es Complejo?
-
-Sí, llevar una aplicación a producción siempre tiene su complejidad, pero la ruta FastAPI + Docker + Cloud Run es una de las más directas y bien documentadas para aplicaciones Python. La mayor complejidad inicial estará en:
-
-Configurar correctamente el checkpointer persistente para LangGraph.
-Escribir el Dockerfile y configurar el despliegue en Cloud Run con las variables de entorno y permisos correctos.
-En resumen:
-
-Tu idea de FastAPI + Cloud Run es excelente. Es una pila tecnológica moderna, escalable y gestionada que se adapta muy bien a los agentes LangGraph. La clave será manejar bien la persistencia del estado de la conversación y la configuración del entorno en la nube.
-
-¿Te gustaría que profundicemos en alguno de estos puntos, por ejemplo, cómo se vería un endpoint básico de FastAPI o qué checkpointer podría ser más adecuado para empezar?
+---
