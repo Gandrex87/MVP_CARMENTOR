@@ -1,4 +1,4 @@
-# graph/builder.py (o graph/perfil/builder.py según tu estructura)
+# graph/builder.py
 
 from langgraph.graph import StateGraph, START, END
 from graph.perfil.state import EstadoAnalisisPerfil # Ajusta la ruta si es necesario
@@ -10,7 +10,7 @@ from graph.perfil.nodes import (preguntar_cp_inicial_node,   recopilar_cp_node, 
     calcular_flags_dinamicos_node,
     calcular_pesos_finales_node,
     formatear_tabla_resumen_node)
-from .memory import get_memory 
+from graph.perfil.memory import get_memory 
 from graph.perfil.condition import (ruta_decision_cp, ruta_decision_economia, ruta_decision_filtros, ruta_decision_perfil,ruta_decision_pasajeros, 
                                     decidir_ruta_inicial, route_based_on_state_node)
 

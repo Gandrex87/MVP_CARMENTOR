@@ -1,273 +1,176 @@
-# # main.py
-
-import uuid
-import logging
-from typing import List, Optional
-
+# main.py
 from fastapi import FastAPI, HTTPException, Path
 from pydantic import BaseModel, Field
-
+from typing import List, Optional, Dict, Any
+import uuid 
+import logging
+import os 
+from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+
+
+# Cargar variables de entorno ANTES de cualquier import que las use
+load_dotenv() 
 
 # --- Configuración de Logging ---
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__) # Logger para este módulo
 
-# --- Importaciones del Agente LangGraph (Ajusta las rutas según tu proyecto) ---
-try:
-    from graph.perfil.builder import build_sequential_agent_graph
-    from graph.perfil.memory import get_memory  # Por si necesitas el checkpointer más adelante
+# --- Importaciones del Agente LangGraph ---
+from graph.perfil.memory import ensure_tables_exist, set_checkpointer_instance
+from graph.perfil.builder import build_sequential_agent_graph
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-    logger.info("Construyendo el grafo del agente CarBlau...")
-    car_mentor_graph = build_sequential_agent_graph()
-    logger.info("¡Grafo del agente CarBlau construido exitosamente!")
+# --- Variables Globales ---
+car_mentor_graph = None
+# Para gestionar el ciclo de vida del checkpointer persistente
+_checkpointer_context_manager = None # Guardará el gestor de contexto
+_persistent_checkpointer_instance = None # Guardará la instancia real del AsyncPostgresSaver
 
-except ImportError as e:
-    logger.error(
-        f"Error al importar componentes del agente LangGraph: {e}. "
-        "Asegúrate de que las rutas sean correctas."
-    )
-    car_mentor_graph = None
-
-except Exception as e_graph:
-    logger.error(f"Error al construir el grafo del agente LangGraph: {e_graph}")
-    car_mentor_graph = None
-
-
-# --- Modelos Pydantic para las Solicitudes y Respuestas de la API ---
-
-class Message(BaseModel):
-    type: str = Field(..., description="Tipo de mensaje: 'ai' o 'user'.")
+# --- Modelos Pydantic (sin cambios) ---
+class Message(BaseModel): # ...
+    type: str = Field(..., description="Tipo de mensaje: 'CarBlau_AI' o 'user'.")
     content: str = Field(..., description="Contenido textual del mensaje.")
-
-
-class StartConversationRequest(BaseModel):
-    initial_message: Optional[str] = Field(
-        None,
-        description="Mensaje inicial opcional del usuario para empezar la conversación."
-    )
-
-
-class StartConversationResponse(BaseModel):
+class StartConversationRequest(BaseModel): # ...
+    initial_message: Optional[str] = Field(None,description="Mensaje inicial opcional del usuario para empezar la conversación.")
+class StartConversationResponse(BaseModel): # ...
     thread_id: str = Field(description="Identificador único para la nueva conversación.")
     agent_messages: List[Message] = Field(description="Lista de los primeros mensajes del agente.")
-
-
-class UserMessageRequest(BaseModel):
+class UserMessageRequest(BaseModel): # ...
     content: str = Field(..., description="Contenido del mensaje del usuario.")
-
-
-class AgentMessageResponse(BaseModel):
+class AgentMessageResponse(BaseModel): # ...
     thread_id: str = Field(description="Identificador de la conversación.")
     agent_messages: List[Message] = Field(description="Lista de los mensajes de respuesta del agente.")
 
-
 # --- Instancia de FastAPI ---
-
 app = FastAPI(
     title="CarBlau Agent API",
     description="API para interactuar con el agente CarBlau y obtener recomendaciones de coches.",
     version="0.1.0"
 )
 
-# (Opcional) Si necesitas CORS CORS (Cross-Origin Resource Sharing) es un mecanismo de seguridad que los navegadores implementan para controlar qué orígenes (dominios) están autorizados a hacer peticiones a tu servidor:
-# from fastapi.middleware.cors import CORSMiddleware
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+# --- Evento de Startup ---
 
+# --- Evento de Startup ---
+@app.on_event("startup")
+async def startup_event():
+    global car_mentor_graph, _checkpointer_context_manager, _persistent_checkpointer_instance
+    logger.info("Ejecutando evento de startup de FastAPI para CarBlau Agent...")
 
+    # 1. Cargar configuración de la base de datos
+    db_user = os.environ.get("DB_USER")
+    db_password = os.environ.get("DB_PASSWORD")
+    db_host = os.environ.get("DB_HOST")
+    db_port = os.environ.get("DB_PORT", "5432")
+    db_name = os.environ.get("DB_NAME")
+
+    if not all([db_user, db_password, db_host, db_name]):
+        logger.error("CRÍTICO: Faltan variables de BBDD. El agente NO funcionará.")
+        raise RuntimeError("Configuración de base de datos incompleta.")
+
+    conn_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    logger.info(f"Cadena de conexión PostgreSQL: postgresql://{db_user}:******@{db_host}:{db_port}/{db_name}")
+
+    try:
+        # 2. Asegurar que las tablas del checkpointer existan
+        logger.info("Verificando/creando tablas para el checkpointer...")
+        await ensure_tables_exist(conn_string)
+        logger.info("Tablas del checkpointer verificadas/creadas (vía ensure_tables_exist).")
+        
+        # 3. Crear el GESTOR DE CONTEXTO para AsyncPostgresSaver
+        _checkpointer_context_manager = AsyncPostgresSaver.from_conn_string(conn_string)
+        logger.info("Gestor de contexto AsyncPostgresSaver creado.")
+
+        # 4. "Entrar" en el contexto para obtener la INSTANCIA REAL del saver
+        #    Esto también abrirá la conexión a la base de datos.
+        _persistent_checkpointer_instance = await _checkpointer_context_manager.__aenter__()
+        logger.info("Instancia real de AsyncPostgresSaver obtenida (conexión a BD abierta).")
+
+        # 5. Establecer la instancia REAL globalmente
+        set_checkpointer_instance(_persistent_checkpointer_instance)
+        logger.info("Instancia persistente de AsyncPostgresSaver configurada globalmente.")
+
+        # 6. Construir y compilar el grafo
+        logger.info("Compilando el grafo del agente CarBlau...")
+        car_mentor_graph = build_sequential_agent_graph()
+        logger.info("Grafo del agente CarBlau compilado y listo.")
+
+    except ImportError as e:
+        logger.error(f"CRÍTICO: Error de importación en startup: {e}.", exc_info=True)
+        raise RuntimeError(f"Error de importación crítico: {e}")
+    except Exception as e:
+        logger.error(f"FALLO CRÍTICO en startup: {e}", exc_info=True)
+        raise RuntimeError(f"No se pudo inicializar el agente: {e}")
+
+# --- Endpoints (sin cambios en su lógica interna, solo dependen de que car_mentor_graph esté listo) ---
 @app.get("/", tags=["root"])
-async def read_root():
-    """
-    Endpoint raíz que devuelve un mensaje de bienvenida.
-    """
+async def read_root(): # ... (como antes)
     logger.info("Solicitud recibida en el endpoint raíz ('/').")
     return {"message": "¡Bienvenido a la API del Agente CarBlau!"}
 
-
-@app.post(
-    "/conversation/start",
-    response_model=StartConversationResponse,
-    tags=["conversation"]
-)
-async def start_conversation(request_data: StartConversationRequest = None):
-    """
-    Inicia una nueva conversación con el agente CarBlau.
-    Devuelve un ID de hilo (thread_id) y el primer mensaje del agente.
-    """
+@app.post("/conversation/start", response_model=StartConversationResponse, status_code=201, tags=["conversation"])
+async def start_conversation(request_data: Optional[StartConversationRequest] = None): # ... (como antes)
     if not car_mentor_graph:
-        logger.error("Intento de iniciar conversación, pero el grafo no está disponible.")
-        raise HTTPException(
-            status_code=503,
-            detail="El servicio del agente no está disponible en este momento."
-        )
-
-    # Generar un ID único para la conversación
+        logger.error("Intento de iniciar conversación, pero el grafo no está disponible (falló en startup).")
+        raise HTTPException(status_code=503, detail="El servicio del agente no está disponible en este momento.")
+    # ... (resto de la lógica del endpoint como en el Canvas anterior)
     thread_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
-
     logger.info(f"Iniciando nueva conversación con thread_id: {thread_id}")
-
-    # Construir lista inicial de mensajes (puede estar vacía)
-    initial_messages: List[BaseMessage] = []
+    initial_messages_for_graph: List[BaseMessage] = []
     if request_data and request_data.initial_message:
-        logger.info(
-            f"Mensaje inicial del usuario para thread_id {thread_id}: "
-            f"{request_data.initial_message}"
-        )
-        initial_messages.append(HumanMessage(content=request_data.initial_message))
-
+        initial_messages_for_graph.append(HumanMessage(content=request_data.initial_message))
     try:
-        # Llamada asíncrona al grafo
-        output = await car_mentor_graph.ainvoke(
-            {"messages": initial_messages},
-            config=config
-        )
-
+        output = await car_mentor_graph.ainvoke({"messages": initial_messages_for_graph}, config=config)
         agent_response_messages: List[Message] = []
         if output and "messages" in output:
-            # Solo devolvemos los AIMessage generados en este primer turno
-            start_index = len(initial_messages)
+            start_index = len(initial_messages_for_graph)
             for msg in output["messages"][start_index:]:
                 if isinstance(msg, AIMessage):
-                    agent_response_messages.append(
-                        Message(type="CarBlau_AI", content=msg.content)
-                    )
-
-        if not agent_response_messages:
-            # Si el agente no generó respuesta en este punto, devolvemos un fallback
-            logger.warning(f"El agente no generó mensajes iniciales para thread_id: {thread_id}")
-            agent_response_messages.append(
-                Message(type="CarBlau_AI", content="Lo siento, ha ocurrido un error al generar la respuesta inicial.")
-            )
-
-        logger.info(
-            f"Conversación iniciada para thread_id: {thread_id}. Mensajes del agente: "
-            f"{len(agent_response_messages)}"
-        )
-        return StartConversationResponse(
-            thread_id=thread_id,
-            agent_messages=agent_response_messages
-        )
-
+                    agent_response_messages.append(Message(type="CarBlau_AI", content=msg.content))
+        if not agent_response_messages and not (request_data and request_data.initial_message):
+            agent_response_messages.append(Message(type="CarBlau_AI", content="Hola, soy CarBlau. ¿Podrías indicarme tu código postal para comenzar?"))
+        return StartConversationResponse(thread_id=thread_id, agent_messages=agent_response_messages)
     except Exception as e:
-        logger.error(
-            f"Error al invocar el grafo para iniciar conversación (thread_id: {thread_id}): {e}",
-            exc_info=True
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno al procesar la solicitud: {str(e)}"
-        )
+        logger.error(f"Error al invocar grafo en /start (thread_id: {thread_id}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-@app.post(
-    "/conversation/{thread_id}/message",
-    response_model=AgentMessageResponse,
-    tags=["conversation"]
-)
+@app.post("/conversation/{thread_id}/message", response_model=AgentMessageResponse, tags=["conversation"])
 async def send_message(
     message_request: UserMessageRequest,
-    thread_id: str = Path(..., description="El ID del hilo de la conversación existente.")
-):
-    """
-    Envía un mensaje de usuario a una conversación existente y obtiene la respuesta del agente.
-    """
+    thread_id: str = Path(..., min_length=36, max_length=36, regex=r"^[a-f0-9-]+$", 
+                        description="El ID del hilo de la conversación existente (formato UUID).")
+): # ... (como antes)
     if not car_mentor_graph:
-        logger.error(
-            f"Intento de enviar mensaje a thread_id {thread_id}, "
-            "pero el grafo no está disponible."
-        )
-        raise HTTPException(
-            status_code=503,
-            detail="El servicio del agente no está disponible en este momento."
-        )
-
-    # El Body (message_request) ya fue validado por FastAPI: si falta `content`, se devuelve 422.
+        logger.error(f"Intento de mensaje a {thread_id}, pero grafo no disponible.")
+        raise HTTPException(status_code=503, detail="El servicio del agente no está disponible.")
     if not message_request.content.strip():
-        logger.warning(
-            f"Solicitud a /conversation/{thread_id}/message con contenido vacío."
-        )
-        raise HTTPException(
-            status_code=400,
-            detail="El contenido del mensaje no puede estar vacío."
-        )
-
+        raise HTTPException(status_code=400, detail="El contenido del mensaje no puede estar vacío.")
     config = {"configurable": {"thread_id": thread_id}}
-    logger.info(
-        f"Continuando conversación con thread_id: {thread_id}. "
-        f"Mensaje del usuario: {message_request.content}"
-    )
-
+    logger.info(f"Continuando {thread_id}. Usuario: {message_request.content}")
     try:
         new_human_message = HumanMessage(content=message_request.content)
-
-        # Llamada asíncrona al grafo
-        output = await car_mentor_graph.ainvoke(
-            {"messages": [new_human_message]},
-            config=config
-        )
-
+        output = await car_mentor_graph.ainvoke({"messages": [new_human_message]}, config=config)
         agent_response_messages: List[Message] = []
-
         if output and "messages" in output:
-            # Buscamos la posición del HumanMessage que acabamos de enviar
-            last_human_index = -1
-            for idx, msg in enumerate(output["messages"]):
-                if isinstance(msg, HumanMessage) and msg.content == new_human_message.content:
-                    last_human_index = idx
-
-            # Si encontramos nuestro HumanMessage, tomamos los AIMessage posteriores
-            if last_human_index != -1:
-                for msg in output["messages"][last_human_index + 1:]:
-                    if isinstance(msg, AIMessage):
-                        agent_response_messages.append(
-                            Message(type="CarBlau_AI", content=msg.content)
-                        )
-
-            # Si no encontramos el index (caso raro), devolvemos todos los AIMessage finales
-            if last_human_index == -1:
-                for msg in reversed(output["messages"]):
-                    if isinstance(msg, AIMessage):
-                        agent_response_messages.insert(
-                            0, Message(type="CarBlau_AI", content=msg.content)
-                        )
-                    elif isinstance(msg, HumanMessage):
-                        break
-
-            if not agent_response_messages:
-                logger.warning(
-                    f"El agente no generó nuevos mensajes para thread_id: {thread_id} tras el input del usuario."
-                )
-
-        logger.info(
-            f"Respuesta del agente para thread_id: {thread_id}. "
-            f"Mensajes: {len(agent_response_messages)}"
-        )
-        return AgentMessageResponse(
-            thread_id=thread_id,
-            agent_messages=agent_response_messages
-        )
-
+            temp_agent_msgs = []
+            for msg in reversed(output["messages"]):
+                if isinstance(msg, AIMessage): temp_agent_msgs.insert(0, Message(type="CarBlau_AI", content=msg.content))
+                elif isinstance(msg, HumanMessage): break 
+            agent_response_messages = temp_agent_msgs
+        if not agent_response_messages: logger.warning(f"Agente no generó mensajes para {thread_id}.")
+        return AgentMessageResponse(thread_id=thread_id, agent_messages=agent_response_messages)
     except Exception as e:
-        logger.error(
-            f"Error al invocar el grafo para continuar conversación (thread_id: {thread_id}): {e}",
-            exc_info=True
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno al procesar la solicitud: {str(e)}"
-        )
-
+        logger.error(f"Error al invocar grafo en /message (thread_id: {thread_id}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 @app.get("/test", tags=["test"])
-async def test_endpoint():
-    """
-    Endpoint de prueba para verificar que el servidor está operativo.
-    """
+async def test_endpoint(): # ... (como antes)
     logger.info("Solicitud recibida en el endpoint de prueba ('/test').")
     return {"message": "¡El endpoint de prueba funciona correctamente!"}
+
+# if __name__ == "__main__":
+#     import uvicorn
+#     # Asegúrate de que load_dotenv() se llame antes si ejecutas así
+#     # uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) # reload=True para desarrollo

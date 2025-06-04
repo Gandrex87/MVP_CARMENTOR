@@ -20,6 +20,16 @@ if not GOOGLE_CREDENTIALS:
 # --- RANGOS MIN-MAX PARA ESCALADO EN BIGQUERY (`utils/bigquery_tools.py`) ---
 # Las claves deben coincidir con los nombres de columna en BQ que se usan para escalar
 
+# Mapeo de nombres de campo de rating a texto amigable para el usuario para node Etapa 1
+MAPA_RATING_A_PREGUNTA_AMIGABLE = {
+    "rating_fiabilidad_durabilidad": "la Fiabilidad y Durabilidad",
+    "rating_seguridad": "la Seguridad",
+    "rating_comodidad": "la Comodidad",
+    "rating_impacto_ambiental": "el Bajo Impacto Medioambiental",
+    "rating_costes_uso": "los Costes de Uso y Mantenimiento",
+    "rating_tecnologia_conectividad": "la Tecnología y Conectividad"
+}
+
 # Definir aquí los rangos mínimos y máximos para cada característica/Valores de bd
 MIN_MAX_RANGES = {
     "estetica": (1.0, 10.0),"premium": (1.0, 10.0),"singular": (1.0, 10.0),

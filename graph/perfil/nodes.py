@@ -17,13 +17,15 @@ from utils.rag_carroceria import get_recommended_carrocerias
 from utils.bigquery_tools import buscar_coches_bq
 from utils.bq_data_lookups import obtener_datos_climaticos_por_cp # IMPORT para la función de búsqueda de clima ---
 from utils.conversion import is_yes 
-from utils.bq_logger import log_busqueda_a_bigquery 
+from utils.bq_logger import log_busqueda_a_bigquery
+from utils.sanitize_dict_for_json import sanitize_dict_for_json
 import traceback 
 import pandas as pd
 import logging
 import json # Para construir el contexto del prompt
 from typing import Literal, Optional ,Dict, Any
-from config.settings import (UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG)
+from config.settings import (MAPA_RATING_A_PREGUNTA_AMIGABLE, UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG)
+
 
 # En graph/nodes.py
 
@@ -209,98 +211,248 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Procesa entrada humana, llama a llm_solo_perfil, actualiza preferencias_usuario,
     y guarda el contenido del mensaje devuelto en 'pregunta_pendiente'.
+    Maneja errores de validación de Pydantic para ratings fuera de rango.
     """
     print("--- Ejecutando Nodo: recopilar_preferencias_node ---")
+    logging.debug("--- Ejecutando Nodo: recopilar_preferencias_node ---")
+    
     historial = state.get("messages", [])
-    preferencias_actuales = state.get("preferencias_usuario") 
+    # Obtener el estado actual de preferencias. Si no existe, inicializar uno nuevo.
+    preferencias_actuales_obj = state.get("preferencias_usuario") or PerfilUsuario()
 
-    # 1. Comprobar si el último mensaje es de la IA
+    # Si el último mensaje es de la IA, no llamar al LLM de nuevo.
     if historial and isinstance(historial[-1], AIMessage):
-        print("DEBUG (Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
-        return {**state, "pregunta_pendiente": None} # Limpiar pregunta pendiente
+        logging.debug("DEBUG (Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
+        # Devolver solo las claves que podrían haber cambiado o que son relevantes para el siguiente paso.
+        # En este caso, si no hay pregunta pendiente, no hay mucho que actualizar.
+        # Si el flujo depende de pregunta_pendiente, asegurarse de propagarla o limpiarla.
+        return {"pregunta_pendiente": state.get("pregunta_pendiente")}
 
-    print("DEBUG (Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
+    logging.debug("DEBUG (Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
     
-    # Inicializar variables que se usarán después del try/except
-    preferencias_post = preferencias_actuales # Usar el actual como fallback inicial
-    contenido_msg_llm = None # Mensaje a guardar para el siguiente nodo
-    
-    # 2. Llamar al LLM enfocado en el perfil
+    # Inicializar variables para la salida del nodo
+    preferencias_para_actualizar_estado = preferencias_actuales_obj # Default: mantener las actuales si todo falla
+    mensaje_para_pregunta_pendiente = "Lo siento, tuve un problema técnico al procesar tus preferencias." # Default
+
     try:
-        # LLM ahora devuelve ResultadoSoloPerfil (con tipo_mensaje y contenido_mensaje)
         response: ResultadoSoloPerfil = llm_solo_perfil.invoke(
             [system_prompt_perfil, *historial],
             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
         )
-        print(f"DEBUG (Perfil) ► Respuesta llm_solo_perfil: {response}")
+        logging.debug(f"DEBUG (Perfil) ► Respuesta llm_solo_perfil: {response}")
 
-        # --- CAMBIO: Extraer de la nueva estructura ---
-        preferencias_nuevas = response.preferencias_usuario 
-        tipo_msg_llm = response.tipo_mensaje # Puedes usarlo para logging o lógica futura si quieres
-        contenido_msg_llm = response.contenido_mensaje # Este es el texto que guardaremos
+        preferencias_del_llm = response.preferencias_usuario # Objeto PerfilUsuario del LLM
+        mensaje_para_pregunta_pendiente = response.contenido_mensaje # Mensaje del LLM
+        # tipo_msg_llm = response.tipo_mensaje # Se podría usar para logging o lógica más fina
 
-        # 3. Aplicar post-procesamiento
-        try:
-            resultado_post_proc = aplicar_postprocesamiento_perfil(preferencias_nuevas)
-            if resultado_post_proc is not None:
-                preferencias_post = resultado_post_proc
-            else:
-                 print("WARN (Perfil) ► aplicar_postprocesamiento_perfil devolvió None.")
-                 preferencias_post = preferencias_nuevas # Fallback
-            print(f"DEBUG (Perfil) ► Preferencias TRAS post-procesamiento: {preferencias_post}")
-        except Exception as e_post:
-            print(f"ERROR (Perfil) ► Fallo en postprocesamiento de perfil: {e_post}")
-            preferencias_post = preferencias_nuevas # Fallback
+        # Aplicar post-procesamiento a las preferencias obtenidas del LLM
+        # Es importante que aplicar_postprocesamiento_perfil maneje un input None si preferencias_del_llm es None
+        if preferencias_del_llm is None: # Si el LLM no devolvió un objeto de preferencias
+            logging.warning("WARN (Perfil) ► llm_solo_perfil devolvió preferencias_usuario como None.")
+            preferencias_del_llm = PerfilUsuario() # Usar uno vacío para el post-procesador
 
-    # Manejo de errores de la llamada LLM
-    except ValidationError as e_val:
-        print(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val}")
-        contenido_msg_llm = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {e_val}"
-        # Mantener preferencias anteriores si falla validación
-        preferencias_post = preferencias_actuales 
-    except Exception as e:
-        print(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil: {e}")
-        print("--- TRACEBACK FALLO LLM PERFIL ---")
-        traceback.print_exc() # Imprimir traceback para depurar
-        print("--------------------------------")
-        contenido_msg_llm = "Lo siento, tuve un problema técnico al procesar tus preferencias."
-        # Mantener preferencias anteriores
-        preferencias_post = preferencias_actuales 
-
-    # 4. Actualizar el estado 'preferencias_usuario' (fusionando)
-    preferencias_actualizadas = preferencias_post # Usar resultado post-proc o el fallback
-    if preferencias_actuales and preferencias_post: 
-        try:
-            if hasattr(preferencias_post, "model_dump"):
-                # Usar exclude_none=True para evitar que Nones del LLM borren datos existentes
-                update_data = preferencias_post.model_dump(exclude_unset=True, exclude_none=True) 
-                if update_data: # Solo actualizar si hay algo que actualizar
-                     preferencias_actualizadas = preferencias_actuales.model_copy(update=update_data)
-                else: # Si post-proc no devolvió nada útil, mantener el actual
-                     preferencias_actualizadas = preferencias_actuales
-            else:
-                 preferencias_actualizadas = preferencias_post 
-        except Exception as e_merge:
-             print(f"ERROR (Perfil) ► Fallo al fusionar preferencias: {e_merge}")
-             preferencias_actualizadas = preferencias_actuales 
-
-    print(f"DEBUG (Perfil) ► Estado preferencias_usuario actualizado: {preferencias_actualizadas}")
-    
-    # 5. Guardar la pregunta/confirmación pendiente para el siguiente nodo
-    pregunta_para_siguiente_nodo = None
-    if contenido_msg_llm and contenido_msg_llm.strip():
-        pregunta_para_siguiente_nodo = contenido_msg_llm.strip()
-        print(f"DEBUG (Perfil) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
-    else:
-        print(f"DEBUG (Perfil) ► No hay mensaje pendiente.")
+        preferencias_post_proc = aplicar_postprocesamiento_perfil(preferencias_del_llm)
         
-    # 6. Devolver estado actualizado (SIN modificar messages, CON pregunta_pendiente)
+        if preferencias_post_proc is not None:
+            preferencias_para_actualizar_estado = preferencias_post_proc
+            logging.debug(f"DEBUG (Perfil) ► Preferencias TRAS post-procesamiento: {preferencias_para_actualizar_estado.model_dump_json(indent=2) if hasattr(preferencias_para_actualizar_estado, 'model_dump_json') else preferencias_para_actualizar_estado}")
+        else:
+            logging.warning("WARN (Perfil) ► aplicar_postprocesamiento_perfil devolvió None. Usando preferencias del LLM sin post-procesar (o las actuales si LLM falló).")
+            preferencias_para_actualizar_estado = preferencias_del_llm if preferencias_del_llm else preferencias_actuales_obj
+
+    except ValidationError as e_val:
+        logging.error(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val.errors()}")
+        
+        custom_error_message = None
+        campo_rating_erroneo_para_reset = None
+        preferencias_para_reset = preferencias_actuales_obj.model_copy(deep=True) # Trabajar sobre una copia de las actuales
+
+        for error in e_val.errors():
+            loc = error.get('loc', ())
+            # El error de Pydantic v2 para modelos anidados puede tener 'preferencias_usuario' como primer elemento de 'loc'
+            if len(loc) > 0 and str(loc[0]) == 'preferencias_usuario' and len(loc) > 1 and str(loc[1]).startswith('rating_'):
+                campo_rating = str(loc[1])
+                tipo_error_pydantic = error.get('type')
+                valor_input = error.get('input')
+
+                if tipo_error_pydantic in ['less_than_equal', 'greater_than_equal', 'less_than', 'greater_than', 'finite_number', 'int_parsing']: # Añadir int_parsing
+                    nombre_amigable = MAPA_RATING_A_PREGUNTA_AMIGABLE.get(campo_rating, f"el campo '{campo_rating}'")
+                    custom_error_message = (
+                        f"Para {nombre_amigable}, necesito una puntuación entre 0 y 10. "
+                        f"Parece que ingresaste '{valor_input}'. ¿Podrías darme un valor en la escala de 0 a 10, por favor?"
+                    )
+                    campo_rating_erroneo_para_reset = campo_rating
+                    break 
+        
+        if custom_error_message:
+            mensaje_para_pregunta_pendiente = custom_error_message
+            if campo_rating_erroneo_para_reset and hasattr(preferencias_para_reset, campo_rating_erroneo_para_reset):
+                setattr(preferencias_para_reset, campo_rating_erroneo_para_reset, None)
+                logging.debug(f"DEBUG (Perfil) ► Campo erróneo '{campo_rating_erroneo_para_reset}' reseteado a None.")
+            preferencias_para_actualizar_estado = preferencias_para_reset # Usar la versión con el campo reseteado
+        else:
+            error_msg_detalle = e_val.errors()[0]['msg'] if e_val.errors() else 'Error desconocido'
+            mensaje_para_pregunta_pendiente = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {error_msg_detalle}"
+            preferencias_para_actualizar_estado = preferencias_actuales_obj # Revertir a las preferencias antes de la llamada LLM
+
+    except Exception as e_general:
+        logging.error(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil o en post-procesamiento: {e_general}", exc_info=True)
+        mensaje_para_pregunta_pendiente = "Lo siento, tuve un problema técnico al procesar tus preferencias. ¿Podríamos intentarlo de nuevo con la última pregunta?"
+        preferencias_para_actualizar_estado = preferencias_actuales_obj # Revertir a las preferencias antes de la llamada LLM
+
+    # Asegurar que pregunta_pendiente tenga un valor si no se estableció
+    if not mensaje_para_pregunta_pendiente or not mensaje_para_pregunta_pendiente.strip():
+        # Esto podría pasar si el LLM devuelve tipo_mensaje=CONFIRMACION y contenido_mensaje=""
+        # pero el perfil aún no está completo según check_perfil_usuario_completeness.
+        # En ese caso, el nodo preguntar_preferencias_node usará su fallback.
+        logging.debug(f"DEBUG (Perfil) ► No hay mensaje específico para pregunta_pendiente, se limpiará o usará fallback.")
+        mensaje_para_pregunta_pendiente = None
+
+
+    logging.debug(f"DEBUG (Perfil) ► Estado preferencias_usuario a actualizar: {preferencias_para_actualizar_estado.model_dump_json(indent=2) if hasattr(preferencias_para_actualizar_estado, 'model_dump_json') else None}")
+    logging.debug(f"DEBUG (Perfil) ► Guardando mensaje para pregunta_pendiente: {mensaje_para_pregunta_pendiente}")
+        
     return {
-        **state,
-        "preferencias_usuario": preferencias_actualizadas,
-        # "messages": historial_con_nuevo_mensaje, # <-- NO se actualiza aquí
-        "pregunta_pendiente": pregunta_para_siguiente_nodo # <-- Se guarda el CONTENIDO del mensaje
+        "preferencias_usuario": preferencias_para_actualizar_estado,
+        "pregunta_pendiente": mensaje_para_pregunta_pendiente
     }
+# def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Procesa entrada humana, llama a llm_solo_perfil, actualiza preferencias_usuario,
+#     y guarda el contenido del mensaje devuelto en 'pregunta_pendiente'.
+#     """
+#     print("--- Ejecutando Nodo: recopilar_preferencias_node ---")
+#     historial = state.get("messages", [])
+#     preferencias_actuales = state.get("preferencias_usuario") 
+
+#     # 1. Comprobar si el último mensaje es de la IA
+#     if historial and isinstance(historial[-1], AIMessage):
+#         print("DEBUG (Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
+#         return {**state, "pregunta_pendiente": None} # Limpiar pregunta pendiente
+
+#     print("DEBUG (Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
+    
+#     # Inicializar variables que se usarán después del try/except
+#     preferencias_post = preferencias_actuales # Usar el actual como fallback inicial
+#     contenido_msg_llm = None # Mensaje a guardar para el siguiente nodo
+    
+#     # 2. Llamar al LLM enfocado en el perfil
+#     try:
+#         # LLM ahora devuelve ResultadoSoloPerfil (con tipo_mensaje y contenido_mensaje)
+#         response: ResultadoSoloPerfil = llm_solo_perfil.invoke(
+#             [system_prompt_perfil, *historial],
+#             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
+#         )
+#         print(f"DEBUG (Perfil) ► Respuesta llm_solo_perfil: {response}")
+
+#         # --- CAMBIO: Extraer de la nueva estructura ---
+#         preferencias_nuevas = response.preferencias_usuario 
+#         tipo_msg_llm = response.tipo_mensaje # Puedes usarlo para logging o lógica futura si quieres
+#         contenido_msg_llm = response.contenido_mensaje # Este es el texto que guardaremos
+
+#         # 3. Aplicar post-procesamiento
+#         try:
+#             resultado_post_proc = aplicar_postprocesamiento_perfil(preferencias_nuevas)
+#             if resultado_post_proc is not None:
+#                 preferencias_post = resultado_post_proc
+#             else:
+#                  print("WARN (Perfil) ► aplicar_postprocesamiento_perfil devolvió None.")
+#                  preferencias_post = preferencias_nuevas # Fallback
+#             print(f"DEBUG (Perfil) ► Preferencias TRAS post-procesamiento: {preferencias_post}")
+#         except Exception as e_post:
+#             print(f"ERROR (Perfil) ► Fallo en postprocesamiento de perfil: {e_post}")
+#             preferencias_post = preferencias_nuevas # Fallback
+
+#     # Manejo de errores de la llamada LLM
+#     except ValidationError as e_val:
+#         print(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val}")
+#         contenido_msg_llm = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {e_val}"
+#         # Mantener preferencias anteriores si falla validación
+#         preferencias_post = preferencias_actuales
+        
+#     except ValidationError as e_val:
+#         logging.error(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val.errors()}")
+        
+#         # --- LÓGICA MEJORADA PARA ERRORES DE RATING ---
+#         custom_error_message = None
+#         campo_rating_erroneo = None
+
+#         for error in e_val.errors():
+#             # error['loc'] es una tupla, ej: ('preferencias_usuario', 'rating_seguridad')
+#             if len(error['loc']) > 1 and str(error['loc'][0]) == 'preferencias_usuario' and \
+#                str(error['loc'][1]).startswith('rating_'):
+                
+#                 campo_rating = str(error['loc'][1])
+#                 tipo_error_pydantic = error['type']
+#                 valor_input = error.get('input')
+
+#                 if tipo_error_pydantic in ['less_than_equal', 'greater_than_equal', 'less_than', 'greater_than', 'finite_number']:
+#                     nombre_amigable = MAPA_RATING_A_PREGUNTA_AMIGABLE.get(campo_rating, f"el campo '{campo_rating}'")
+#                     custom_error_message = (
+#                         f"Para {nombre_amigable}, necesito una puntuación entre 0 y 10. "
+#                         f"Parece que ingresaste '{valor_input}'. ¿Podrías darme un valor en la escala de 0 a 10, por favor?"
+#                     )
+#                     campo_rating_erroneo = campo_rating # Guardar para resetear
+#                     break # Manejar solo el primer error de rating encontrado
+        
+#         if custom_error_message:
+#             contenido_msg_llm = custom_error_message
+#             tipo_msg_llm = "PREGUNTA" # Forzar repregunta
+#             # Resetear el campo erróneo en el objeto de preferencias para que se vuelva a preguntar
+#             if campo_rating_erroneo and preferencias_post: # Usar el objeto antes de la fallida actualización del LLM
+#                 if hasattr(preferencias_post, campo_rating_erroneo):
+#                     setattr(preferencias_post, campo_rating_erroneo, None)
+#                 preferencias_post = preferencias_post # Usar la versión reseteada
+#         else:
+#             # Error de validación genérico (no de rating o no manejado específicamente)
+#             contenido_msg_llm = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {e_val.errors()[0]['msg'] if e_val.errors() else 'Error desconocido'}"
+#             tipo_msg_llm = "PREGUNTA"
+#             # En este caso, también es bueno usar las preferencias previas o resetear.
+#             preferencias_post = preferencias_post
+ 
+#     except Exception as e:
+#         print(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil: {e}")
+#         print("--- TRACEBACK FALLO LLM PERFIL ---")
+#         traceback.print_exc() # Imprimir traceback para depurar
+#         print("--------------------------------")
+#         contenido_msg_llm = "Lo siento, tuve un problema técnico al procesar tus preferencias."
+#         # Mantener preferencias anteriores
+#         preferencias_post = preferencias_actuales 
+
+#     # 4. Actualizar el estado 'preferencias_usuario' (fusionando)
+#     preferencias_actualizadas = preferencias_post # Usar resultado post-proc o el fallback
+#     if preferencias_actuales and preferencias_post: 
+#         try:
+#             if hasattr(preferencias_post, "model_dump"):
+#                 # Usar exclude_none=True para evitar que Nones del LLM borren datos existentes
+#                 update_data = preferencias_post.model_dump(exclude_unset=True, exclude_none=True) 
+#                 if update_data: # Solo actualizar si hay algo que actualizar
+#                      preferencias_actualizadas = preferencias_actuales.model_copy(update=update_data)
+#                 else: # Si post-proc no devolvió nada útil, mantener el actual
+#                      preferencias_actualizadas = preferencias_actuales
+#             else:
+#                  preferencias_actualizadas = preferencias_post 
+#         except Exception as e_merge:
+#              print(f"ERROR (Perfil) ► Fallo al fusionar preferencias: {e_merge}")
+#              preferencias_actualizadas = preferencias_actuales 
+
+#     print(f"DEBUG (Perfil) ► Estado preferencias_usuario actualizado: {preferencias_actualizadas}")
+    
+#     # 5. Guardar la pregunta/confirmación pendiente para el siguiente nodo
+#     pregunta_para_siguiente_nodo = None
+#     if contenido_msg_llm and contenido_msg_llm.strip():
+#         pregunta_para_siguiente_nodo = contenido_msg_llm.strip()
+#         print(f"DEBUG (Perfil) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
+#     else:
+#         print(f"DEBUG (Perfil) ► No hay mensaje pendiente.")
+        
+#     # 6. Devolver estado actualizado (SIN modificar messages, CON pregunta_pendiente)
+#     return {
+#         **state,
+#         "preferencias_usuario": preferencias_actualizadas,
+#         # "messages": historial_con_nuevo_mensaje, # <-- NO se actualiza aquí
+#         "pregunta_pendiente": pregunta_para_siguiente_nodo # <-- Se guarda el CONTENIDO del mensaje
+#     }
 
 
 def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
@@ -1374,6 +1526,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
        state["config"].get("configurable") and isinstance(state["config"]["configurable"], dict):
         thread_id = state["config"]["configurable"].get("thread_id", "unknown_thread")
     
+    coches_encontrados_raw = [] 
     coches_encontrados = []
     sql_ejecutada = None 
     params_ejecutados = None 
@@ -1413,15 +1566,21 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
                 k=k_coches
             )
             if isinstance(resultados_tupla, tuple) and len(resultados_tupla) == 3:
-                coches_encontrados, sql_ejecutada, params_ejecutados = resultados_tupla
+                coches_encontrados_raw, sql_ejecutada, params_ejecutados = resultados_tupla
             else: 
                 logging.warning("WARN (Buscar BQ) ► buscar_coches_bq no devolvió SQL/params. Logueo será parcial.")
-                coches_encontrados = resultados_tupla if isinstance(resultados_tupla, list) else []
-
+                coches_encontrados_raw = resultados_tupla if isinstance(resultados_tupla, list) else []
+            # --- SANITIZACIÓN DE NaN ---
+            if coches_encontrados_raw:
+                for coche_raw in coches_encontrados_raw:
+                    coches_encontrados.append(sanitize_dict_for_json(coche_raw))
+                logging.info(f"INFO (Buscar BQ) ► {len(coches_encontrados_raw)} coches crudos se limpian NaN para ->  {len(coches_encontrados)} coches.")
+            # --- FIN SANITIZACIÓN ---
+            
             if coches_encontrados:
                 mensaje_coches = f"¡Listo! Basado en todo lo que hablamos, aquí tienes {len(coches_encontrados)} coche(s) que podrían interesarte:\n\n"
                 
-                coches_para_df = []
+                #coches_para_df = []
                 for i, coche_dict_completo in enumerate(coches_encontrados):
                     # --- LLAMAR AL NUEVO GENERADOR DE EXPLICACIONES ---
                     explicacion_coche = generar_explicacion_coche_con_llm(

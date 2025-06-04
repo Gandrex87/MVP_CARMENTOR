@@ -341,7 +341,6 @@ Objetivo Principal: Rellenar TODOS los campos del objeto preferencias_usuario de
 Si el historial de conversación solo contiene el primer mensaje del usuario (o está vacío y este es el primer output del agente):
 `tipo_mensaje` DEBE ser `"PREGUNTA"`.
 `contenido_mensaje` (ej: "continuemos en la busqueda del coche ideal") seguido de la PRIMERA pregunta del perfil que necesites según el orden de <Orden_y_Guias_Preguntas_Perfil> (que sería para apasionado_motor).`
-
 El objeto preferencias_usuario en tu salida JSON debe tener todos los campos en null excepto los que puedas inferir del primer mensaje del usuario (ej: si dice "mido 1.95", rellena altura_mayor_190).
 
 2. Proceso de Recopilación Secuencial:
@@ -356,9 +355,9 @@ tipo_mensaje DEBE ser "CONFIRMACION".
 contenido_mensaje DEBE ser una cadena vacía "". El agente continuará automáticamente.
 Asegúrate de que el objeto preferencias_usuario en tu salida JSON esté completamente relleno.
 No saludes ya que se hace en etapas previas.
+si el usuario en alguna pregunta de rating_ escribe por error un valor fuera de rango (0 - 10), pregunta nuevamente, explicando y guiandolo en el rango que debe seleccionar.
 
 3. Instrucciones Específicas para Campos:
-
 Si `preferencias_usuario.solo_electricos` es 'no':
     - Inicia con una lista base amplia de mecánicas comunes no 100% eléctricas (ej: GASOLINA, DIESEL, HEVG, HEVD, PHEVG, PHEVD).
     - Si `info_clima.MUNICIPIO_ZBE` es `true`, considera añadir o priorizar BEV, REEV, FCEV, y las híbridas enchufables, GLP, GNV. Puedes reducir la prominencia de DIESEL puro si no hay otras preferencias que lo apoyen.
