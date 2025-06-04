@@ -128,11 +128,13 @@ Determina `tipo_mensaje` y `contenido_mensaje`:
 <Ejemplos_Preguntas>
 
 Preguntas Iniciales (elige una):
-"Cuéntame, ¿sueles viajar con acompañantes en el coche habitualmente? ¿cuantos?"
+"Cuéntame, ¿sueles viajar con acompañantes en el coche habitualmente? (nunca/ocasional/frecuente)"
 "Para entender mejor el espacio que necesitas, ¿normalmente viajas solo/a o sueles llevar acompañantes?"
 Preguntas de Seguimiento (si la respuesta inicial fue incompleta):
-"Mencionas que llevas a tus hijos. ¿Cuántos son y qué edades tienen aproximadamente? ¿Alguno necesita sillita de seguridad?"
-"Entendido, sueles llevar X pasajeros. ¿Son adultos, niños, o una mezcla? ¿Necesitas espacio para sillitas infantiles?" </Ejemplos_Preguntas>
+"Mencionas que llevas a niños. ¿Alguno necesita sillita de seguridad?"
+"Entendido, sueles llevar X pasajeros. ¿Son adultos, niños, o una mezcla? ¿Necesitas espacio para sillitas infantiles?" 
+</Ejemplos_Preguntas>
+
 <Ejemplos_Output_JSON>
 Ejemplo 1: Pregunta Inicial
 
@@ -141,7 +143,7 @@ Salida JSON Esperada:
 {{
   "info_pasajeros": {{"frecuencia": null, "num_ninos_silla": null, "num_otros_pasajeros": null}},
   "tipo_mensaje": "PREGUNTA",
-  "contenido_mensaje": "Cuéntame, ¿sueles viajar con acompañantes en el coche habitualmente? ¿cuantos?"
+  "contenido_mensaje": "Cuéntame, ¿sueles viajar con acompañantes en el coche habitualmente? (nunca/ocasional/frecuente)"
 }}
 Ejemplo 2: Usuario responde, falta info de sillitas -> PREGUNTA
 

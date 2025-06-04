@@ -189,6 +189,157 @@ La lista de `tipo_carroceria` devuelta por `get_recommended_carrocerias` se guar
 
 Este componente permite al agente ir más allá de simples coincidencias de palabras clave, utilizando la comprensión semántica para guiar una de las decisiones de filtrado más importantes.
 
+## Diferencia entre Pesos y Bonificaciones/Penalizaciones Fijas
+
+Es fundamental tener clara la diferencia entre los **pesos** (que se normalizan y multiplican por características escaladas) y estas **bonificaciones/penalizaciones fijas**. Ambas son formas de ajustar el `score_total`, pero funcionan de manera diferente y sirven para propósitos ligeramente distintos.
+
+---
+
+## 1. Pesos (Calculados por `compute_raw_weights` y `normalize_weights`)
+
+* **Origen**: Vienen de las preferencias del usuario (ratings 0-10, respuestas sí/no a preguntas como "apasionado del motor", "altura > 1.90", etc.) y de la lógica de "importancia relativa" que hemos definido (ej: `AVENTURA_RAW`).
+* **Proceso**:
+
+  1. `compute_raw_weights` asigna un *peso crudo* a cada característica.
+
+     * Ej: `rating_seguridad = 8` → `raw["rating_seguridad"] = 8.0`
+     * Ej: `apasionado_motor = 'sí'` → `raw["premium"] = 3.0`
+  2. `normalize_weights` suma todos los pesos crudos y divide cada uno por la suma total, obteniendo pesos normalizados que suman 1.0.
+
+     * Ej: `peso_normalizado_seguridad = 0.15`, `peso_normalizado_premium = 0.05`
+* **Aplicación en SQL**:
+
+  1. Cada característica del coche se escala a un rango 0-1 (`seguridad_scaled`, `premium_scaled`).
+  2. El `score_total` se construye sumando el producto de cada característica escalada por su peso normalizado:
+
+     ```sql
+     score_total =
+       (seguridad_scaled * @peso_rating_seguridad)
+       + (premium_scaled * @peso_premium)
+       + ...
+     ```
+* **Efecto**:
+
+  * **Ponderación Relativa**: Los pesos normalizados determinan qué proporción del "presupuesto total de importancia" (que es 1.0) se asigna a cada característica.
+  * **Comparación Continua**: Favorece a los coches que son mejores en las características con mayor peso.
+
+---
+
+## 2. Bonificaciones/Penalizaciones Fijas (Tus `BONUS_...` y `PENALTY_...`)
+
+* **Origen**: Vienen de condiciones específicas y binarias que se cumplen o no, activadas por un flag booleano calculado en Python.
+
+  * Ej: `flag_aplicar_logica_distintivo = TRUE` (por `rating_impacto_ambiental >= 8`).
+  * Ej: `flag_es_municipio_zbe = TRUE` (CP en ZBE).
+* **Proceso**:
+
+  1. Los flags booleanos se pasan a la query BigQuery (`@flag_aplicar_logica_distintivo`, etc.).
+  2. En el SQL, se usan cláusulas `CASE WHEN` para sumar o restar valores fijos al `score_total` si la condición se cumple.
+* **Aplicación en SQL**:
+
+  ```sql
+  score_total = ( ... suma de términos ponderados ... )
+    + (CASE WHEN @flag_aplicar_logica_distintivo THEN
+        CASE
+          WHEN UPPER(distintivo_ambiental) IN ('CERO','0','ECO','C') THEN 0.15  -- BONUS_DISTINTIVO_GENERAL
+          WHEN UPPER(distintivo_ambiental) IN ('B','NA') THEN -0.15            -- PENALTY_DISTINTIVO_GENERAL
+          ELSE 0.0
+        END
+      ELSE 0.0 END)
+    + (CASE WHEN @flag_es_municipio_zbe THEN
+        CASE
+          WHEN UPPER(distintivo_ambiental) IN ('CERO','0','ECO','C') THEN 0.25  -- BONUS_ZBE
+          WHEN UPPER(distintivo_ambiental) IN ('B','NA') THEN -0.50            -- PENALTY_ZBE
+          ELSE 0.0
+        END
+      ELSE 0.0 END)
+    + (CASE WHEN @flag_aplicar_logica_distintivo AND COALESCE(ocasion, FALSE)
+            THEN 0.10                                                     -- BONUS_OCASION
+            ELSE 0.0 END)
+    -- ... y las penalizaciones por antigüedad, comodidad vs low-cost/deportividad ...
+  ```
+* **Efecto**:
+
+  * **Ajuste Directo y Discreto**: Es un "empujón" o "castigo" fijo, independiente de qué tan "bueno" sea el coche en esa característica.
+  * **Manejo de Reglas de Negocio**: Ideal para reglas como ZBE o categoría de ocasión.
+  * **Impacto Fuerte**: Un penalización de -0.50 puede hundir un coche en el ranking.
+
+---
+
+## 3. Diferencias Clave y Cuándo Usar Cada Uno
+
+| Característica      | Pesos (compute + normalize)                                | Bonificaciones/Penalizaciones Fijas (CASE WHEN)                           |
+| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **Propósito**       | Importancia relativa de características continuas (0-1).   | Ajustes discretos basados en condiciones específicas o reglas de negocio. |
+| **Cálculo**         | Ratings → pesos crudos → normalización (sum = 1.0).        | Valores fijos (+/-) aplicados si cumple la condición.                     |
+| **Efecto en Score** | Multiplicativo con la característica escalada.             | Aditivo directo (todo o nada).                                            |
+| **Sensibilidad**    | Sensible a cuánto mejor es un coche en la característica.  | Sensible a si cumple o no la condición.                                   |
+| **Ejemplos**        | "Quiero mucha seguridad" → `seguridad_scaled * alto_peso`. | "Estoy en ZBE" → +0.25 o -0.50 según distintivo.                          |
+
+---
+
+## 4. Exportar a Hojas de Cálculo
+
+* **¿Se están "cargando" mucho los pesos?**
+
+  * Sí: si `rating_fiabilidad_durabilidad`, `rating_impacto_ambiental` y `rating_costes_uso` son altos, la suma de esos pesos normalizados acentúa las columnas BQ correspondientes.
+* **Con Bonificaciones/Penalizaciones**:
+
+  * Cada bonus/penalty es independiente y se suma como líneas separadas en la hoja.
+
+---
+
+## 5. Recomendación
+
+Tu enfoque actual de usar ambos mecanismos es **potente**:
+
+1. Los **pesos** capturan la importancia relativa de las preferencias del usuario.
+2. Las **bonificaciones/penalizaciones** implementan reglas de negocio o ajustes fuertes.
+
+Asegúrate de que los valores fijos estén en una escala adecuada en relación con los scores ponderados (generalmente 0 a 1). Un bonus de +0.25 o una penalización de -0.50 debe usarse con cautela para no desbalancear el ranking.
+
+6. Lógica Actual (con el "doble chequeo")
+   
+```sql
+-- Penalización para 'acceso_low_cost'
++ (CASE 
+       WHEN @flag_penalizar_low_cost_comodidad = TRUE -- (1er chequeo: ¿Prioriza el usuario la comodidad?)
+            AND acceso_low_cost_scaled >= 0.7     -- (2do chequeo: ¿Este coche es MUY "low_cost"?)
+       THEN -0.20 -- Aplicar penalización
+       ELSE 0.0 
+   END)
+```
+Cómo funciona:
+
+Se verifica el flag @flag_penalizar_low_cost_comodidad, que es TRUE si el usuario dio un rating alto a "Comodidad" (>= 7). Si el flag es FALSE, la penalización no se aplica.
+
+Si el flag es TRUE, se evalúa acceso_low_cost_scaled >= 0.7.
+
+Solo si ambas condiciones se cumplen, se resta 0.20 al score_total.
+
+1. Columna Original en BQ `acceso_low_cost`: Tiene una escala, por ejemplo, de 1.0 a 10.0 (según tu `MIN_MAX_RANGES`, donde asumimos que un valor más alto, como 10.0, significa "más low_cost" o más básico, lo cual es menos deseable si se busca confort).
+
+2. Escalado Min-Max (`acceso_low_cost_scaled`): En el SQL, transformamos el valor original de `acceso_low_cost` a un valor normalizado entre 0.0 y 1.0.
+
+- Si `acceso_low_cost` original es 1.0 (el mínimo, menos "low_cost"), entonces acceso_low_cost_scaled será 0.0.
+  
+- Si `acceso_low_cost` original es 10.0 (el máximo, más "low_cost"), entonces acceso_low_cost_scaled será 1.0.
+  
+- Si `acceso_low_cost` original es, por ejemplo, 7.3, y el rango es (1.0, 10.0): `escalado = (7.3 - 1.0) / (10.0 - 1.0) = 6.3 / 9.0 = 0.7`
+  
+3. Umbral de Penalización (UMBRAL_LOW_COST_PENALIZABLE = 0.7):
+Este umbral, tal como lo tienes definido en tus constantes Python (ej: UMBRAL_LOW_COST_PENALIZABLE = 0.7), se compara directamente con el valor escalado (acceso_low_cost_scaled) en el SQL:
+
+```sql
+
+  ... AND acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE} ... 
+  -- que se convierte en:
+  ... AND acceso_low_cost_scaled >= 0.7 ...
+  Esto significa que la penalización se aplica si el valor escalado del coche para acceso_low_cost es 0.7 o más.
+```
+
+Efecto:
+Esta lógica garantiza que solo los coches excesivamente "low-cost" (valor escalado ≥ 0.7) reciban la penalización, y únicamente cuando al usuario le importa mucho la comodidad.
 
 
 ////////////////////////////////
@@ -211,4 +362,4 @@ Esto te da la flexibilidad de decir: "Prefiero coches cómodos, y si un coche es
 
 ¿Queda más claro así? Si te parece bien este enfoque, podemos continuar con la implementación en buscar_coches_bq.
 
-MUNICIPIO_ZBE, 	ZONA_LLUVIAS,	ZONA_NIEBLAS,	ZONA_NIEVE, ZONA_CLIMA_MONTA,	ZONA_GLP,	ZONA_GNV
+

@@ -46,5 +46,13 @@ class TipoUsoProfesional(str, Enum):
     CARGA     = "carga"
     MIXTO     = "mixto"
     
-
+class DimensionProblematica(str, Enum):
+    LARGO = "largo"
+    ANCHO = "ancho"
+    ALTO = "alto"
+    
+class EstiloConduccion(str, Enum):
+    TRANQUILO = "tranquilo"
+    DEPORTIVO = "deportivo"
+    MIXTO     = "mixto"
     

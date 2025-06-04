@@ -3,6 +3,20 @@ from .state import EstadoAnalisisPerfil # o donde esté tu TypedDict
 from utils.validation import check_perfil_usuario_completeness, check_filtros_completos, check_economia_completa, check_pasajeros_completo
 from typing import Literal
 
+
+# --- NUEVA Función Condicional para la Etapa - 0 de Codigo Postal ---
+def ruta_decision_cp(state: EstadoAnalisisPerfil) -> Literal["buscar_clima", "repreguntar_cp"]:
+    """Decide si el CP es válido para buscar clima o si hay que repreguntar."""
+    print("--- Evaluando Condición: ruta_decision_cp ---")
+    decision = state.get("_decision_cp_validation") # Clave puesta por validar_cp_node
+    if decision == "cp_valido_listo_para_clima":
+        print("DEBUG (Condición CP) ► CP válido/omitido. Procediendo a buscar clima.")
+        return "buscar_clima"
+    else: # "repreguntar_cp" o cualquier otro caso
+        print("DEBUG (Condición CP) ► CP inválido o aclaración necesaria. Repreguntando.")
+        return "repreguntar_cp"
+
+
 def ruta_decision_pasajeros(state: EstadoAnalisisPerfil) -> Literal["aplicar_filtros", "necesita_pregunta_pasajero"]:
     """Decide si la info de pasajeros está completa."""
     print("--- Evaluando Condición: ruta_decision_pasajeros ---")
@@ -81,14 +95,13 @@ def ruta_decision_economia(state: EstadoAnalisisPerfil) -> str:
     if check_economia_completa(economia):
         print("DEBUG (Condición Economía) ► Economía COMPLETA. Avanzando a finalizar.")
         # Clave para ir al nodo final
-        return "pasar_a_finalizar" 
+        return "iniciar_finalizacion"
     else:
         print("DEBUG (Condición Economía) ► Economía INCOMPLETA. Se necesita pregunta.")
         # Clave para ir al nuevo nodo que pregunta
         return "necesita_pregunta_economia"
 
 
-# --- Punto de Entrada Condicional CORREGIDO ---
 # --- NUEVO NODO ROUTER (Muy simple) ---
 def route_based_on_state_node(state: EstadoAnalisisPerfil) -> dict:
     """Nodo intermedio que no hace nada, solo permite la bifurcación inicial."""
@@ -99,7 +112,8 @@ def route_based_on_state_node(state: EstadoAnalisisPerfil) -> dict:
 
 def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
     """Decide a qué etapa saltar al inicio de una invocación."""
-    print("\n--- DEBUG: Evaluating Routing Decision ---") 
+    print("\n--- DEBUG: Evaluating Routing Decision ---")
+    info_clima = state.get("info_clima_usuario") 
     preferencias = state.get("preferencias_usuario")
     info_pasajeros = state.get("info_pasajeros")
     filtros = state.get("filtros_inferidos")
@@ -108,6 +122,7 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
     coches = state.get("coches_recomendados")
     
     # Prints de depuración (opcional mantenerlos)
+    print(f"DEBUG Router: CP OK? {info_clima is not None}")
     print(f"DEBUG Router: Prefs OK? {check_perfil_usuario_completeness(preferencias)}")
     print(f"DEBUG Router: Pasajeros OK? {check_pasajeros_completo(info_pasajeros)}")
     print(f"DEBUG Router: Filtros OK? {check_filtros_completos(filtros)}")
@@ -116,7 +131,12 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
     print(f"DEBUG Router: Coches Buscados? {coches is not None}")
 
     # Lógica de enrutamiento en orden
-    if not check_perfil_usuario_completeness(preferencias):
+    if info_clima is None: # Si nunca hemos intentado obtener info_clima
+        print("DEBUG Router: Decisión -> recopilar_cp (Etapa CP no completada)")
+        return "recopilar_cp" 
+    # Si info_clima existe (incluso si cp_valido_encontrado es False), la etapa de CP/Clima se considera "pasada".
+    # Continuar con la lógica de las siguientes etapas: Perfil -> Pasajeros -> Filtros ...   
+    elif not check_perfil_usuario_completeness(preferencias):
         print("DEBUG Router: Decisión -> recopilar_preferencias")
         return "recopilar_preferencias" 
     elif not check_pasajeros_completo(info_pasajeros):
@@ -129,11 +149,12 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
          print("DEBUG Router: Decisión -> recopilar_economia")
          return "recopilar_economia" 
     elif pesos is None: 
-        print("DEBUG Router: Decisión -> finalizar_y_presentar")
-        return "finalizar_y_presentar"
-    elif coches is None: 
+        # Si falta algún paso de la secuencia de finalización (cálculo de econ modo1, rag, flags, pesos)
+        print("DEBUG Router: Decisión -> iniciar_finalizacion (va a calcular_recomendacion_economia_modo1)")
+        return "iniciar_finalizacion"
+    elif coches is None: # Si todo lo anterior está completo y los pesos están, pero no hay coches
         print("DEBUG Router: Decisión -> buscar_coches_finales")
         return "buscar_coches_finales"
-    else:
-        print("DEBUG Router: Decisión -> Conversación Completa. Reiniciando (recopilar_preferencias).")
-        return "recopilar_preferencias" # Reiniciar
+    else: # Conversación completa y coches ya buscados, reiniciar para una nueva consulta
+        print("DEBUG Router: Decisión -> Conversación Completa con coches. Reiniciando (recopilar_cp).")
+        return "recopilar_cp"

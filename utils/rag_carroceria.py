@@ -7,7 +7,12 @@ from langchain_community.vectorstores import FAISS
 from utils.rag_reader import cargar_carrocerias_desde_pdf
 from typing import Optional, List, Dict, Any # Añade los que necesites
 from utils.conversion import is_yes
-
+from config.settings import (AVENTURA_SYNONYMS_RAG, USO_PROF_MIXTO_SYNONYMS_RAG, USO_PROF_PASAJEROS_SYNONYMS_RAG,
+                             USO_PROF_MIXTO_SYNONYMS_RAG, ESTETICA_VALORADA_SYNONYMS_RAG, ESPACIO_PASAJEROS_NINOS_SYNONYMS_RAG, 
+                             APASIONADO_MOTOR_SYNONYMS_RAG, SOLO_ELECTRICOS_SYNONYMS_RAG, ALTA_COMODIDAD_CARROCERIA_SYNONYMS_RAG,
+                             NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS_RAG, CLIMA_MONTA_CARROCERIA_SYNONYMS_RAG, USO_PROF_CARGA_SYNONYMS_RAG 
+                             , UMBRAL_RATING_COMODIDAD_RAG
+                             )
 
 
 # --- Constantes ---
@@ -120,64 +125,12 @@ def get_vectorstore(force_rebuild: bool = False) -> FAISS:
         raise RuntimeError(f"No se pudo construir ni cargar el vector store: {e}")
 
 
-# USO_PROF_SYNONYMS = [
-#     "profesional", "transporte de mercancías", "transporte de pasajeros", "herramientas", "comercio", "logística"
-# ]
-
-# Mapa de sinónimos por nivel de aventura
-AVENTURA_SYNONYMS = {
-    "ninguna":   ["ciudad", "asfalto", "uso diario", "practicidad", "maniobrable"],
-    "ocasional": ["campo", "ligero fuera de asfalto", "excursiones", "profesional", "versátil"],
-    "extrema":   ["off-road", "terrenos difíciles","tracción 4x4","barro", "gran altura libre", "reductora"]
-}
-
-# NUEVOS SINÓNIMOS SUGERIDOS (a usar dinámicamente en get_recommended_carrocerias)
-USO_PROF_CARGA_SYNONYMS = [
-    "transporte de mercancías", "herramientas", "materiales", "logística", "entregas", "furgón" 
-    # Tags del PDF relevantes: "Transporte de objetos especiales", "logística", "entregas", "comercio", "servicio técnico", "carga pesada"
-]
-
-USO_PROF_PASAJEROS_SYNONYMS = [
-    "transporte de personas","vehículo de pasajeros", "transporte escolar", "rutas de personal",
-    "muchos asientos"
-    # Tags del PDF relevantes: "Muchos pasajeros" (en FURGONETA, MONOVOLUMEN), "viajes familiares" (FURGONETA) podría tener una connotación.
-]
-
-USO_PROF_MIXTO_SYNONYMS = [
-    "uso mixto profesional", "versatilidad carga y pasajeros", "vehículo combi", 
-    "transporte de equipo y personal", "trabajo y familia adaptable", "doble cabina"
-    # Tags del PDF relevantes: FURGONETA (intrínsecamente mixto), PICKUP (doble cabina), SUV, FAMILIAR.
-]
-
-
-ESTETICA_VALORADA_SYNONYMS = [ # Si valora_estetica == "sí"
-   "diseño", "elegancia", "llamar atención" # Algunos ya están en tags del PDF
-]
-
-ESPACIO_PASAJEROS_NINOS_SYNONYMS = [ # Si num_ninos_silla > 0 o muchos pasajeros
-   "espacio sillas infantiles", "modularidad asientos", "accesibilidad plazas traseras"
-]
-
-APASIONADO_MOTOR_SYNONYMS = [ # Si apasionado_motor == "sí"
-    "conducción emocionante", "singular", "motor avanzado", "ágil en curvas"
-]
-
-# Podrías incluso tener para SOLO_ELECTRICOS, aunque "eléctrico" es bastante directo
-SOLO_ELECTRICOS_SYNONYMS = ["cero emisiones", "sostenible", "bajo consumo energético"]
-
-# --- NUEVOS SINÓNIMOS/TÉRMINOS PARA ALTA COMODIDAD ---
-ALTA_COMODIDAD_CARROCERIA_SYNONYMS = ["comodidad y confort", "mascotas", "derivado de un 2VOL o 3VOL", "SUV familiar cómodo",   "monovolumen espacioso"
-]
-NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS = ["maletero amplio", "versatilidad interior","portón trasero grande", "modularidad"]
-
-# --- FIN NUEVOS SINÓNIMOS ---
-
-
 def get_recommended_carrocerias(
     preferencias: Dict[str, Any], 
     filtros_tecnicos: Optional[Dict[str, Any]], # <--- ASEGÚRATE QUE ESTE ARGUMENTO EXISTA 
     info_pasajeros: Optional[Dict[str, Any]], 
-    k: int = 4
+    info_clima: Optional[Dict[str, Any]], # <-- NUEVO ARGUMENTO
+    k: int = 4 #antes 4
 ) -> List[str]:
     """
     Obtiene tipos de carrocería recomendados usando RAG,
@@ -191,25 +144,30 @@ def get_recommended_carrocerias(
     partes_query = []
 
     # --- 1. Construcción de Partes de la Query basada en Preferencias ---
-    if is_yes(preferencias.get("solo_electricos")) and SOLO_ELECTRICOS_SYNONYMS:
-        partes_query.extend(SOLO_ELECTRICOS_SYNONYMS)
+    if is_yes(preferencias.get("solo_electricos")) and SOLO_ELECTRICOS_SYNONYMS_RAG:
+        partes_query.extend(SOLO_ELECTRICOS_SYNONYMS_RAG)
     
-    if is_yes(preferencias.get("valora_estetica")) and ESTETICA_VALORADA_SYNONYMS:
-        partes_query.extend(ESTETICA_VALORADA_SYNONYMS)
+    if is_yes(preferencias.get("valora_estetica")) and ESTETICA_VALORADA_SYNONYMS_RAG:
+        partes_query.extend(ESTETICA_VALORADA_SYNONYMS_RAG)
     
-    if is_yes(preferencias.get("apasionado_motor")) and APASIONADO_MOTOR_SYNONYMS:
-        partes_query.extend(APASIONADO_MOTOR_SYNONYMS)
-            
+    if is_yes(preferencias.get("apasionado_motor")) and APASIONADO_MOTOR_SYNONYMS_RAG:
+        partes_query.extend(APASIONADO_MOTOR_SYNONYMS_RAG)
+    
+    if is_yes(preferencias.get("arrastra_remolque")):
+        logging.info("INFO (RAG) ► Usuario arrastra remolque. Enriqueciendo query RAG para capacidad de arrastre.")
+        partes_query.extend([
+            "capacidad de carga", " transportar cargas grandes", "robusto", 
+            "estructura resistente","remolcar caravana"])
     # Aventura
     aventura_val = preferencias.get("aventura")
     nivel_aventura_str = ""
     if hasattr(aventura_val, "value"): nivel_aventura_str = aventura_val.value.strip().lower()
     elif isinstance(aventura_val, str): nivel_aventura_str = aventura_val.strip().lower()
 
-    if nivel_aventura_str and nivel_aventura_str in AVENTURA_SYNONYMS:
-        partes_query.extend(AVENTURA_SYNONYMS[nivel_aventura_str])
+    if nivel_aventura_str and nivel_aventura_str in AVENTURA_SYNONYMS_RAG:
+        partes_query.extend(AVENTURA_SYNONYMS_RAG[nivel_aventura_str])
     elif not nivel_aventura_str or nivel_aventura_str == "ninguna":
-        if "ninguna" in AVENTURA_SYNONYMS: partes_query.extend(AVENTURA_SYNONYMS["ninguna"])
+        if "ninguna" in AVENTURA_SYNONYMS_RAG: partes_query.extend(AVENTURA_SYNONYMS_RAG["ninguna"])
         else: partes_query.extend(["urbano", "carretera", "compacto"])
 
     # Uso Profesional
@@ -220,9 +178,9 @@ def get_recommended_carrocerias(
         if hasattr(tipo_uso_prof_val, "value"): detalle_uso_str = tipo_uso_prof_val.value.lower()
         elif isinstance(tipo_uso_prof_val, str): detalle_uso_str = tipo_uso_prof_val.lower()
 
-        if detalle_uso_str == "carga" and USO_PROF_CARGA_SYNONYMS: partes_query.extend(USO_PROF_CARGA_SYNONYMS)
-        elif detalle_uso_str == "pasajeros" and USO_PROF_PASAJEROS_SYNONYMS: partes_query.extend(USO_PROF_PASAJEROS_SYNONYMS)
-        elif detalle_uso_str == "mixto" and USO_PROF_MIXTO_SYNONYMS: partes_query.extend(USO_PROF_MIXTO_SYNONYMS)
+        if detalle_uso_str == "carga" and USO_PROF_CARGA_SYNONYMS_RAG: partes_query.extend(USO_PROF_CARGA_SYNONYMS_RAG)
+        elif detalle_uso_str == "pasajeros" and USO_PROF_PASAJEROS_SYNONYMS_RAG: partes_query.extend(USO_PROF_PASAJEROS_SYNONYMS_RAG)
+        elif detalle_uso_str == "mixto" and USO_PROF_MIXTO_SYNONYMS_RAG: partes_query.extend(USO_PROF_MIXTO_SYNONYMS_RAG)
                 
     # Información de Pasajeros
     if isinstance(info_pasajeros, dict):
@@ -231,25 +189,30 @@ def get_recommended_carrocerias(
         num_otros_pasajeros = info_pasajeros.get("num_otros_pasajeros", 0)
 
         if frecuencia != "nunca":
-            if num_ninos_silla > 0 and ESPACIO_PASAJEROS_NINOS_SYNONYMS:
-                partes_query.extend(ESPACIO_PASAJEROS_NINOS_SYNONYMS)
+            if num_ninos_silla > 0 and ESPACIO_PASAJEROS_NINOS_SYNONYMS_RAG:
+                partes_query.extend(ESPACIO_PASAJEROS_NINOS_SYNONYMS_RAG)
             elif (num_ninos_silla + num_otros_pasajeros) >= 2: 
-                partes_query.extend(["espacio para pasajeros", "viajar acompañado", "amplitud interior", "muchas plazas", "gran capacidad interior"])
+                partes_query.extend(["espacio para pasajeros", "viajar acompañado", "amplitud interior", "muchas plazas"])
     else:
         logging.info("INFO (RAG Query) ► No se proporcionó información de pasajeros válida para RAG.")
 
     # Necesidad de Espacio para Objetos Especiales
-    if is_yes(preferencias.get("necesita_espacio_objetos_especiales")) and NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS:
+    if is_yes(preferencias.get("necesita_espacio_objetos_especiales")) and NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS_RAG:
         logging.info("INFO (RAG) ► Necesidad de espacio objetos especiales. Enriqueciendo query.")
-        partes_query.extend(NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS)
+        partes_query.extend(NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS_RAG)
     
     # Alta Comodidad
-    UMBRAL_RATING_COMODIDAD_RAG = 8 
     rating_comodidad_val = preferencias.get("rating_comodidad")
-    if rating_comodidad_val is not None and rating_comodidad_val >= UMBRAL_RATING_COMODIDAD_RAG and ALTA_COMODIDAD_CARROCERIA_SYNONYMS:
+    if rating_comodidad_val is not None and rating_comodidad_val >= UMBRAL_RATING_COMODIDAD_RAG and ALTA_COMODIDAD_CARROCERIA_SYNONYMS_RAG:
         logging.info(f"INFO (RAG) ► Rating Comodidad alto. Enriqueciendo query para confort.")
-        partes_query.extend(ALTA_COMODIDAD_CARROCERIA_SYNONYMS)
-
+        partes_query.extend(ALTA_COMODIDAD_CARROCERIA_SYNONYMS_RAG)
+        
+    # --- LÓGICA PARA INFLUIR RAG CON CLIMA CP DE MONTAÑA ---
+    if info_clima and info_clima.get("ZONA_CLIMA_MONTA") is True:
+        logging.info("INFO (RAG) ► Zona de Clima de Montaña detectada. Enriqueciendo query RAG.")
+        if CLIMA_MONTA_CARROCERIA_SYNONYMS_RAG:
+            partes_query.extend(CLIMA_MONTA_CARROCERIA_SYNONYMS_RAG)
+    
     # --- 2. Limpieza y Formación de la Query String ---
     partes_unicas = []
     if partes_query: # Solo procesar si hay partes

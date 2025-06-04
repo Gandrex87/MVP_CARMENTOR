@@ -3,11 +3,24 @@ from typing import List, Optional, Annotated, Literal
 from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, model_validator
-from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesional
+from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesional, DimensionProblematica, EstiloConduccion
 from typing import Literal, Optional
 
 
-# 🧠 Modelos de Datos (PerfilUsuario, FiltrosInferidos, EconomiaUsuario): Estos modelos definen la información que quieres recopilar.
+# 🧠 Modelos de Datos (InfoClimaUsuario, PerfilUsuario, FiltrosInferidos, EconomiaUsuario): Estos modelos definen la información que quieres recopilar.
+   
+   
+# Las claves aquí deben coincidir con los nombres de tus columnas en la tabla zona_climas
+class InfoClimaUsuario(BaseModel):
+    MUNICIPIO_ZBE: bool = False # Default a False
+    ZONA_LLUVIAS: bool = False
+    ZONA_NIEBLAS: bool = False
+    ZONA_NIEVE: bool = False
+    ZONA_CLIMA_MONTA: bool = False
+    ZONA_GLP: bool = False
+    ZONA_GNV: bool = False
+    cp_valido_encontrado: bool = Field(default=False, description="Indica si el CP se procesó y se encontró en al menos una categoría o es válido.")
+    codigo_postal_consultado: Optional[str] = Field(default=None, description="El CP que se consultó.") 
         
 class PerfilUsuario(BaseModel):
     # Añadir default=None a todos los Optional que no lo tenían
@@ -17,24 +30,34 @@ class PerfilUsuario(BaseModel):
     uso_profesional: Optional[str] = Field(default=None, description="¿Usará el coche para trabajo? Responde 'sí' o 'no'")
     tipo_uso_profesional: Optional[TipoUsoProfesional] = Field(default=None, description="Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'")
     prefiere_diseno_exclusivo: Optional[str] = Field(default=None,description="¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?")
-    aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
-    transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'")
-    necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'")
     altura_mayor_190: Optional[str] = Field(default=None, description="¿El usuario mide más de 1.90 metros? Responde 'sí' o 'no'")
     peso_mayor_100: Optional[str] = Field(default=None, description="¿El usuario pesa más de 100 kg? Responde 'sí' o 'no'")
+    transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'")
+    necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'")    
+    arrastra_remolque: Optional[str] = Field(default=None, description="¿Va a arrastrar remolque pesado o caravana? Responde 'sí' o 'no'" )
+     # --- NUEVOS CAMPOS PARA GARAJE/APARCAMIENTO ---
+    tiene_garage: Optional[str] = Field(default=None, description="¿Tiene garaje o plaza de aparcamiento propia? Responde 'sí' o 'no'" )
+    problemas_aparcar_calle: Optional[str] = Field(default=None,description="Si no tiene garaje, ¿suele tener problemas para aparcar en la calle? Responde 'sí' o 'no'")
+    espacio_sobra_garage: Optional[str] = Field(default=None, description="Si tiene garaje, ¿tiene espacio de sobra? Responde 'sí' o 'no'")
+    problema_dimension_garage: Optional[List[DimensionProblematica]] = Field(default=None,description="Si no tiene espacio de sobra en garaje, ¿cuál es la dimensión problemática principal (largo, ancho, alto)? Puede ser una lista.")
+    tiene_punto_carga_propio: Optional[str] = Field( # 'sí' o 'no'
+        default=None,
+        description="¿El usuario tiene un punto de carga para vehículo eléctrico en propiedad? Responde 'sí' o 'no'"
+    )
+    aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
+    estilo_conduccion: Optional[EstiloConduccion] = Field( 
+            default=None,
+            description="Estilo de conducción preferido: tranquilo, deportivo o mixto.")
     solo_electricos: Optional[str] = Field(default=None, description="¿Quiere solo coches eléctricos? Responde 'sí' o 'no'")
+    prioriza_baja_depreciacion: Optional[str] = Field(default=None, description="¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'")
     transmision_preferida: Optional[Transmision] = Field(default=None, description="¿Qué transmisión prefieres: automático, manual o ambos?")
     # --- NUEVOS CAMPOS DE RATING (0-10) ---
     rating_fiabilidad_durabilidad: Optional[int] = Field( default=None, ge=0, le=10,description="Importancia de Fiabilidad y Durabilidad (0-10).")  # ge=greater or equal, le=less or equal
     rating_seguridad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Seguridad (0-10).")
     rating_comodidad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Comodidad (0-10)." )
     rating_impacto_ambiental: Optional[int] = Field(default=None, ge=0, le=10,description="Importancia del Bajo Impacto Medioambiental (0-10)."  )
-    #rating_costes_uso: Optional[int] = Field( default=None, ge=0, le=10, description="Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).") por ahora no va
     rating_tecnologia_conectividad: Optional[int] = Field(default=None, ge=0, le=10, description="Importancia de la Tecnología y Conectividad (0-10).")
-    prioriza_baja_depreciacion: Optional[str] = Field(default=None, description="¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'")
-    
-   
-    
+    rating_costes_uso: Optional[int] = Field( default=None, ge=0, le=10, description="Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).") 
     
     # ConfigDict se mantiene igual (recuerda quitar ignored_types si no lo hiciste)
     class ConfigDict:
@@ -124,10 +147,25 @@ class ResultadoSoloFiltros(BaseModel):
     filtros_inferidos: FiltrosInferidos
     mensaje_validacion: str = Field(description="Pregunta de seguimiento CLARA y CORTA si falta información ESENCIAL para completar los FiltrosInferidos (ej: tipo_mecanica), o un mensaje de confirmación si los filtros están completos.")
 
-    
+
+# Modelo Pydantic para la salida del LLM que extrae el CP ---
+class ResultadoCP(BaseModel):
+    """Salida esperada del LLM enfocado en extraer el código postal."""
+    codigo_postal_extraido: Optional[str] = Field(default=None, description="El código postal numérico de 5 dígitos extraído de la respuesta del usuario.")
+    tipo_mensaje: Literal["PREGUNTA_ACLARACION", "CP_OBTENIDO", "ERROR"] = Field(description="Clasificación: 'PREGUNTA_ACLARACION' si el CP no es válido o falta, 'CP_OBTENIDO' si se extrajo un CP válido, 'ERROR'.")
+    contenido_mensaje: str = Field(description="El texto real del mensaje: la pregunta de aclaración para el CP, una confirmación, o un detalle del error.")
+
+
+
+
 #ES el contenedor general que acumula toda la información a lo largo de la ejecución del grafo.
 class EstadoAnalisisPerfil(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]  # 👈 sumo todos los mensajes sin perder contexto
+    codigo_postal_usuario: Optional[str] # El CP validado
+    info_clima_usuario: Optional[InfoClimaUsuario] # Los datos climáticos de BQ
+    codigo_postal_extraido_temporal: Optional[str]
+    tipo_mensaje_cp_llm: Optional[Literal["PREGUNTA_ACLARACION", "CP_OBTENIDO", "ERROR"]]
+    _decision_cp_validation: Optional[Literal["buscar_clima", "repreguntar_cp"]] # Clave interna para routing
     preferencias_usuario: Optional[PerfilUsuario]
     filtros_inferidos: Optional[FiltrosInferidos]
     economia: Optional[EconomiaUsuario]          # ← nuevo canal para la rama económica
@@ -142,6 +180,7 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_penalizar_deportividad_comodidad: Optional[bool]
     flag_penalizar_antiguo_por_tecnologia: Optional[bool]
     aplicar_logica_distintivo_ambiental: Optional[bool]
+    es_municipio_zbe: Optional[bool] 
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
 
 
