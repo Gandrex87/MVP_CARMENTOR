@@ -103,22 +103,3 @@ def obtener_datos_climaticos_por_cp(codigo_postal_str: str) -> Optional[InfoClim
         # En caso de error, devolver un objeto indicando que no se pudo procesar
         return InfoClimaUsuario(codigo_postal_consultado=codigo_postal_str, cp_valido_encontrado=False)
 
-# --- Ejemplo de uso (para probar en un notebook o localmente si tienes credenciales) ---
-# if __name__ == "__main__":
-#     # Configurar logging para ver los mensajes de la función
-#     logging.basicConfig(level=logging.INFO)
-#     test_cp = "28010" # Un CP de ejemplo
-#     clima_info = obtener_datos_climaticos_por_cp(test_cp)
-#     if clima_info:
-#         print(f"\nInformación climática para {test_cp}:")
-#         print(clima_info.model_dump_json(indent=2))
-#     else:
-#         print(f"No se pudo obtener información para {test_cp}")
-
-#     test_cp_no_existente = "00000"
-#     clima_info_no = obtener_datos_climaticos_por_cp(test_cp_no_existente)
-#     if clima_info_no:
-#         print(f"\nInformación climática para {test_cp_no_existente}:")
-#         print(clima_info_no.model_dump_json(indent=2))
-#     else:
-#         print(f"No se pudo obtener información para {test_cp_no_existente}")

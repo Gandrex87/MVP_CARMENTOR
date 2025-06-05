@@ -6,6 +6,8 @@
 # utils/postprocessing.py
 from utils.enums import Transmision , TipoMecanica
 from typing import Optional, List, Set
+from config.settings import (PESO_CRUDO_FAV_ESTETICA , PESO_CRUDO_FAV_PREMIUM, PESO_CRUDO_FAV_SINGULAR , PESO_CRUDO_BASE_ESTETICA ,PESO_CRUDO_BASE_PREMIUM,
+                            PESO_CRUDO_BASE_SINGULAR )
 from graph.perfil.state import PerfilUsuario, FiltrosInferidos,InfoClimaUsuario 
 from .conversion import is_yes
 import logging 
@@ -165,26 +167,26 @@ def aplicar_postprocesamiento_filtros(
         filtros_actualizado.tipo_mecanica = lista_final_mecanicas
         cambios_efectuados_en_este_nodo = True
 
-
-    # --- Reglas para estetica_min, premium_min, singular_min (como las tenías) ---
+    
+    # --- Reglas para estetica_min, premium_min, singular_min ---
     if preferencias:
         # Estética
-        estetica_target = 5.0 if is_yes(preferencias.valora_estetica) else 1.0
+        estetica_target = PESO_CRUDO_FAV_ESTETICA if is_yes(preferencias.valora_estetica) else PESO_CRUDO_BASE_ESTETICA
         if filtros_actualizado.estetica_min != estetica_target:
             logging.debug(f"PostProc Filtros: Aplicando regla estetica: de {filtros_actualizado.estetica_min} a {estetica_target}")
             filtros_actualizado.estetica_min = estetica_target
             cambios_efectuados_en_este_nodo = True
             
         # Premium
-        premium_min_target = 3.0 if is_yes(preferencias.apasionado_motor) else 1.0 # Ajustado a tu última lógica
+        premium_min_target = PESO_CRUDO_FAV_PREMIUM if is_yes(preferencias.apasionado_motor) else PESO_CRUDO_BASE_PREMIUM 
         if filtros_actualizado.premium_min != premium_min_target:
             logging.debug(f"PostProc Filtros: Aplicando regla premium: de {filtros_actualizado.premium_min} a {premium_min_target}")
             filtros_actualizado.premium_min = premium_min_target
             cambios_efectuados_en_este_nodo = True
 
         # Singular (Aditiva)
-        singular_min_calculado = (3.0 if is_yes(preferencias.apasionado_motor) else 1.0) + \
-                                 (3.0 if is_yes(preferencias.prefiere_diseno_exclusivo) else 1.0)
+        singular_min_calculado = (PESO_CRUDO_FAV_SINGULAR if is_yes(preferencias.apasionado_motor) else PESO_CRUDO_BASE_SINGULAR) + \
+                                 (PESO_CRUDO_FAV_SINGULAR if is_yes(preferencias.prefiere_diseno_exclusivo) else PESO_CRUDO_BASE_SINGULAR)
         singular_min_calculado = max(0.0, min(10.0, singular_min_calculado)) # Clamp
 
         if filtros_actualizado.singular_min != singular_min_calculado:

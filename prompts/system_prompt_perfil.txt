@@ -394,7 +394,7 @@ valora_estetica: "¿Es importante para ti el diseño y la estética del coche, o
 coche_principal_hogar: "¿Este nuevo coche se convertirá en el vehículo principal de tu hogar?"
 uso_profesional: "¿El coche será principalmente para uso personal o también tendrá un uso profesional?"
 tipo_uso_profesional: (SOLO SI uso_profesional es 'sí' Y este campo es null) "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
-prefiere_diseno_exclusivo: "En cuanto al estilo, ¿te inclinas más por un diseño exclusivo y que destaque, o prefieres algo más discreto y convencional? (Responde 'sí' para exclusivo, 'no' para discreto)"
+prefiere_diseno_exclusivo: "En cuanto al estilo, ¿te inclinas más por un diseño exclusivo y que destaque, o prefieres algo más discreto y convencional?"
 altura_mayor_190: "¿Para asegurar tu comodidad, mides más de 1.90 m?"
 peso_mayor_100: "Y en cuanto al peso, ¿superas los 100 kg? Esto nos ayuda con la amplitud de los asientos."
 transporta_carga_voluminosa: "¿Sueles necesitar transportar equipaje voluminoso, material deportivo grande o similar con frecuencia?"

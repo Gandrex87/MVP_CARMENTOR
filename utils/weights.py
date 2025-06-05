@@ -19,7 +19,7 @@ from config.settings import (MAX_SINGLE_RAW_WEIGHT , MIN_SINGLE_RAW_WEIGHT , AVE
                             RAW_PESO_DEPORTIVIDAD_MEDIO, RAW_PESO_MENOR_REL_PESO_POTENCIA_MEDIO, RAW_PESO_POTENCIA_MAXIMA_MEDIO, RAW_PESO_PAR_MOTOR_DEPORTIVO_MEDIO, RAW_PESO_MENOR_ACELERACION_MEDIO,
                             RAW_PESO_DEPORTIVIDAD_BAJO, RAW_PESO_MENOR_REL_PESO_POTENCIA_BAJO, RAW_PESO_POTENCIA_MAXIMA_BAJO, RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO, RAW_PESO_MENOR_ACELERACION_BAJO,
                             RAW_PESO_PAR_MOTOR_REMOLQUE, RAW_PESO_CAP_REMOLQUE_CF, RAW_PESO_CAP_REMOLQUE_SF, RAW_PESO_BASE_REMOLQUE, RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD, RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD,
-                            RAW_PESO_BASE_COSTE_USO_DIRECTO, RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO, PESO_CRUDO_BASE_MALETERO,PESO_CRUDO_FAV_MALETERO, PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES, RAW_PESO_BASE_AUT_VEHI,
+                            RAW_PESO_BASE_COSTE_USO_DIRECTO, RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO, PESO_CRUDO_BASE_MALETERO,PESO_CRUDO_FAV_MALETERO_MAX, PESO_CRUDO_FAV_MALETERO_MIN, PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES, RAW_PESO_BASE_AUT_VEHI,
                             PESO_CRUDO_BASE_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190,PESO_CRUDO_BASE_ANCHO_GRAL, PESO_CRUDO_FAV_ANCHO , PESO_CRUDO_BASE_DEVALUACION, PESO_CRUDO_FAV_DEVALUACION,
                             
                             )
@@ -120,8 +120,8 @@ def compute_raw_weights(
 
     if is_yes(preferencias.get("transporta_carga_voluminosa")):
         # Si transporta carga voluminosa, aumentamos la importancia de las columnas de maletero
-        raw["maletero_minimo_score"] = PESO_CRUDO_FAV_MALETERO
-        raw["maletero_maximo_score"] = PESO_CRUDO_FAV_MALETERO
+        raw["maletero_minimo_score"] = PESO_CRUDO_FAV_MALETERO_MIN
+        raw["maletero_maximo_score"] = PESO_CRUDO_FAV_MALETERO_MAX
         print(f"DEBUG (Weights) ► transporta_carga_voluminosa='sí'. Pesos crudos para maletero: {raw['maletero_minimo_score']}/{raw['maletero_maximo_score']}")
 
         if is_yes(preferencias.get("necesita_espacio_objetos_especiales")):
@@ -164,9 +164,9 @@ def compute_raw_weights(
     rating_cu = preferencias.get("rating_costes_uso")
     if rating_cu is not None and rating_cu >= UMBRAL_RATING_COSTES_USO_PARA_FAV_CONSUMO_COSTES:
         print(f"DEBUG (Weights) ► Costes de Uso alto ({rating_cu}). Activando pesos para bajo consumo, bajo coste uso y mantenimiento.")
-        raw["fav_bajo_consumo"] += RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES # Refuerza el peso de bajo consumo (ej: 7.0) ¡AJUSTArR!
-        raw["fav_bajo_coste_uso_directo"] = RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO    # Peso específico para columna costes_de_uso, ¡AJUSTAR!
-        raw["fav_bajo_coste_mantenimiento_directo"] = RAW_WEIGHT_FAV_BAJO_COSTE_MANTENIMIENTO_DIRECTO # Peso específico para columna costes_mantenimiento, ¡AJUSTAR!
+        raw["fav_bajo_consumo"] += RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES #
+        raw["fav_bajo_coste_uso_directo"] = RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO    # 
+        raw["fav_bajo_coste_mantenimiento_directo"] = RAW_WEIGHT_FAV_BAJO_COSTE_MANTENIMIENTO_DIRECTO 
     
     # --- LÓGICA PARA PESOS DE ARRASTRE DE REMOLQUE ---
     # Usaremos claves distintas para estos pesos para que sean específicos

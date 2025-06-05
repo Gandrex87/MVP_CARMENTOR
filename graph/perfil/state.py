@@ -64,22 +64,59 @@ class PerfilUsuario(BaseModel):
         use_enum_values = True
 
 # --- NUEVO MODELO PARA INFO DE PASAJEROS ---
+# class InfoPasajeros(BaseModel):
+#     frecuencia: Optional[Literal["nunca", "ocasional", "frecuente"]] = Field(
+#         default=None,
+#         description="Frecuencia con la que viajan otros pasajeros."
+#     )
+#     num_ninos_silla: Optional[int] = Field(
+#         default=None, 
+#         description="Número de niños que necesitan silla de seguridad (X)."
+#     )
+#     num_otros_pasajeros: Optional[int] = Field(
+#         default=None, 
+#         description="Número de adultos u otros pasajeros sin silla (Z)."
+#     )
+#     # Podrías añadir un campo de completitud si quieres validarlo aquí
+#     # class ConfigDict:
+#     #     validate_assignment = True # Para validar al asignar si añades @validator
+
+# --- Modelo Pydantic para InfoPasajeros (MODIFICADO) ---
 class InfoPasajeros(BaseModel):
-    frecuencia: Optional[Literal["nunca", "ocasional", "frecuente"]] = Field(
-        default=None,
-        description="Frecuencia con la que viajan otros pasajeros."
+    # NUEVOS CAMPOS PARA EL FLUJO DE PREGUNTAS
+    suele_llevar_acompanantes: Optional[bool] = Field(
+        default=None, 
+        description="¿El usuario suele llevar acompañantes? (true/false)"
     )
+    frecuencia_viaje_con_acompanantes: Optional[Literal["ocasional", "frecuente"]] = Field(
+        default=None,
+        description="Si suele llevar acompañantes, ¿con qué frecuencia? ('ocasional' o 'frecuente')"
+    )
+    composicion_pasajeros_texto: Optional[str] = Field(
+        default=None,
+        description="Respuesta textual del usuario a la pregunta sobre la composición de los pasajeros (ej: 'dos niños y un adulto', 'tres adultos')."
+    )
+    
+    # CAMPO EXISTENTE: se inferirá de los nuevos o se preguntará si es necesario
+    frecuencia: Optional[Literal["nunca", "ocasional", "frecuente"]] = Field(
+        default=None, 
+        description="Frecuencia general con la que viaja con pasajeros (inferido o preguntado)."
+    )
+    
+    # CAMPOS EXISTENTES: se inferirán de composicion_pasajeros_texto y la pregunta de sillas
     num_ninos_silla: Optional[int] = Field(
         default=None, 
-        description="Número de niños que necesitan silla de seguridad (X)."
+        ge=0, 
+        description="Número de niños que necesitan silla infantil."
     )
     num_otros_pasajeros: Optional[int] = Field(
         default=None, 
-        description="Número de adultos u otros pasajeros sin silla (Z)."
+        ge=0, 
+        description="Número de otros pasajeros (adultos o niños sin silla), sin contar al conductor."
     )
-    # Podrías añadir un campo de completitud si quieres validarlo aquí
-    # class ConfigDict:
-    #     validate_assignment = True # Para validar al asignar si añades @validator
+
+    class ConfigDict:
+        use_enum_values = True # Para que los Literal se traten como sus valores
 
 class FiltrosInferidos(BaseModel):
     #batalla_min: Optional[float] = Field(default=None, description="Valor mínimo de batalla recomendado (rango: 1500.0 a 4490.0 mm). Relevante si el usuario mide más de 189 cm.")

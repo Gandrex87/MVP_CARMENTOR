@@ -13,7 +13,8 @@ def formatear_preferencias_en_tabla(
     filtros: FiltrosInput = None, 
     economia: EconomiaInput = None,
     codigo_postal_usuario: Optional[str] = None,
-    info_clima_usuario: Optional[Dict[str, Any]] = None # <-- NUEVO PARÁMETRO   
+    info_clima_usuario: Optional[Dict[str, Any]] = None, # <-- NUEVO PARÁMETRO  
+    info_pasajeros: Optional[Dict[str, Any]] = None # <-- NUEVO PARÁMETRO 
 ) -> str:
     """
     Devuelve una tabla Markdown con:
@@ -26,8 +27,8 @@ def formatear_preferencias_en_tabla(
     filtros_dict = filtros.model_dump(mode='json') if hasattr(filtros, "model_dump") else filtros or {}
     econ_dict = economia.model_dump(mode='json') if hasattr(economia, "model_dump") else economia or {}
     info_clima_dict = info_clima_usuario if info_clima_usuario is not None else {} # <-- Usar dict
-    # Usar is_yes para las booleanas
     estetica_str = "Importante" if is_yes(prefs_dict.get("valora_estetica")) else "No prioritaria"
+    pasajeros_dict = info_pasajeros if info_pasajeros is not None else {} # <-- Usar dict
     
     # Usar .value para los Enums (asegurándonos de que el valor exista)
     transm_val = prefs_dict.get("transmision_preferida") # Esto será el valor (str) gracias a model_dump(mode='json')
@@ -129,7 +130,41 @@ def formatear_preferencias_en_tabla(
         }
         for desc, val in ratings_map.items():
             texto += f"| {desc:<32} | {val if val is not None else 'N/A'} |\n"
+    # --- NUEVA SECCIÓN PARA INFO PASAJEROS ---
+    texto += "\n👥 Información de Pasajeros:\n\n"
+    texto += "| Detalle Pasajeros            | Valor                      |\n"
+    texto += "|------------------------------|----------------------------|\n"
 
+    suele_acomp_val = pasajeros_dict.get("suele_llevar_acompanantes") # Ahora es booleano
+    suele_acomp_str = "No especificado"
+    if suele_acomp_val is not None:
+        suele_acomp_str = "Sí" if suele_acomp_val else "No"
+    texto += f"| Suele llevar acompañantes   | {suele_acomp_str} |\n"
+
+    if suele_acomp_val is True: # Solo mostrar detalles si SÍ suele llevar acompañantes
+        frec_viaje_acomp_val = pasajeros_dict.get("frecuencia_viaje_con_acompanantes")
+        frec_viaje_acomp_str = frec_viaje_acomp_val.capitalize() if frec_viaje_acomp_val else "No especificada"
+        texto += f"|   ↳ Frecuencia con ellos | {frec_viaje_acomp_str} |\n"
+
+        # compos_pasajeros_val = pasajeros_dict.get("composicion_pasajeros_texto")
+        # compos_pasajeros_str = compos_pasajeros_val if compos_pasajeros_val and compos_pasajeros_val.strip() else "No detallada"
+        # texto += f"|   ↳ Composición (desc.)  | {compos_pasajeros_str} |\n" # Opcional mostrar el texto libre
+
+        num_ninos_silla_val = pasajeros_dict.get("num_ninos_silla")
+        num_ninos_silla_str = str(num_ninos_silla_val) if num_ninos_silla_val is not None else "0"
+        texto += f"|   ↳ Niños en Silla       | {num_ninos_silla_str} |\n"
+        
+        num_otros_pas_val = pasajeros_dict.get("num_otros_pasajeros")
+        num_otros_pas_str = str(num_otros_pas_val) if num_otros_pas_val is not None else "0"
+        texto += f"|   ↳ Otros Pasajeros      | {num_otros_pas_str} |\n"
+
+    # El campo 'frecuencia' general (nunca, ocasional, frecuente) se puede mostrar si es diferente
+    # o si resume bien lo anterior. Por ahora, los detalles de arriba son más informativos.
+    # frecuencia_general_val = pasajeros_dict.get("frecuencia")
+    # if frecuencia_general_val:
+    #     texto += f"| Frecuencia General Viaje   | {frecuencia_general_val.capitalize()} |\n"
+    # --- FIN NUEVA SECCIÓN INFO PASAJEROS ---
+    
     # --- 2) Filtros técnicos ---
     # (Asumiendo que tipo_mecanica y tipo_carroceria en filtros_dict ya son listas de strings (valores enum)
     # porque get_enum_names se usa antes o porque model_dump ya lo hizo)

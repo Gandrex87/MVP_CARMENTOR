@@ -130,7 +130,7 @@ def get_recommended_carrocerias(
     filtros_tecnicos: Optional[Dict[str, Any]], # <--- ASEGÚRATE QUE ESTE ARGUMENTO EXISTA 
     info_pasajeros: Optional[Dict[str, Any]], 
     info_clima: Optional[Dict[str, Any]], # <-- NUEVO ARGUMENTO
-    k: int = 4 #antes 4
+    k: int = 5 #antes 4
 ) -> List[str]:
     """
     Obtiene tipos de carrocería recomendados usando RAG,
