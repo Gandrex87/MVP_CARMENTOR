@@ -14,7 +14,9 @@ from config.settings import (
     PENALTY_ANTIGUEDAD_MAS_10_ANOS, PENALTY_ANTIGUEDAD_7_A_10_ANOS,
     PENALTY_ANTIGUEDAD_5_A_7_ANOS, BONUS_DISTINTIVO_ECO_CERO_C,
     PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,
-    BONUS_ZBE_DISTINTIVO_FAVORABLE,PENALTY_ZBE_DISTINTIVO_DESFAVORABLE
+    BONUS_ZBE_DISTINTIVO_FAVORABLE,PENALTY_ZBE_DISTINTIVO_DESFAVORABLE,   PENALTY_BEV_REEV_AVENTURA_OCASIONAL,
+    PENALTY_PHEV_AVENTURA_OCASIONAL,
+    PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA
 )
 
 
@@ -82,6 +84,10 @@ def buscar_coches_bq(
     flag_aplicar_logica_distintivo_val = bool(filtros.get("aplicar_logica_distintivo_ambiental", False))
     flag_es_municipio_zbe_val = bool(filtros.get("es_municipio_zbe", False))
 
+    flag_pen_bev_reev_ocas_val = bool(filtros.get("penalizar_bev_reev_aventura_ocasional", False))
+    flag_pen_phev_ocas_val = bool(filtros.get("penalizar_phev_aventura_ocasional", False))
+    flag_pen_electrif_extr_val = bool(filtros.get("penalizar_electrificados_aventura_extrema", False))
+    
     # 3. Desempaquetar Min/Max (asegúrate que todas las claves coincidan con MIN_MAX_RANGES y BQ)
     m = MIN_MAX_RANGES # Alias corto
     min_est, max_est = m["estetica"]; min_prem, max_prem = m["premium"]; min_sing, max_sing = m["singular"]
@@ -205,8 +211,8 @@ def buscar_coches_bq(
         + sd.potencia_maxima_style_scaled * @peso_potencia_maxima_style_score
         + sd.par_scaled * @peso_par_motor_style_score 
         + sd.menor_aceleracion_scaled * @peso_fav_menor_aceleracion_score
-        + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND sd.acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE_SCALED} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
-        + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND sd.deportividad_bq_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END) # Usa deportividad_bq_scaled para penalización
+        + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND sd.acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE_SCALED} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END) # Penalizo coches que estan por debajo de calif: 5
+        + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND sd.deportividad_bq_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END) # Penalizo coches que estan por debajo de calif: 5
         + (CASE 
              WHEN @flag_penalizar_antiguo_tec = TRUE THEN
                  CASE
@@ -239,6 +245,19 @@ def buscar_coches_bq(
                  END
              ELSE 0.0 
            END)
+        + (CASE 
+            WHEN @flag_pen_bev_reev_avent_ocas = TRUE AND sd.tipo_mecanica IN ('BEV', 'REEV') THEN {PENALTY_BEV_REEV_AVENTURA_OCASIONAL}
+            ELSE 0.0
+           END)
+        + (CASE
+            WHEN @flag_pen_phev_avent_ocas = TRUE AND sd.tipo_mecanica IN ('PHEVD', 'PHEVG') THEN {PENALTY_PHEV_AVENTURA_OCASIONAL}
+            ELSE 0.0
+           END)
+        + (CASE
+            WHEN @flag_pen_electrif_avent_extr = TRUE AND sd.tipo_mecanica IN ('BEV', 'REEV', 'PHEVD', 'PHEVG') THEN {PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA}
+            ELSE 0.0
+           END)
+        -- --- FIN NUEVA LÓGICA --
       ) AS score_total
     FROM ScaledData sd -- Alias aquí para usarlo en SELECT y SCORE
     WHERE 1=1 
@@ -289,6 +308,9 @@ def buscar_coches_bq(
         bigquery.ScalarQueryParameter("flag_penalizar_antiguo_tec", "BOOL", flag_penalizar_antiguo_tec_val),
         bigquery.ScalarQueryParameter("flag_aplicar_logica_distintivo", "BOOL", flag_aplicar_logica_distintivo_val),
         bigquery.ScalarQueryParameter("flag_es_municipio_zbe", "BOOL", flag_es_municipio_zbe_val),
+         bigquery.ScalarQueryParameter("flag_pen_bev_reev_avent_ocas", "BOOL", flag_pen_bev_reev_ocas_val),
+        bigquery.ScalarQueryParameter("flag_pen_phev_avent_ocas", "BOOL", flag_pen_phev_ocas_val),
+        bigquery.ScalarQueryParameter("flag_pen_electrif_avent_extr", "BOOL", flag_pen_electrif_extr_val),
         bigquery.ScalarQueryParameter("k", "INT64", k)
     ]
 

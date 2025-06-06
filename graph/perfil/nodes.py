@@ -6,7 +6,8 @@ from .state import (EstadoAnalisisPerfil,
                     FiltrosInferidos, ResultadoSoloFiltros,
                     EconomiaUsuario,ResultadoEconomia ,
                     InfoPasajeros, ResultadoPasajeros,
-                    InfoClimaUsuario, ResultadoCP)
+                    InfoClimaUsuario, ResultadoCP, NivelAventura 
+)
 from config.llm import llm_solo_perfil, llm_solo_filtros, llm_economia, llm_pasajeros, llm_cp_extractor
 from prompts.loader import system_prompt_perfil, system_prompt_filtros_template, prompt_economia_structured_sys_msg, system_prompt_pasajeros, system_prompt_cp
 from utils.postprocessing import aplicar_postprocesamiento_perfil, aplicar_postprocesamiento_filtros
@@ -21,11 +22,11 @@ from utils.bq_logger import log_busqueda_a_bigquery
 from utils.sanitize_dict_for_json import sanitize_dict_for_json
 import traceback 
 import pandas as pd
-import logging
 import json # Para construir el contexto del prompt
 from typing import Literal, Optional ,Dict, Any
 from config.settings import (MAPA_RATING_A_PREGUNTA_AMIGABLE, UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG)
 from utils.explanation_generator import generar_explicacion_coche_con_llm # <-- NUEVO IMPORT
+import logging
 logger = logging.getLogger(__name__)
 
 # En graph/nodes.py
@@ -512,7 +513,7 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if prefs.tiene_punto_carga_propio is None:
         return "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual? (Responde 'sí' o 'no')"
     # --- FIN NUEVA PREGUNTA ---
-    if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
+    if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
     if prefs.estilo_conduccion is None:return "¿Cómo describirías tu estilo de conducción habitual? Por ejemplo: tranquilo, deportivo, o una mezcla de ambos (mixto)."
     # --- FIN NUEVAS PREGUNTAS DE CARGA ---
     if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?"
@@ -921,57 +922,47 @@ def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Calcula filtros/indicadores basados en la información de pasajeros completa
     y los actualiza en el estado.
-    Calcula: plazas_min (siempre), penalizar_puertas_bajas, priorizar_ancho.
+    Calcula: plazas_min (siempre), penalizar_puertas_bajas.
     """
     print("--- Ejecutando Nodo: aplicar_filtros_pasajeros_node ---")
+    logger.debug("--- Ejecutando Nodo: aplicar_filtros_pasajeros_node ---")
     info_pasajeros_obj = state.get("info_pasajeros") # <-- Renombrado para claridad
-    filtros_actuales = state.get("filtros_inferidos") or FiltrosInferidos() 
+    filtros_actuales_obj = state.get("filtros_inferidos") or FiltrosInferidos() 
 
     # Valores por defecto para los flags
     penalizar_p = False 
-    priorizar_a = False 
+
     
     # Valores para X y Z (default 0)
     X = 0
     Z = 0
     frecuencia = None
 
-    if info_pasajeros_obj: # Verificar que info_pasajeros_obj exista
-        frecuencia = info_pasajeros_obj.frecuencia
+    if info_pasajeros_obj: 
+        # Usar frecuencia_viaje_con_acompanantes si está, sino la general 'frecuencia'
+        # La nueva lógica de InfoPasajeros debería priorizar frecuencia_viaje_con_acompanantes
+        frecuencia = info_pasajeros_obj.frecuencia_viaje_con_acompanantes or info_pasajeros_obj.frecuencia
         X = info_pasajeros_obj.num_ninos_silla or 0
         Z = info_pasajeros_obj.num_otros_pasajeros or 0
-        print(f"DEBUG (Aplicar Filtros Pasajeros) ► Info recibida: freq='{frecuencia}', X={X}, Z={Z}")
+        logger.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Info recibida: freq='{frecuencia}', X={X}, Z={Z}")
     else:
-        print("ERROR (Aplicar Filtros Pasajeros) ► No hay información de pasajeros en el estado. Se usarán defaults para plazas.")
-        # frecuencia seguirá siendo None, X y Z son 0
+        logger.error("ERROR (Aplicar Filtros Pasajeros) ► No hay información de pasajeros en el estado. Se usarán defaults.")
+        frecuencia = "nunca" # Asumir 'nunca' si no hay info
 
-    # --- Calcular plazas_min SIEMPRE ---
-    # Si frecuencia es 'nunca' o None, X y Z son 0, entonces plazas_calc = 1.
     plazas_calc = X + Z + 1 
-    print(f"DEBUG (Aplicar Filtros Pasajeros) ► Calculado plazas_min = {plazas_calc}")
+    logger.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Calculado plazas_min = {plazas_calc}")
 
-    # --- Aplicar reglas para flags que SÍ dependen de la frecuencia ---
-    if frecuencia and frecuencia != "nunca":
-        # Regla Priorizar Ancho (si Z>=2 para ocasional o frecuente)
-        if Z >= 2:
-            priorizar_a = True
-            print("DEBUG (Aplicar Filtros Pasajeros) ► Indicador priorizar_ancho = True")
-            
+    if frecuencia and frecuencia != "nunca": # Nota: frecuencia ahora puede ser 'ocasional' o 'frecuente'
         # Regla Penalizar Puertas Bajas (solo si frecuente y X>=1)
         if frecuencia == "frecuente" and X >= 1:
             penalizar_p = True
-            print("DEBUG (Aplicar Filtros Pasajeros) ► Indicador penalizar_puertas_bajas = True")
+            logger.debug("DEBUG (Aplicar Filtros Pasajeros) ► Indicador penalizar_puertas_bajas = True")
     else:
-        print("DEBUG (Aplicar Filtros Pasajeros) ► Frecuencia es 'nunca' o None. Flags de priorizar_ancho y penalizar_puertas se mantienen en su default (False).")
+        logger.debug("DEBUG (Aplicar Filtros Pasajeros) ► Frecuencia es 'nunca' o None. penalizar_puertas se mantiene False.")
 
-
-    # Actualizar el objeto filtros_inferidos con plazas_min
     update_filtros_dict = {"plazas_min": plazas_calc}
-    filtros_actualizados = filtros_actuales.model_copy(update=update_filtros_dict)
-    print(f"DEBUG (Aplicar Filtros Pasajeros) ► Filtros actualizados (con plazas_min): {filtros_actualizados}")
-
-    # Devolver el estado completo actualizado
-    # Asegúrate que tu return en finalizar_y_presentar_node y los TypedDict sean explícitos para estas claves
+    filtros_actualizados = filtros_actuales_obj.model_copy(update=update_filtros_dict)
+    logger.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Filtros actualizados (con plazas_min): {filtros_actualizados}")
     return {
         # **state, # Considera devolver solo lo que cambia o el estado explícito
         "preferencias_usuario": state.get("preferencias_usuario"),
@@ -983,7 +974,6 @@ def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
         "coches_recomendados": state.get("coches_recomendados"), 
         "tabla_resumen_criterios": state.get("tabla_resumen_criterios"),
         "penalizar_puertas_bajas": penalizar_p,  # Guardar flag actualizado
-        "priorizar_ancho": priorizar_a,          # Guardar flag actualizado
         "flag_penalizar_low_cost_comodidad": state.get("flag_penalizar_low_cost_comodidad"), # Mantener estos
         "flag_penalizar_deportividad_comodidad": state.get("flag_penalizar_deportividad_comodidad")
     }
@@ -1352,9 +1342,8 @@ def calcular_recomendacion_economia_modo1_node(state: EstadoAnalisisPerfil) -> d
 
 def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Llama a la función RAG para obtener tipos de carrocería recomendados
-    basándose en las preferencias, filtros parciales, info de pasajeros e info de clima.
-    Actualiza filtros_inferidos.tipo_carroceria en el estado.
+    Llama a la función RAG para obtener tipos de carrocería recomendados, basándose en las preferencias, filtros parciales, 
+    info de pasajeros e info de clima. Actualiza filtros_inferidos.tipo_carroceria en el estado.
     """
     print("--- Ejecutando Nodo: obtener_tipos_carroceria_rag_node ---")
     logging.debug("--- Ejecutando Nodo: obtener_tipos_carroceria_rag_node ---")
@@ -1363,12 +1352,12 @@ def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
     filtros_obj = state.get("filtros_inferidos") # Este ya puede tener la rec. Modo 1
     info_pasajeros_obj = state.get("info_pasajeros")
     info_clima_obj = state.get("info_clima_usuario")
+    k_rag = 3 # Número de recomendaciones a obtener, puedes hacerlo configurable
 
     # Verificar pre-condiciones para RAG (al menos preferencias)
     if not preferencias_obj:
         logging.error("ERROR (RAG Node) ► 'preferencias_usuario' no existe en el estado. No se puede llamar a RAG.")
         # Devolver el estado como está si faltan datos críticos para RAG
-        # o solo actualizar filtros si ya existía un objeto filtros_obj
         return {"filtros_inferidos": filtros_obj if filtros_obj else FiltrosInferidos()}
 
     # Si filtros_obj es None (poco probable si el nodo anterior lo inicializó), crear uno
@@ -1378,8 +1367,7 @@ def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
         
     filtros_actualizados = filtros_obj.model_copy(deep=True)
 
-    # Convertir a dicts para pasar a get_recommended_carrocerias
-    # La función RAG espera diccionarios según su firma actual
+    # Convertir a dicts para pasar a get_recommended_carrocerias - La función RAG espera diccionarios según su firma actual
     prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
     # filtros_tecnicos_dict se refiere a los filtros ya inferidos/actualizados hasta este punto
     filtros_tecnicos_dict = filtros_actualizados.model_dump(mode='json', exclude_none=False) 
@@ -1388,9 +1376,7 @@ def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
     
     tipos_carroceria_recomendados = None # Default
 
-    # Solo llamar a RAG si tipo_carroceria aún no está definido o está vacío
-    # Esto evita re-llamar a RAG si ya se hizo en una ejecución anterior (si el nodo se re-ejecuta)
-    # o si otro proceso ya lo llenó.
+    # Solo llamar a RAG si tipo_carroceria aún no está definido o está vacío, esto evita re-llamar a RAG si ya se hizo en una ejecución anterior (si el nodo se re-ejecuta)
     if not filtros_actualizados.tipo_carroceria: 
         logging.debug("DEBUG (RAG Node) ► Llamando a get_recommended_carrocerias...")
         try:
@@ -1399,14 +1385,14 @@ def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
                 filtros_tecnicos=filtros_tecnicos_dict, # Pasando el estado actual de filtros
                 info_pasajeros=info_pasajeros_dict,
                 info_clima=info_clima_dict, 
-                k=5 # O el número de recomendaciones que desees
+                k=k_rag # O el número de recomendaciones que desees
             ) 
             logging.debug(f"DEBUG (RAG Node) ► RAG recomendó: {tipos_carroceria_recomendados}")
             if tipos_carroceria_recomendados: # Solo actualizar si RAG devolvió algo
                 filtros_actualizados.tipo_carroceria = tipos_carroceria_recomendados
             else:
                 logging.warning("WARN (RAG Node) ► get_recommended_carrocerias devolvió una lista vacía o None.")
-                filtros_actualizados.tipo_carroceria = ["SUV", "BERLINA"] # Un fallback muy genérico si RAG falla
+                filtros_actualizados.tipo_carroceria = ["SUV", "FAMILIAR" ,"MONOVOLUMEN"] # Un fallback muy genérico si RAG falla
         except Exception as e_rag:
             logging.error(f"ERROR (RAG Node) ► Fallo en la llamada a get_recommended_carrocerias: {e_rag}")
             traceback.print_exc()
@@ -1417,6 +1403,8 @@ def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
     return {"filtros_inferidos": filtros_actualizados}
 
 # --- NUEVO NODO ---
+
+
 def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Calcula todos los flags booleanos dinámicos basados en las preferencias del usuario
@@ -1425,15 +1413,17 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     """
     print("--- Ejecutando Nodo: calcular_flags_dinamicos_node ---")
     logging.debug("--- Ejecutando Nodo: calcular_flags_dinamicos_node ---")
-
+    logger.info("--- Ejecutando Nodo: calcular_flags_dinamicos_node ---") # Usar INFO para asegurar visibilidad
     preferencias_obj = state.get("preferencias_usuario")
     info_clima_obj = state.get("info_clima_usuario")
-    # Los flags 'penalizar_puertas_bajas' y 'priorizar_ancho' vienen de aplicar_filtros_pasajeros_node
-    # y ya deberían estar en el estado si esa lógica se ejecutó.
-    # Los recuperamos para devolverlos y asegurar que persistan.
+    # Los flags 'penalizar_puertas_bajas' y 'priorizar_ancho' vienen de aplicar_filtros_pasajeros_node ya deberían estar en el estado si esa lógica se ejecutó.
     penalizar_puertas_bajas_actual = state.get("penalizar_puertas_bajas", False)
-    priorizar_ancho_actual = state.get("priorizar_ancho", False)
-
+    #priorizar_ancho_actual = state.get("priorizar_ancho", False)
+    print(f"DEBUG contenido preferencias_obj: {preferencias_obj}") # Debug para ver qué contiene el objeto
+    # Inicializar flags para seleccion NivelAventura False por defecto
+    flag_pen_bev_reev_avent_ocas = False
+    flag_pen_phev_avent_ocas = False
+    flag_pen_electrif_avent_extr = False # Para BEV, REEV, PHEV en aventura extrema
     # Inicializar todos los flags que este nodo calcula
     flag_penalizar_lc_comod = False
     flag_penalizar_dep_comod = False
@@ -1447,22 +1437,23 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         # Devolver los flags con sus valores por defecto y mantener los existentes
         return {
             "penalizar_puertas_bajas": penalizar_puertas_bajas_actual,
-            "priorizar_ancho": priorizar_ancho_actual,
+            #"priorizar_ancho": priorizar_ancho_actual,
             "flag_penalizar_low_cost_comodidad": flag_penalizar_lc_comod,
             "flag_penalizar_deportividad_comodidad": flag_penalizar_dep_comod,
             "flag_penalizar_antiguo_por_tecnologia": flag_penalizar_ant_tec,
             "aplicar_logica_distintivo_ambiental": flag_aplicar_dist_amb,
+            "penalizar_bev_reev_aventura_ocasional": flag_pen_bev_reev_avent_ocas,
+            "penalizar_phev_aventura_ocasional": flag_pen_phev_avent_ocas,
+            "penalizar_electrificados_aventura_extrema": flag_pen_electrif_avent_extr,
             "es_municipio_zbe": flag_es_zbe
         }
 
     # Lógica para Flags de Penalización por Comodidad
-    # Asumimos que UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS está definido (ej: en config.settings)
-    # from config.settings import UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS # Ejemplo de import
     if preferencias_obj.rating_comodidad is not None:
         if preferencias_obj.rating_comodidad >= UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS:
             flag_penalizar_lc_comod = True
             flag_penalizar_dep_comod = True
-            logging.debug(f"DEBUG (CalcFlags) ► Rating Comodidad ({preferencias_obj.rating_comodidad}). Activando flags penalización comodidad.")
+            logging.debug(f"DEBUG (CalcFlags) ► Rating Comodidad ({preferencias_obj.rating_comodidad}). Activando flags penalización comodidad flag penalizar depor comod y flag penalizar lowcost comod")
 
     # Lógica para Flag de Penalización por Antigüedad y Tecnología
     if preferencias_obj.rating_tecnologia_conectividad is not None:
@@ -1484,15 +1475,43 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     
     logging.debug(f"DEBUG (CalcFlags) ► Flags calculados: lc_comod={flag_penalizar_lc_comod}, dep_comod={flag_penalizar_dep_comod}, ant_tec={flag_penalizar_ant_tec}, dist_amb={flag_aplicar_dist_amb}, zbe={flag_es_zbe}")
 
+    
+   # --- DEBUGGING AVENTURA ---
+    if hasattr(preferencias_obj, 'aventura'):
+        aventura_val = preferencias_obj.aventura
+        print(f"DEBUG (CalcFlags) ► Valor de preferencias_obj.aventura: {aventura_val} (Tipo: {type(aventura_val)})")
+        logger.debug(f"DEBUG (CalcFlags) ► Valor de preferencias_obj.aventura: {aventura_val} (Tipo: {type(aventura_val)})")
+        logger.debug(f"DEBUG (CalcFlags) ► Comparando con NivelAventura.OCASIONAL (Valor: {NivelAventura.ocasional}, Tipo: {type(NivelAventura.ocasional)})")
+        logger.debug(f"DEBUG (CalcFlags) ► Comparando con NivelAventura.EXTREMA (Valor: {NivelAventura.extrema}, Tipo: {type(NivelAventura.extrema)})")
+
+        if aventura_val is not None:
+            if aventura_val == NivelAventura.ocasional:
+                flag_pen_bev_reev_avent_ocas = True
+                flag_pen_phev_avent_ocas = True
+                logger.debug(f"INFO (CalcFlags) ► Aventura OCASIONAL. Activando penalizaciones para BEV/REEV y PHEV.") # Cambiado a INFO
+            elif aventura_val == NivelAventura.extrema:
+                flag_pen_electrif_avent_extr = True 
+                logger.debug(f"INFO (CalcFlags) ► Aventura EXTREMA. Activando penalización para todos los electrificados.") # Cambiado a INFO
+            else:
+                logger.debug(f"DEBUG (CalcFlags) ► Nivel de aventura es '{aventura_val}', no OCASIONAL ni EXTREMA. No se activan penalizaciones específicas de aventura/mecánica.")
+        else:
+            logger.debug("DEBUG (CalcFlags) ► Nivel de aventura es None. No se activan penalizaciones de mecánica por aventura.")
+    else:
+        logging.warning("WARN (CalcFlags) ► El objeto 'preferencias_usuario' no tiene el atributo 'aventura'.")
+    # --- FIN DEBUGGING AVENTURA ---
+    
     # Devolver solo los flags que este nodo es responsable de calcular/actualizar
     # y los que ya existían para asegurar que se propaguen.
     return {
         "penalizar_puertas_bajas": penalizar_puertas_bajas_actual, # Propagar
-        "priorizar_ancho": priorizar_ancho_actual, # Propagar
+       # "priorizar_ancho": priorizar_ancho_actual, # Propagar
         "flag_penalizar_low_cost_comodidad": flag_penalizar_lc_comod,
         "flag_penalizar_deportividad_comodidad": flag_penalizar_dep_comod, 
         "flag_penalizar_antiguo_por_tecnologia": flag_penalizar_ant_tec,
         "aplicar_logica_distintivo_ambiental": flag_aplicar_dist_amb,
+        "penalizar_bev_reev_aventura_ocasional": flag_pen_bev_reev_avent_ocas,
+        "penalizar_phev_aventura_ocasional": flag_pen_phev_avent_ocas,
+        "penalizar_electrificados_aventura_extrema": flag_pen_electrif_avent_extr,
         "es_municipio_zbe": flag_es_zbe
     }
     
@@ -1508,16 +1527,8 @@ def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
     preferencias_obj = state.get("preferencias_usuario")
     filtros_obj = state.get("filtros_inferidos") # Contiene estetica_min, premium_min, singular_min
     info_clima_obj = state.get("info_clima_usuario")
-    
-    # Obtener flags que influyen en los pesos
-    priorizar_ancho_flag = state.get("priorizar_ancho", False)
-    
-    # Flags climáticos (calculados por calcular_flags_dinamicos_node o leídos de info_clima)
-    # Es más robusto leerlos del estado donde calcular_flags_dinamicos_node los debió poner,
-    # pero si esa función no los añade al estado, los recalculamos o tomamos de info_clima.
-    # Asumiremos que calcular_flags_dinamicos_node NO añade es_zona_... al estado,
-    # sino que compute_raw_weights los toma de info_clima_obj directamente o
-    # que finalizar_y_presentar_node (o este nodo) los extrae de info_clima_obj.
+    info_pasajeros_obj = state.get("info_pasajeros")
+    print(f"DEBUG_MIO (info_pasajeros_obj): {info_pasajeros_obj}")
     # Por ahora, los extraemos aquí de info_clima_obj para pasarlos a compute_raw_weights.
 
     es_nieblas_val = False
@@ -1536,6 +1547,7 @@ def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
 
     try:
         prefs_dict_para_weights = preferencias_obj.model_dump(mode='json', exclude_none=False)
+        info_pasajeros_dict_para_weights = info_pasajeros_obj.model_dump(mode='json', exclude_none=False) if info_pasajeros_obj else None
         
         estetica_min_val = filtros_obj.estetica_min
         premium_min_val = filtros_obj.premium_min
@@ -1544,7 +1556,7 @@ def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
         logging.debug(f"DEBUG (CalcPesos) ► Entradas para compute_raw_weights:\n"
                       f"  Preferencias: {prefs_dict_para_weights.get('apasionado_motor')}, {prefs_dict_para_weights.get('aventura')}, etc.\n"
                       f"  EsteticaMin: {estetica_min_val}, PremiumMin: {premium_min_val}, SingularMin: {singular_min_val}\n"
-                      f"  PriorizarAncho: {priorizar_ancho_flag}\n"
+                      f"  InfoPasajeros: {info_pasajeros_dict_para_weights}\n"
                       f"  ZonaNieblas: {es_nieblas_val}, ZonaNieve: {es_nieve_val}, ZonaMonta: {es_monta_val}")
 
         raw_weights = compute_raw_weights(
@@ -1552,7 +1564,7 @@ def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
             estetica_min_val=estetica_min_val,
             premium_min_val=premium_min_val,
             singular_min_val=singular_min_val,
-            priorizar_ancho=priorizar_ancho_flag,
+            info_pasajeros_dict=info_pasajeros_dict_para_weights,
             es_zona_nieblas=es_nieblas_val,
             es_zona_nieve=es_nieve_val,
             es_zona_clima_monta=es_monta_val
@@ -1626,7 +1638,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     con el resumen de criterios y los resultados de los coches.
     """
     print("--- Ejecutando Nodo: buscar_coches_finales_node ---")
-    # logging.debug(f"DEBUG (Buscar BQ Init) ► Estado completo recibido: {state}") 
+    logging.debug(f"DEBUG (Buscar BQ Init) ► Estado completo recibido: {state}") 
     
     historial = state.get("messages", [])
     # --- OBTENER TABLA RESUMEN DEL ESTADO ---
@@ -1642,12 +1654,16 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     flag_penalizar_antiguo_tec_val = state.get("flag_penalizar_antiguo_por_tecnologia", False)
     flag_aplicar_distintivo_val = state.get("aplicar_logica_distintivo_ambiental", False)
     flag_es_zbe_val = state.get("es_municipio_zbe", False)
+    # Flags de aventura y penalización de mecánica
+    flag_pen_bev_reev_avent_ocas = state.get("penalizar_bev_reev_aventura_ocasional", False)
+    flag_pen_phev_avent_ocas= state.get("penalizar_phev_aventura_ocasional", False)
+    flag_pen_electrif_avent_extr = state.get("penalizar_electrificados_aventura_extrema", False)
     
     thread_id = "unknown_thread"
     if state.get("config") and isinstance(state["config"], dict) and \
        state["config"].get("configurable") and isinstance(state["config"]["configurable"], dict):
         thread_id = state["config"]["configurable"].get("thread_id", "unknown_thread")
-    k_coches = 5 
+    k_coches = 7 
     coches_encontrados_raw = [] 
     coches_encontrados = []
     sql_ejecutada = None 
@@ -1674,6 +1690,11 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         filtros_para_bq['flag_penalizar_deportividad_comodidad'] = flag_penalizar_dep_comod
         filtros_para_bq['flag_penalizar_antiguo_por_tecnologia'] = flag_penalizar_antiguo_tec_val
         filtros_para_bq['aplicar_logica_distintivo_ambiental'] = flag_aplicar_distintivo_val
+        
+        filtros_para_bq['penalizar_bev_reev_aventura_ocasional'] = flag_pen_bev_reev_avent_ocas
+        filtros_para_bq['penalizar_phev_aventura_ocasional'] = flag_pen_phev_avent_ocas
+        filtros_para_bq['penalizar_electrificados_aventura_extrema'] = flag_pen_electrif_avent_extr
+        
         filtros_para_bq['es_municipio_zbe'] = flag_es_zbe_val
         
         
@@ -1861,17 +1882,18 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         "economia": economia_obj, 
         "pesos": pesos_finales, 
         "penalizar_puertas_bajas": penalizar_puertas_flag, 
-        "priorizar_ancho": state.get("priorizar_ancho"), 
+       # "priorizar_ancho": state.get("priorizar_ancho"), 
         "flag_penalizar_low_cost_comodidad": flag_penalizar_lc_comod,
         "flag_penalizar_deportividad_comodidad": flag_penalizar_dep_comod, 
         "flag_penalizar_antiguo_por_tecnologia": flag_penalizar_antiguo_tec_val,
         "aplicar_logica_distintivo_ambiental": flag_aplicar_distintivo_val,
         "es_municipio_zbe": flag_es_zbe_val, 
+        "penalizar_bev_reev_aventura_ocasional": flag_pen_bev_reev_avent_ocas,
+        "penalizar_phev_aventura_ocasional": flag_pen_phev_avent_ocas,
+        "penalizar_electrificados_aventura_extrema": flag_pen_electrif_avent_extr,
         "codigo_postal_usuario": state.get("codigo_postal_usuario"),
         "info_clima_usuario": state.get("info_clima_usuario"),
     }
-
-
 
 
 # --- NUEVO NODO BÚSQUEDA FINAL Etapa 5 ---

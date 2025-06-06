@@ -7,6 +7,7 @@
 
 from typing import Optional, Dict, Any # Añadir tipos
 from .conversion import is_yes
+import logging
 from .enums import NivelAventura 
 from graph.perfil.state import PerfilUsuario # Importar para type hint
 from config.settings import (MAX_SINGLE_RAW_WEIGHT , MIN_SINGLE_RAW_WEIGHT , AVENTURA_RAW_WEIGHTS,
@@ -20,7 +21,7 @@ from config.settings import (MAX_SINGLE_RAW_WEIGHT , MIN_SINGLE_RAW_WEIGHT , AVE
                             RAW_PESO_DEPORTIVIDAD_BAJO, RAW_PESO_MENOR_REL_PESO_POTENCIA_BAJO, RAW_PESO_POTENCIA_MAXIMA_BAJO, RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO, RAW_PESO_MENOR_ACELERACION_BAJO,
                             RAW_PESO_PAR_MOTOR_REMOLQUE, RAW_PESO_CAP_REMOLQUE_CF, RAW_PESO_CAP_REMOLQUE_SF, RAW_PESO_BASE_REMOLQUE, RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD, RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD,
                             RAW_PESO_BASE_COSTE_USO_DIRECTO, RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO, PESO_CRUDO_BASE_MALETERO,PESO_CRUDO_FAV_MALETERO_MAX, PESO_CRUDO_FAV_MALETERO_MIN, PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES, RAW_PESO_BASE_AUT_VEHI,
-                            PESO_CRUDO_BASE_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190,PESO_CRUDO_BASE_ANCHO_GRAL, PESO_CRUDO_FAV_ANCHO , PESO_CRUDO_BASE_DEVALUACION, PESO_CRUDO_FAV_DEVALUACION,
+                            PESO_CRUDO_BASE_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_BASE_ANCHO_GRAL, PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190,PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL, PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE , PESO_CRUDO_BASE_DEVALUACION, PESO_CRUDO_FAV_DEVALUACION,
                             
                             )
 
@@ -30,7 +31,7 @@ def compute_raw_weights(
     estetica_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.estetica_min)
     premium_min_val: Optional[float],       # Renombrado para claridad (viene de filtros.premium_min)
     singular_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.singular_min)
-    priorizar_ancho: Optional[bool], # <-- NUEVO ARGUMENTO BOOLEANO
+    info_pasajeros_dict: Optional[Dict[str, Any]],
     es_zona_nieblas: bool = False,
     es_zona_nieve: bool = False,
     es_zona_clima_monta: bool = False,
@@ -40,6 +41,8 @@ def compute_raw_weights(
     """
     
     raw = {} # Inicializar el diccionario de pesos crudos
+    pasajeros_info = info_pasajeros_dict if info_pasajeros_dict else {}
+    
     # Usar 0.0 como fallback si los valores de filtro son None
     raw = {
         "estetica": float(estetica_min_val or 0.0),
@@ -48,7 +51,7 @@ def compute_raw_weights(
     }
     print(f"DEBUG (Weights) ► Pesos crudos iniciales (est/prem/sing): {raw}")
 
-    # Pesos de Aventura
+    # 1. Pesos de Aventura
     aventura_level_str = None
     if preferencias: # Verificar si el diccionario preferencias existe
         aventura_level_input = preferencias.get("aventura") # <-- USO DE .get()
@@ -67,7 +70,7 @@ def compute_raw_weights(
     raw["reductoras"] = float(aventura_weights_map.get("reductoras", 0.0))
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir aventura: {raw}")
 
-    # Pesos basados en altura_mayor_190
+    # 2. Pesos basados en altura_mayor_190
     altura_pref_val = preferencias.get("altura_mayor_190") if preferencias else None # <-- USO DE .get()
     if is_yes(altura_pref_val):
         print("DEBUG (Weights) ► Usuario alto. Asignando pesos a batalla/índice.")
@@ -79,16 +82,32 @@ def compute_raw_weights(
         raw["indice_altura_interior"] = PESO_CRUDO_BASE_BATALLA_ALTURA_MAYOR_190
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir dims por altura: {raw}")
     
-    # Peso para 'ancho' basado en 'priorizar_ancho' (influenciado por priorizar_ancho de pasajeros Z>=2)
-    # Este peso favorece MÁS ancho. Lo mantendremos separado del "fav_menor_ancho_garage".
-    if priorizar_ancho: 
-        raw["ancho_general_score"] = PESO_CRUDO_FAV_ANCHO  
-        print(f"DEBUG (Weights) ► Priorizar Ancho=True. Asignando peso crudo alto a ancho_general_score: {raw['ancho_general_score']}")
+    
+    # --- 3. LÓGICA MODIFICADA PARA 'ancho_general_score' BASADA EN PASAJEROS ---
+    raw["ancho_general_score"] = PESO_CRUDO_BASE_ANCHO_GRAL # Peso base bajo por defecto para el ancho general
+    
+    frecuencia_pasajeros = pasajeros_info.get("frecuencia_viaje_con_acompanantes") or pasajeros_info.get("frecuencia")
+    num_ninos_silla_X = pasajeros_info.get("num_ninos_silla", 0) # Usamos .get() con default 0
+    num_otros_pasajeros_Z = pasajeros_info.get("num_otros_pasajeros", 0) # Usamos .get() con default 0
+    total_acompanantes = num_ninos_silla_X + num_otros_pasajeros_Z
+    logging.debug(f"Weights: Info pasajeros para ancho_general_score -> frecuencia='{frecuencia_pasajeros}', X={num_ninos_silla_X}, Z={num_otros_pasajeros_Z}, Total Acompañantes={total_acompanantes}")
+    print(f"DEBUG (Weights) ► Info pasajeros para ancho_general_score -> frecuencia='{frecuencia_pasajeros}', X={num_ninos_silla_X}, Z={num_otros_pasajeros_Z}, Total Acompañantes={total_acompanantes}")
+    # Condición basada en el total de acompañantes y la frecuencia.
+    # Solo se prioriza el ancho si la frecuencia NO es "nunca" Y hay al menos 2 acompañantes en total.
+    if frecuencia_pasajeros and frecuencia_pasajeros != "nunca" and total_acompanantes >= 2:
+        if frecuencia_pasajeros == "ocasional":
+            raw["ancho_general_score"] = PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL
+            logging.debug(f"Weights: Pasajeros ocasionales (Total Acompañantes={total_acompanantes}>=2). ancho_general_score ajustado a {raw['ancho_general_score']}")
+        elif frecuencia_pasajeros == "frecuente":
+            raw["ancho_general_score"] = PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE
+            logging.debug(f"Weights: Pasajeros frecuentes (Total Acompañantes={total_acompanantes}>=2). ancho_general_score ajustado a {raw['ancho_general_score']}")
     else:
-        raw["ancho_general_score"] = PESO_CRUDO_BASE_ANCHO_GRAL  
-        print(f"DEBUG (Weights) ► Priorizar Ancho=False/None. Asignando peso crudo bajo a ancho_general_score: {raw['ancho_general_score']}")
+        # Este else es para cuando no se cumplen las condiciones para aumentar el peso del ancho.
+        # El peso ya se inicializó a PESO_CRUDO_BASE_ANCHO_GRAL.
+        logging.debug(f"Weights: No se cumplen condiciones para priorizar ancho por pasajeros (frecuencia='{frecuencia_pasajeros}', total_acompanantes={total_acompanantes}). ancho_general_score se mantiene en {raw['ancho_general_score']}")
+    # --- FIN LÓGICA CORREGIDA ANCHO ---
         
-    # --- NUEVO PESO CRUDO PARA DEPRECIACIÓN ---
+    # 4. --- NUEVO PESO CRUDO PARA DEPRECIACIÓN ---
     if is_yes(preferencias.get("prioriza_baja_depreciacion")):
         raw["devaluacion"] =PESO_CRUDO_FAV_DEVALUACION
     else: # 'no' o None
@@ -130,9 +149,8 @@ def compute_raw_weights(
             raw["ancho"] = max(raw.get("ancho", 0.5), PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES) # Asegurar que sea al menos 5.0
             print(f"DEBUG (Weights) ► necesita_espacio_objetos_especiales='sí'. Pesos crudos para largo: {raw['largo_vehiculo_score']}, ancho actualizado a: {raw['ancho']}")
     
-    # --- NUEVA LÓGICA: Favorecer índice_altura y autonomía si comodidad es alta ---
+    # --- NUEVA LÓGICA: Favorecer índice_altura y autonomia_uso_maxima si comodidad es alta ---
     rating_comodidad_val = preferencias.get("rating_comodidad")
-
     # Inicializar peso para autonomía (nueva característica a ponderar)
     raw["autonomia_vehiculo"] = RAW_PESO_BASE_AUT_VEHI
 
@@ -140,7 +158,7 @@ def compute_raw_weights(
         print(f"DEBUG (Weights) ► Comodidad alta ({rating_comodidad_val}). Aumentando pesos para índice_altura y autonomía.")
         # Aumentar el peso de indice_altura_interior. 
         # Podemos sumarle al existente o establecer un valor alto. Sumar es más flexible.
-        raw["indice_altura_interior"] = raw.get("indice_altura_interior", 0.5) + RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD # Ejemplo: suma 4 puntos crudos
+        raw["indice_altura_interior"] = raw.get("indice_altura_interior", 0.5) + RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD 
         # Asignar un peso crudo alto a la autonomía
         raw["autonomia_vehiculo"] = RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD # Ejemplo de peso crudo alto, ajusta según importancia
     
@@ -261,6 +279,11 @@ def compute_raw_weights(
         raw["par_motor_style_score"] = RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO
         raw["fav_menor_aceleracion_score"] = RAW_PESO_MENOR_ACELERACION_BAJO
 
+    #  # Clamp final para todos los pesos que podrían haberse acumulado
+    # for key in list(raw.keys()): # Iterar sobre una copia de las claves si modificas el dict
+    #     if isinstance(raw[key], (int, float)): # Solo clampear números
+    #         raw[key] = max(MIN_SINGLE_RAW_WEIGHT, min(MAX_SINGLE_RAW_WEIGHT, raw[key]))
+    
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}
     #print(f"DEBUG (Weights) ► Pesos Crudos FINALES: {raw_float}")

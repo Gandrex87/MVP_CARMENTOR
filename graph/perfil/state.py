@@ -40,14 +40,9 @@ class PerfilUsuario(BaseModel):
     problemas_aparcar_calle: Optional[str] = Field(default=None,description="Si no tiene garaje, ¿suele tener problemas para aparcar en la calle? Responde 'sí' o 'no'")
     espacio_sobra_garage: Optional[str] = Field(default=None, description="Si tiene garaje, ¿tiene espacio de sobra? Responde 'sí' o 'no'")
     problema_dimension_garage: Optional[List[DimensionProblematica]] = Field(default=None,description="Si no tiene espacio de sobra en garaje, ¿cuál es la dimensión problemática principal (largo, ancho, alto)? Puede ser una lista.")
-    tiene_punto_carga_propio: Optional[str] = Field( # 'sí' o 'no'
-        default=None,
-        description="¿El usuario tiene un punto de carga para vehículo eléctrico en propiedad? Responde 'sí' o 'no'"
-    )
+    tiene_punto_carga_propio: Optional[str] = Field(default=None, description="¿El usuario tiene un punto de carga para vehículo eléctrico en propiedad? Responde 'sí' o 'no'" )
     aventura: Optional[NivelAventura] = Field(default=None,description="¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?")
-    estilo_conduccion: Optional[EstiloConduccion] = Field( 
-            default=None,
-            description="Estilo de conducción preferido: tranquilo, deportivo o mixto.")
+    estilo_conduccion: Optional[EstiloConduccion] = Field(default=None, description="Estilo de conducción preferido: tranquilo, deportivo o mixto.")
     solo_electricos: Optional[str] = Field(default=None, description="¿Quiere solo coches eléctricos? Responde 'sí' o 'no'")
     prioriza_baja_depreciacion: Optional[str] = Field(default=None, description="¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'")
     transmision_preferida: Optional[Transmision] = Field(default=None, description="¿Qué transmisión prefieres: automático, manual o ambos?")
@@ -63,23 +58,6 @@ class PerfilUsuario(BaseModel):
     class ConfigDict:
         use_enum_values = True
 
-# --- NUEVO MODELO PARA INFO DE PASAJEROS ---
-# class InfoPasajeros(BaseModel):
-#     frecuencia: Optional[Literal["nunca", "ocasional", "frecuente"]] = Field(
-#         default=None,
-#         description="Frecuencia con la que viajan otros pasajeros."
-#     )
-#     num_ninos_silla: Optional[int] = Field(
-#         default=None, 
-#         description="Número de niños que necesitan silla de seguridad (X)."
-#     )
-#     num_otros_pasajeros: Optional[int] = Field(
-#         default=None, 
-#         description="Número de adultos u otros pasajeros sin silla (Z)."
-#     )
-#     # Podrías añadir un campo de completitud si quieres validarlo aquí
-#     # class ConfigDict:
-#     #     validate_assignment = True # Para validar al asignar si añades @validator
 
 # --- Modelo Pydantic para InfoPasajeros (MODIFICADO) ---
 class InfoPasajeros(BaseModel):
@@ -212,12 +190,15 @@ class EstadoAnalisisPerfil(TypedDict):
     coches_recomendados: Optional[List[dict[str, any]]] # Lista de diccionarios de coches
     info_pasajeros: Optional[InfoPasajeros] # Añadimos el nuevo objeto al estado principal
     penalizar_puertas_bajas: Optional[bool] 
-    priorizar_ancho: Optional[bool]
+    #priorizar_ancho: Optional[bool]
     flag_penalizar_low_cost_comodidad: Optional[bool]
     flag_penalizar_deportividad_comodidad: Optional[bool]
     flag_penalizar_antiguo_por_tecnologia: Optional[bool]
     aplicar_logica_distintivo_ambiental: Optional[bool]
-    es_municipio_zbe: Optional[bool] 
+    es_municipio_zbe: Optional[bool]
+    penalizar_bev_reev_aventura_ocasional: Optional[bool]
+    penalizar_phev_aventura_ocasional: Optional[bool]
+    penalizar_electrificados_aventura_extrema: Optional[bool] # Un solo flag para BEV, REEV, PHEV en aventura extrema
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
 
 

@@ -70,9 +70,9 @@ def aplicar_postprocesamiento_filtros(
     Devuelve una instancia de FiltrosInferidos con cambios (o la original si no hay cambios).
     """
     logging.debug("\n--- DEBUG DENTRO PostProc Filtros ---")
-    # logging.debug(f"Recibido Prefs: {preferencias.model_dump_json(indent=2) if preferencias else None}") # Más legible
-    # logging.debug(f"Recibido Filtros (antes): {filtros.model_dump_json(indent=2) if filtros else None}")
-    # logging.debug(f"Recibido Info Clima: {info_clima.model_dump_json(indent=2) if info_clima else None}")
+    logging.debug(f"Recibido Prefs: {preferencias.model_dump_json(indent=2) if preferencias else None}") # Más legible
+    logging.debug(f"Recibido Filtros (antes): {filtros.model_dump_json(indent=2) if filtros else None}")
+    logging.debug(f"Recibido Info Clima: {info_clima.model_dump_json(indent=2) if info_clima else None}")
     
     if filtros is None:
          logging.debug("PostProc Filtros: Objeto FiltrosInferidos de entrada es None. No se aplica post-procesamiento.")

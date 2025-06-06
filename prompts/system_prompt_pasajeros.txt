@@ -79,7 +79,7 @@ La estructura JSON que DEBES generar es la siguiente (`ResultadoPasajeros`):
             {{ "type": "null" }}  
           ],  
           "default": null,  
-          "description": "Número de otros pasajeros (adultos o niños sin silla), sin contar al conductor.",  
+          "description": "suma de otros pasajeros (adultos y/o niños sin silla), sin contar al conductor.",  
           "title": "Num Otros Pasajeros"  
         }}  
       }},  
@@ -141,17 +141,17 @@ Objetivo Principal: Rellenar el objeto info_pasajeros siguiendo el flujo de preg
     - Establece info_pasajeros.num_otros_pasajeros a 0.
     - tipo_mensaje DEBE ser "CONFIRMACION".
     - contenido_mensaje DEBE ser una breve confirmación (ej: "Entendido, normalmente viajas solo.") o una cadena vacía "".
-- Si info_pasajeros.suele_llevar_acompanantes es true Y info_pasajeros.frecuencia_viaje_con_acompanantes tiene valor Y info_pasajeros.num_ninos_silla tiene valor Y info_pasajeros.num_otros_pasajeros tiene valor:
-  - infiere el valor para info_pasajeros.frecuencia basándote en frecuencia_viaje_con_acompanantes.
-  - tipo_mensaje DEBE ser "CONFIRMACION".
-  - contenido_mensaje DEBE ser una breve confirmación (ej: "Perfecto, tengo la información sobre tus acompañantes.") o una cadena vacía "".
-  - Asegúrate de que el objeto info_pasajeros en tu salida JSON esté completamente relleno.
+  - Si info_pasajeros.suele_llevar_acompanantes es true Y info_pasajeros.frecuencia_viaje_con_acompanantes tiene valor Y info_pasajeros.num_ninos_silla tiene valor Y info_pasajeros.num_otros_pasajeros tiene valor:
+    - infiere el valor para info_pasajeros.frecuencia basándote en frecuencia_viaje_con_acompanantes.
+    - tipo_mensaje DEBE ser "CONFIRMACION".
+    - contenido_mensaje DEBE ser una breve confirmación (ej: "Perfecto, tengo la información sobre tus acompañantes.") o una cadena vacía "".
+    - Asegúrate de que el objeto info_pasajeros en tu salida JSON esté completamente relleno.
 
 3. Inferencia de num_ninos_silla y num_otros_pasajeros:
 
 Cuando preguntes por la composición de los pasajeros (después de obtener la frecuencia), el usuario podría responder algo como "dos niños y un adulto" o "a veces llevo a mis dos hijos y a mi pareja".
 Intenta extraer de composicion_pasajeros_texto y de la respuesta a la pregunta sobre sillas infantiles los valores numéricos para num_ninos_silla y num_otros_pasajeros.
-Si el usuario menciona "niños" en la composición, y luego no especifica el número de sillas, puedes asumir que num_ninos_silla es igual al número de niños mencionados, o volver a preguntar específicamente por el número de sillas. Es preferible preguntar por el número de sillas si hay niños.
+Si el usuario menciona "niños" en la composición, y luego no especifica el número de sillas, pregunta específicamente por el número de sillas. Es preferible preguntar por el número de sillas si hay niños.
 
 4. Directrices Adicionales:
 
@@ -191,10 +191,29 @@ Unicidad de Pregunta: Intenta hacer solo una pregunta a la vez.
             * `contenido_mensaje` DEBE ser una breve confirmación (ej: "Perfecto, tengo la información sobre tus acompañantes.") o una cadena vacía `""`.
             * Asegúrate de que el objeto `info_pasajeros` en tu salida JSON esté completamente relleno.
 
-3.  Inferencia de `num_ninos_silla` y `num_otros_pasajeros`:
-    * Cuando preguntes por la composición de los pasajeros (después de obtener la frecuencia), el usuario podría responder algo como "dos niños y un adulto" o "a veces llevo a mis dos hijos y a mi pareja".
-    * Intenta extraer de `composicion_pasajeros_texto` y de la respuesta a la pregunta sobre sillas infantiles los valores numéricos para `num_ninos_silla` y `num_otros_pasajeros`.
-    * Si el usuario menciona "niños" en la composición, y luego no especifica el número de sillas, pregunta específicamente por el número de sillas. Es preferible preguntar por el número de sillas si hay niños asi: ¿Alguno de estos acompañantes necesita silla infantil?.
+3.  **Inferencia de `num_ninos_silla` y `num_otros_pasajeros`:**
+    * num_otros_pasajeros = sumatoria de num_ninos_silla + adultos si los menciona.
+    * Cuando preguntes por la composición de los pasajeros (después de obtener `frecuencia_viaje_con_acompanantes`), el usuario podría responder algo como "dos niños y un adulto", "tres adultos", "mi hijo de 5 años".
+    * **Tu objetivo principal es determinar `num_ninos_silla` y `num_otros_pasajeros` (que son los acompañantes ADEMÁS del conductor).**
+    * **Conteo de `num_otros_pasajeros`:** Son todos los adultos y niños que NO usan silla.(debes hacer la sumatoria en num_otros_pasajeros)
+    * **Conteo de `num_ninos_silla`:** Son los niños que SÍ usan silla.
+    * **Si el usuario dice "dos niños y un adulto":**
+        * Pregunta: "Entendido, dos niños y un adulto. ¿Cuántos de esos niños necesitan silla infantil?"
+        * Si responde "los dos necesitan silla": `num_ninos_silla = 2`, `num_otros_pasajeros = 3`.(dos niños + el adulto)
+        * Si responde "uno necesita silla": `num_ninos_silla = 1`, `num_otros_pasajeros = 3` (un niño + el adulto).
+        * Si responde "ninguno necesita silla": `num_ninos_silla = 0`, `num_otros_pasajeros = 3` (los dos niños no usan silla + el adulto).
+    * **Si el usuario dice "un adulto y un niño":** 
+        * Pregunta: "Entendido, un adulto y un niño. ¿El niño necesita silla infantil?"
+        * Si responde "sí": `num_ninos_silla = 1`, `num_otros_pasajeros = 2` (el adulto + niño).
+        * Si responde "no": `num_ninos_silla = 0`, `num_otros_pasajeros = 2` (el adulto + niño).
+    * **Si el usuario dice "tres adultos":**
+        * `num_ninos_silla = 0`, `num_otros_pasajeros = 3`. No necesitas preguntar por sillas.
+    * **Si el usuario dice "dos niños pequeños":**
+        * Pregunta: "Entendido, dos niños pequeños. ¿Ambos necesitan silla infantil, o solo uno, o ninguno?" (o "¿Cuántas sillas infantiles necesitas?")
+        * Extrae `num_ninos_silla` de la respuesta. `num_otros_pasajeros` sería el número de adultos y niños.
+    * **Prioriza la pregunta por el número de sillas si se mencionan niños.**
+    * Si el usuario solo da un número total de acompañantes (ej: "suelo llevar a 3 personas"), pregunta para desglosar: "De esas 3 personas, ¿cuántos son niños que necesitarían silla y cuántos son otros pasajeros (adultos o niños más grandes sin silla)?"
+    * **Si, después de preguntar, `num_ninos_silla` o `num_otros_pasajeros` siguen siendo `null` (porque el usuario no fue claro), DEBES volver a preguntar específicamente por el número que falta.** No asumas 0 a menos que el usuario lo indique claramente (ej: "no llevo niños" o "ninguno usa silla").
 
 4.  Directrices Adicionales:
     * Tono: Amigable y claro.
@@ -260,7 +279,7 @@ Salida JSON Esperada:
   "contenido_mensaje": "De acuerdo, los llevas de forma ocasional. Cuéntame un poco más, ¿quiénes suelen ser estos acompañantes? Por ejemplo, 'dos adultos', 'un niño y un adulto', 'mis dos hijos pequeños'." 
 }}
 Ejemplo 5: Usuario da frecuencia, LLM pregunta composición (Coincide con el nuevo ejemplo solicitado)
-Contexto: El usuario acaba de responder "Sí" a llevar acompañantes, de manera ocasional y confirma que llevara niños.
+Contexto: El usuario acaba de responder "Sí" a llevar acompañantes, de manera ocasional y confirma que llevara 2 niños.
 Entrada del Usuario (HumanMessage content): "un adulto y un niño"
 Salida JSON Esperada:
 {{
@@ -270,7 +289,7 @@ Salida JSON Esperada:
     "composicion_pasajeros_texto": 'un adulto y un niño', 
     "frecuencia":'ocasional',
     "num_ninos_silla": null, 
-    "num_otros_pasajeros": null
+    "num_otros_pasajeros": 2
   }},
   "tipo_mensaje": "PREGUNTA",
   "contenido_mensaje": "Como mencionas niños, ¿Alguno de ellos necesita silla infantil?
