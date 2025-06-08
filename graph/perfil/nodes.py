@@ -27,7 +27,10 @@ from typing import Literal, Optional ,Dict, Any
 from config.settings import (MAPA_RATING_A_PREGUNTA_AMIGABLE, UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG)
 from utils.explanation_generator import generar_explicacion_coche_con_llm # <-- NUEVO IMPORT
 import logging
-logger = logging.getLogger(__name__)
+
+# --- Configuración de Logging ---
+logging.basicConfig(level=logging.DEBUG) #INFO PARA CUANDO PASE A PRODUCCION
+logger = logging.getLogger(__name__) # Logger para este módulo
 
 # En graph/nodes.py
 
@@ -1352,7 +1355,8 @@ def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
     filtros_obj = state.get("filtros_inferidos") # Este ya puede tener la rec. Modo 1
     info_pasajeros_obj = state.get("info_pasajeros")
     info_clima_obj = state.get("info_clima_usuario")
-    k_rag = 3 # Número de recomendaciones a obtener, puedes hacerlo configurable
+    k_rag = 4 # Número de recomendaciones a obtener, puedes hacerlo configurable
+    k_candidates = 8 #Numero de candidatos a reordenar.
 
     # Verificar pre-condiciones para RAG (al menos preferencias)
     if not preferencias_obj:
@@ -1367,12 +1371,12 @@ def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
         
     filtros_actualizados = filtros_obj.model_copy(deep=True)
 
-    # Convertir a dicts para pasar a get_recommended_carrocerias - La función RAG espera diccionarios según su firma actual
-    prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
-    # filtros_tecnicos_dict se refiere a los filtros ya inferidos/actualizados hasta este punto
-    filtros_tecnicos_dict = filtros_actualizados.model_dump(mode='json', exclude_none=False) 
-    info_pasajeros_dict = info_pasajeros_obj.model_dump(mode='json') if info_pasajeros_obj else None
-    info_clima_dict = info_clima_obj.model_dump(mode='json') if info_clima_obj else None
+    # # Convertir a dicts para pasar a get_recommended_carrocerias - La función RAG espera diccionarios según su firma actual
+    # prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
+    # # filtros_tecnicos_dict se refiere a los filtros ya inferidos/actualizados hasta este punto
+    # filtros_tecnicos_dict = filtros_actualizados.model_dump(mode='json', exclude_none=False) 
+    # info_pasajeros_dict = info_pasajeros_obj.model_dump(mode='json') if info_pasajeros_obj else None
+    # info_clima_dict = info_clima_obj.model_dump(mode='json') if info_clima_obj else None
     
     tipos_carroceria_recomendados = None # Default
 
@@ -1381,12 +1385,14 @@ def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
         logging.debug("DEBUG (RAG Node) ► Llamando a get_recommended_carrocerias...")
         try:
             tipos_carroceria_recomendados = get_recommended_carrocerias(
-                preferencias=prefs_dict, 
-                filtros_tecnicos=filtros_tecnicos_dict, # Pasando el estado actual de filtros
-                info_pasajeros=info_pasajeros_dict,
-                info_clima=info_clima_dict, 
-                k=k_rag # O el número de recomendaciones que desees
-            ) 
+            # 1. Pasamos los objetos Pydantic directamente, sin .model_dump()
+            preferencias=preferencias_obj, 
+            info_pasajeros=info_pasajeros_obj,
+            info_clima=info_clima_obj,
+            filtros_inferidos=filtros_actualizados, # 2. El argumento ahora se llama 'filtros_inferidos
+            k=k_rag,# 3. Añadimos los parámetros de control
+            num_candidates_to_rerank=k_candidates # Puedes hacerlo configurable si quieres
+        )  
             logging.debug(f"DEBUG (RAG Node) ► RAG recomendó: {tipos_carroceria_recomendados}")
             if tipos_carroceria_recomendados: # Solo actualizar si RAG devolvió algo
                 filtros_actualizados.tipo_carroceria = tipos_carroceria_recomendados
