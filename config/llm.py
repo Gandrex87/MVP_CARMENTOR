@@ -46,7 +46,7 @@ load_dotenv()
 
 
 MODEL_NAME_OPENAI = "gpt-4o-mini" # O el modelo OpenAI que prefieras
-MODEL_NAME_OPENAI_2 = "gpt-3.5-turbo" # O el modelo OpenAI alternativo
+MODEL_NAME_OPENAI_2 = "gpt-3.5-turbo" # mas barato
 TEMPERATURE_AGENT = 0.2 # Puedes ajustar la temperatura
 TEMPERATURE_AGENT_2 = 0.4
 
@@ -67,7 +67,7 @@ try:
     llm_res = init_chat_model(
         model=MODEL_NAME_OPENAI_2,
         model_provider="openai", # 
-        max_tokens=80,
+        max_tokens=120,
         temperature=TEMPERATURE_AGENT_2,
     )
     logging.info(f"¡Modelo LLM secundario '{getattr(llm_res, 'model_name', MODEL_NAME_OPENAI_2)}' inicializado exitosamente!")

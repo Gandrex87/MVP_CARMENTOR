@@ -199,6 +199,16 @@ class EstadoAnalisisPerfil(TypedDict):
     penalizar_bev_reev_aventura_ocasional: Optional[bool]
     penalizar_phev_aventura_ocasional: Optional[bool]
     penalizar_electrificados_aventura_extrema: Optional[bool] # Un solo flag para BEV, REEV, PHEV en aventura extrema
+    # --- NUEVOS FLAGS PARA LÓGICA DE CARROCERÍA ---
+    favorecer_carroceria_montana: Optional[bool]
+    favorecer_carroceria_comercial: Optional[bool]
+    favorecer_carroceria_pasajeros_pro: Optional[bool]
+    desfavorecer_carroceria_no_aventura: Optional[bool]
+    favorecer_suv_aventura_ocasional: Optional[bool]
+    favorecer_pickup_todoterreno_aventura_extrema:Optional[bool]
+    aplicar_logica_objetos_especiales: Optional[bool]
+    favorecer_carroceria_confort: Optional[bool]    
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
+
 
 

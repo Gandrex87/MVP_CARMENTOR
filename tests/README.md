@@ -6,10 +6,11 @@ Para ejecutar por consola
 
 - pytest
   
-O más detalle:
+O más detalle (verbose):
 
 - pytest -v
-
+- pytest -v tests/test_explicaciones.py
+  
 Se puede agregar  -s para ver los prints ej.:
 
 - pytest tests/test_generadores.py -s

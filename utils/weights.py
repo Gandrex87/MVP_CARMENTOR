@@ -109,7 +109,7 @@ def compute_raw_weights(
         
     # 4. --- NUEVO PESO CRUDO PARA DEPRECIACIÓN ---
     if is_yes(preferencias.get("prioriza_baja_depreciacion")):
-        raw["devaluacion"] =PESO_CRUDO_FAV_DEVALUACION
+        raw["devaluacion"] = PESO_CRUDO_FAV_DEVALUACION
     else: # 'no' o None
         raw["devaluacion"] = PESO_CRUDO_BASE_DEVALUACION
     print(f"DEBUG (Weights) ► Peso crudo para devaluacion (basado en prioriza_baja_depreciacion='{preferencias.get('prioriza_baja_depreciacion')}'): {raw['devaluacion']}")
@@ -149,7 +149,7 @@ def compute_raw_weights(
             raw["ancho"] = max(raw.get("ancho", 0.5), PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES) # Asegurar que sea al menos 5.0
             print(f"DEBUG (Weights) ► necesita_espacio_objetos_especiales='sí'. Pesos crudos para largo: {raw['largo_vehiculo_score']}, ancho actualizado a: {raw['ancho']}")
     
-    # --- NUEVA LÓGICA: Favorecer índice_altura y autonomia_uso_maxima si comodidad es alta ---
+    # --- Favorecer índice_altura y autonomia_uso_maxima si comodidad es alta ---
     rating_comodidad_val = preferencias.get("rating_comodidad")
     # Inicializar peso para autonomía (nueva característica a ponderar)
     raw["autonomia_vehiculo"] = RAW_PESO_BASE_AUT_VEHI

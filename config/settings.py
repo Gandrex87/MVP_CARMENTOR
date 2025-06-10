@@ -70,20 +70,20 @@ MIN_MAX_RANGES = {
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- VALORES DE AJUSTE DIRECTO AL SCORE (BONUS/PENALIZACIONES) (`utils/bigquery_tools.py`) ---
 # Estos son valores absolutos que se suman/restan al score final.
-# Escala sugerida para estos ajustes: -0.2 a +0.2 para no dominar completamente un score que tiende a 0-1.
+# Escala sugerida para estos ajustes: -0.25 a +0.25 para no dominar completamente un score que tiende a 0-1.
 
 #valores directos que se suman o restan al score (escala 0-1)
 # Penalización por Puertas
-PENALTY_PUERTAS_BAJAS = -0.10
+PENALTY_PUERTAS_BAJAS = -0.081
 
 # Penalizaciones por Comodidad (si comodidad es alta, penalizar estos)
-PENALTY_LOW_COST_POR_COMODIDAD = -0.25 # Cuánto restar si es muy low-cost y se quiere confort
-PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.25 # Cuánto restar si es muy deportivo y se quiere confort
+PENALTY_LOW_COST_POR_COMODIDAD = -0.10 # Cuánto restar si es muy low-cost y se quiere confort
+PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.10 # Cuánto restar si es muy deportivo y se quiere confort
 
 # Penalización por Antigüedad (si tecnología es alta)
-PENALTY_ANTIGUEDAD_MAS_10_ANOS = -0.25
+PENALTY_ANTIGUEDAD_MAS_10_ANOS = -0.20
 PENALTY_ANTIGUEDAD_7_A_10_ANOS = -0.15
-PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -0.07
+PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -0.081
 
 #valores directos que se suman o restan al score (escala 0-1)
 PENALTY_BEV_REEV_AVENTURA_OCASIONAL = -0.10
@@ -95,30 +95,47 @@ BONUS_DISTINTIVO_ECO_CERO_C = 0.049
 PENALTY_DISTINTIVO_NA_B = -0.081 #Falta separar la nota NA para aplicar diferenciar calificacion.
 
 #WHEN @flag_aplicar_logica_distintivo = TRUE AND COALESCE(sd.ocasion, FALSE) = TRUE THEN
-BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 0.10 
+BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 0.081 
 
 # Lógica Distintivo Ambiental (Específica ZBE - activada si CP está en ZBE)
 BONUS_ZBE_DISTINTIVO_FAVORABLE = 0.081 # # (CERO, 0, ECO, C)
 PENALTY_ZBE_DISTINTIVO_DESFAVORABLE = -0.081 #  (B, NA)
+
+
+# Regla 1: Si flag_favorecer_carroceria_montana es TRUE, los coches con tipo_carroceria 'SUV' o 'TODOTERRENO' reciben un bonus.
+# Regla 2: Si flag_favorecer_carroceria_comercial es TRUE, los coches 'COMERCIAL' reciben un bonus.
+# Regla 3: Si flag_favorecer_carroceria_pasajeros_pro es TRUE, los coches '3VOL' o 'MONOVOLUMEN' reciben un bonus.
+# Regla 4: Si flag_desfavorecer_carroceria_no_aventura es TRUE, los coches 'PICKUP' o 'TODOTERRENO' reciben una penalización.
+# Regla 5: si flag_fav_pickup_todoterreno_aventura_extrema es TRUE, coches 'TODOTERRENO' favorece
+# Regla 6: si flag_fav_pickup_todoterreno_aventura_extrema es TRUE, coches 'PICKUP' favorece
+# Regla 7: si flag_aplicar_logica_objetos_especiales = TRUE, favorecer ('MONOVOLUMEN', 'FURGONETA', 'FAMILIAR', 'SUV'), penalty ('3VOL', 'COUPE', 'DESCAPOTABLE')
+# Regla 8: si flag_fav_carroceria_confort = TRUE, favorece ('3VOL', '2VOL', 'SUV', 'FAMILIAR', 'MONOVOLUMEN')
+
+BONUS_CARROCERIA_MONTANA = 0.05
+BONUS_CARROCERIA_COMERCIAL = 0.20
+BONUS_CARROCERIA_PASAJEROS_PRO = 0.20
+PENALTY_CARROCERIA_NO_AVENTURA = -0.15
+BONUS_SUV_AVENTURA_OCASIONAL = 0.20
+BONUS_TODOTERRENO_AVENTURA_EXTREMA = 0.10 
+BONUS_PICKUP_AVENTURA_EXTREMA = 0.05
+BONUS_CARROCERIA_OBJETOS_ESPECIALES = 0.10
+PENALTY_CARROCERIA_OBJETOS_ESPECIALES = -0.20
+BONUS_CARROCERIA_CONFORT = 0.081
 
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- UMBRALES PARA ACTIVAR FLAGS EN PYTHON (`graph/perfil/nodes.py` - `finalizar_y_presentar_node`) ---
 
 # Umbrales para activar pesos específicos de impacto/costes en compute_raw_weights
 UMBRAL_RATING_IMPACTO_PARA_FAV_PESO_CONSUMO = 8
-UMBRAL_RATING_COSTES_USO_PARA_FAV_CONSUMO_COSTES = 8
+UMBRAL_RATING_COSTES_USO_PARA_FAV_CONSUMO_COSTES = 7
 UMBRAL_RATING_COMODIDAD_PARA_FAVORECER = 8
 UMBRAL_RATING_COMODIDAD_RAG = 8.0 # Umbral de rating de comodidad para activar sinónimos RAG
-
-#graph/nodes.py
-#funcion calcular_flags_dinamicos_node
 UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS = 7
 UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG = 7
 UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG = 7
-
-
 UMBRAL_LOW_COST_PENALIZABLE_SCALED = 0.5 # Penalizar si acceso_low_cost_scaled >= 
 UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED = 0.5 # Penalizar si deportividad_scaled >= 0.5  # penalizando coches con una deportividad igual o superior al punto medio (5.5),
+UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA = 8
 
 # --------------------------------------- ## --------------------------------------- ## --------------------------------------
 # --- LÓGICA DE PESOS CRUDOS (`utils/weights.py`) ---
@@ -160,21 +177,21 @@ PESO_CRUDO_FAV_MALETERO_MAX = 6.0
 PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES = 5.0
 
 
-# Valores de peso crudo a sumar si se cumplen umbrales de ratings
+# Valores de peso crudo a sumar si se cumplen umbrales de ratings en weights.py
 RAW_PESO_BASE_AUT_VEHI = 0.5
 RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD = 6.0
 RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD = 4.0
-RAW_PESO_BASE_COSTE_USO_DIRECTO = 0.5
-RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO = 0.5
+RAW_PESO_BASE_COSTE_USO_DIRECTO = 1.0
+RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO = 1.0
 RAW_WEIGHT_ADICIONAL_FAV_BAJO_PESO_POR_IMPACTO = 10.0
 RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_IMPACTO = 7.0
 RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES = 6.0 
-RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO = 7.0
+RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO = 9.0
 RAW_WEIGHT_FAV_BAJO_COSTE_MANTENIMIENTO_DIRECTO = 7.0
 
 # --- Reglas para estetica_min, premium_min, singular_min postprocessing.py ---
 PESO_CRUDO_FAV_ESTETICA = 8.0
-PESO_CRUDO_FAV_PREMIUM= 8.0
+PESO_CRUDO_FAV_PREMIUM = 8.0
 PESO_CRUDO_FAV_SINGULAR= 4.0
 PESO_CRUDO_BASE_ESTETICA= 1.0
 PESO_CRUDO_BASE_PREMIUM= 1.0
@@ -214,38 +231,9 @@ RAW_PESO_CAP_REMOLQUE_SF = 3.0
 # Pesos crudos base para remolque si es 'no' o None
 RAW_PESO_BASE_REMOLQUE = 1.0
 
-
+# filtro de la cuota máxima en la funcion de busqueda en BigQuery bigquery_tools.py
+FACTOR_CONVERSION_PRECIO_CUOTA = 1.35 / 96
 
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
-# --- SINÓNIMOS PARA RAG (`utils/rag_carroceria.py`) ---
-# Renombrados para evitar colisión con AVENTURA_RAW_WEIGHTS si las claves fueran idénticas
-# Mapa de sinónimos por nivel de aventura
-AVENTURA_SYNONYMS_RAG = {
-    "ninguna":   ["ciudad", "asfalto", "uso diario", "practicidad", "maniobrable"],
-    "ocasional": ["campo", "ligero fuera de asfalto", "excursiones", "versátil"],
-    "extrema":   ["off-road", "terrenos difíciles","tracción 4x4", "reductoras"]}
 
-# Tags del PDF relevantes: "Transporte de objetos especiales", "logística", "entregas", "comercio", "servicio técnico", "carga pesada"
-USO_PROF_CARGA_SYNONYMS_RAG = ["transporte de mercancías", "logística", "furgón" ]
-
-USO_PROF_PASAJEROS_SYNONYMS_RAG = ["transporte personas", "rutas de personal", "muchos asientos"]
-
-# Tags del PDF relevantes: FURGONETA (intrínsecamente mixto), PICKUP (doble cabina), SUV, FAMILIAR.
-USO_PROF_MIXTO_SYNONYMS_RAG = [
-    "uso mixto profesional", "vehículo combi", "transporte equipo y personal", "trabajo y familia adaptable", "doble cabina" ]
-
-# Si valora_estetica == "sí"
-ESTETICA_VALORADA_SYNONYMS_RAG = [ "diseño", "elegancia", "llamar atención" ]
-
-# Si num_ninos_silla > 0 o muchos pasajeros
-ESPACIO_PASAJEROS_NINOS_SYNONYMS_RAG = [ "espacio sillas infantiles", "modularidad asientos"]
-
-# Si apasionado_motor == "sí"
-APASIONADO_MOTOR_SYNONYMS_RAG = [ "conducción emocionante", "singular", "ágil en curvas"]
-
-# Podrías incluso tener para SOLO_ELECTRICOS, aunque "eléctrico" es bastante directo
-SOLO_ELECTRICOS_SYNONYMS_RAG = ["cero emisiones", "sostenible", "bajo consumo energético"]
-ALTA_COMODIDAD_CARROCERIA_SYNONYMS_RAG = ["comodidad y confort","derivado de 2VOL o 3VOL", "monovolumen espacioso"]
-NECESITA_ESPACIO_OBJETOS_ESPECIALES_SYNONYMS_RAG = ["maletero amplio", "portón trasero grande", "modularidad"]
-CLIMA_MONTA_CARROCERIA_SYNONYMS_RAG = ["todoterreno", "SUV robusto"]
 

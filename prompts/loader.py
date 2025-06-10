@@ -44,3 +44,5 @@ system_prompt_cp = cargar_prompt("system_prompt_cp.txt")
 
 system_prompt_explicacion_coche = cargar_prompt("system_prompt_explicacion_coche.txt")
 
+system_prompt_explicacion_coche_mejorado = cargar_prompt("system_prompt_explicacion_coche_mejorado.txt")
+

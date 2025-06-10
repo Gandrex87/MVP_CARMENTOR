@@ -14,7 +14,7 @@ from utils.postprocessing import aplicar_postprocesamiento_perfil, aplicar_postp
 from utils.validation import check_perfil_usuario_completeness , check_filtros_completos, check_economia_completa, check_pasajeros_completo
 from utils.formatters import formatear_preferencias_en_tabla
 from utils.weights import compute_raw_weights, normalize_weights
-from utils.rag_carroceria import get_recommended_carrocerias
+#from utils.rag_carroceria import get_recommended_carrocerias
 from utils.bigquery_tools import buscar_coches_bq
 from utils.bq_data_lookups import obtener_datos_climaticos_por_cp # IMPORT para la función de búsqueda de clima ---
 from utils.conversion import is_yes 
@@ -24,8 +24,8 @@ import traceback
 import pandas as pd
 import json # Para construir el contexto del prompt
 from typing import Literal, Optional ,Dict, Any
-from config.settings import (MAPA_RATING_A_PREGUNTA_AMIGABLE, UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG)
-from utils.explanation_generator import generar_explicacion_coche_con_llm # <-- NUEVO IMPORT
+from config.settings import (MAPA_RATING_A_PREGUNTA_AMIGABLE, UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG, UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA)
+from utils.explanation_generator import generar_explicacion_coche_mejorada # <-- NUEVO IMPORT
 import logging
 
 # --- Configuración de Logging ---
@@ -1343,70 +1343,120 @@ def calcular_recomendacion_economia_modo1_node(state: EstadoAnalisisPerfil) -> d
         # Para LangGraph, es mejor devolver el objeto aunque no haya cambiado, si la clave existe en el estado.
         return {"filtros_inferidos": filtros_actualizados} 
 
-def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
-    """
-    Llama a la función RAG para obtener tipos de carrocería recomendados, basándose en las preferencias, filtros parciales, 
-    info de pasajeros e info de clima. Actualiza filtros_inferidos.tipo_carroceria en el estado.
-    """
-    print("--- Ejecutando Nodo: obtener_tipos_carroceria_rag_node ---")
-    logging.debug("--- Ejecutando Nodo: obtener_tipos_carroceria_rag_node ---")
+# def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Llama a la función RAG para obtener tipos de carrocería recomendados, basándose en las preferencias, filtros parciales, 
+#     info de pasajeros e info de clima. Actualiza filtros_inferidos.tipo_carroceria en el estado.
+#     """
+#     print("--- Ejecutando Nodo: obtener_tipos_carroceria_rag_node ---")
+#     logging.debug("--- Ejecutando Nodo: obtener_tipos_carroceria_rag_node ---")
 
-    preferencias_obj = state.get("preferencias_usuario")
-    filtros_obj = state.get("filtros_inferidos") # Este ya puede tener la rec. Modo 1
-    info_pasajeros_obj = state.get("info_pasajeros")
-    info_clima_obj = state.get("info_clima_usuario")
-    k_rag = 4 # Número de recomendaciones a obtener, puedes hacerlo configurable
-    k_candidates = 8 #Numero de candidatos a reordenar.
+#     preferencias_obj = state.get("preferencias_usuario")
+#     filtros_obj = state.get("filtros_inferidos") # Este ya puede tener la rec. Modo 1
+#     info_pasajeros_obj = state.get("info_pasajeros")
+#     info_clima_obj = state.get("info_clima_usuario")
+#     k_rag = 4 # Número de recomendaciones a obtener, puedes hacerlo configurable
+#     k_candidates = 8 #Numero de candidatos a reordenar.
 
-    # Verificar pre-condiciones para RAG (al menos preferencias)
-    if not preferencias_obj:
-        logging.error("ERROR (RAG Node) ► 'preferencias_usuario' no existe en el estado. No se puede llamar a RAG.")
-        # Devolver el estado como está si faltan datos críticos para RAG
-        return {"filtros_inferidos": filtros_obj if filtros_obj else FiltrosInferidos()}
+#     # Verificar pre-condiciones para RAG (al menos preferencias)
+#     if not preferencias_obj:
+#         logging.error("ERROR (RAG Node) ► 'preferencias_usuario' no existe en el estado. No se puede llamar a RAG.")
+#         # Devolver el estado como está si faltan datos críticos para RAG
+#         return {"filtros_inferidos": filtros_obj if filtros_obj else FiltrosInferidos()}
 
-    # Si filtros_obj es None (poco probable si el nodo anterior lo inicializó), crear uno
-    if filtros_obj is None:
-        logging.warning("WARN (RAG Node) ► filtros_inferidos era None. Inicializando uno nuevo.")
-        filtros_obj = FiltrosInferidos()
+#     # Si filtros_obj es None (poco probable si el nodo anterior lo inicializó), crear uno
+#     if filtros_obj is None:
+#         logging.warning("WARN (RAG Node) ► filtros_inferidos era None. Inicializando uno nuevo.")
+#         filtros_obj = FiltrosInferidos()
         
-    filtros_actualizados = filtros_obj.model_copy(deep=True)
+#     filtros_actualizados = filtros_obj.model_copy(deep=True)
 
-    # # Convertir a dicts para pasar a get_recommended_carrocerias - La función RAG espera diccionarios según su firma actual
-    # prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
-    # # filtros_tecnicos_dict se refiere a los filtros ya inferidos/actualizados hasta este punto
-    # filtros_tecnicos_dict = filtros_actualizados.model_dump(mode='json', exclude_none=False) 
-    # info_pasajeros_dict = info_pasajeros_obj.model_dump(mode='json') if info_pasajeros_obj else None
-    # info_clima_dict = info_clima_obj.model_dump(mode='json') if info_clima_obj else None
+#     # # Convertir a dicts para pasar a get_recommended_carrocerias - La función RAG espera diccionarios según su firma actual
+#     # prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
+#     # # filtros_tecnicos_dict se refiere a los filtros ya inferidos/actualizados hasta este punto
+#     # filtros_tecnicos_dict = filtros_actualizados.model_dump(mode='json', exclude_none=False) 
+#     # info_pasajeros_dict = info_pasajeros_obj.model_dump(mode='json') if info_pasajeros_obj else None
+#     # info_clima_dict = info_clima_obj.model_dump(mode='json') if info_clima_obj else None
     
-    tipos_carroceria_recomendados = None # Default
+#     tipos_carroceria_recomendados = None # Default
 
-    # Solo llamar a RAG si tipo_carroceria aún no está definido o está vacío, esto evita re-llamar a RAG si ya se hizo en una ejecución anterior (si el nodo se re-ejecuta)
-    if not filtros_actualizados.tipo_carroceria: 
-        logging.debug("DEBUG (RAG Node) ► Llamando a get_recommended_carrocerias...")
-        try:
-            tipos_carroceria_recomendados = get_recommended_carrocerias(
-            # 1. Pasamos los objetos Pydantic directamente, sin .model_dump()
-            preferencias=preferencias_obj, 
-            info_pasajeros=info_pasajeros_obj,
-            info_clima=info_clima_obj,
-            filtros_inferidos=filtros_actualizados, # 2. El argumento ahora se llama 'filtros_inferidos
-            k=k_rag,# 3. Añadimos los parámetros de control
-            num_candidates_to_rerank=k_candidates # Puedes hacerlo configurable si quieres
-        )  
-            logging.debug(f"DEBUG (RAG Node) ► RAG recomendó: {tipos_carroceria_recomendados}")
-            if tipos_carroceria_recomendados: # Solo actualizar si RAG devolvió algo
-                filtros_actualizados.tipo_carroceria = tipos_carroceria_recomendados
-            else:
-                logging.warning("WARN (RAG Node) ► get_recommended_carrocerias devolvió una lista vacía o None.")
-                filtros_actualizados.tipo_carroceria = ["SUV", "FAMILIAR" ,"MONOVOLUMEN"] # Un fallback muy genérico si RAG falla
-        except Exception as e_rag:
-            logging.error(f"ERROR (RAG Node) ► Fallo en la llamada a get_recommended_carrocerias: {e_rag}")
-            traceback.print_exc()
-            filtros_actualizados.tipo_carroceria = ["ErrorAlObtenerCarrocerias"] 
-    else:
-        logging.debug(f"DEBUG (RAG Node) ► tipo_carroceria ya existe en filtros_inferidos ({filtros_actualizados.tipo_carroceria}). Omitiendo llamada a RAG.")
+#     # Solo llamar a RAG si tipo_carroceria aún no está definido o está vacío, esto evita re-llamar a RAG si ya se hizo en una ejecución anterior (si el nodo se re-ejecuta)
+#     if not filtros_actualizados.tipo_carroceria: 
+#         logging.debug("DEBUG (RAG Node) ► Llamando a get_recommended_carrocerias...")
+#         try:
+#             tipos_carroceria_recomendados = get_recommended_carrocerias(
+#             # 1. Pasamos los objetos Pydantic directamente, sin .model_dump()
+#             preferencias=preferencias_obj, 
+#             info_pasajeros=info_pasajeros_obj,
+#             info_clima=info_clima_obj,
+#             filtros_inferidos=filtros_actualizados, # 2. El argumento ahora se llama 'filtros_inferidos
+#             k=k_rag,# 3. Añadimos los parámetros de control
+#             num_candidates_to_rerank=k_candidates # Puedes hacerlo configurable si quieres
+#         )  
+#             logging.debug(f"DEBUG (RAG Node) ► RAG recomendó: {tipos_carroceria_recomendados}")
+#             if tipos_carroceria_recomendados: # Solo actualizar si RAG devolvió algo
+#                 filtros_actualizados.tipo_carroceria = tipos_carroceria_recomendados
+#             else:
+#                 logging.warning("WARN (RAG Node) ► get_recommended_carrocerias devolvió una lista vacía o None.")
+#                 filtros_actualizados.tipo_carroceria = ["SUV", "FAMILIAR" ,"MONOVOLUMEN"] # Un fallback muy genérico si RAG falla
+#         except Exception as e_rag:
+#             logging.error(f"ERROR (RAG Node) ► Fallo en la llamada a get_recommended_carrocerias: {e_rag}")
+#             traceback.print_exc()
+#             filtros_actualizados.tipo_carroceria = ["ErrorAlObtenerCarrocerias"] 
+#     else:
+#         logging.debug(f"DEBUG (RAG Node) ► tipo_carroceria ya existe en filtros_inferidos ({filtros_actualizados.tipo_carroceria}). Omitiendo llamada a RAG.")
 
-    return {"filtros_inferidos": filtros_actualizados}
+#     return {"filtros_inferidos": filtros_actualizados}
+# def determinar_carroceria_por_reglas_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Determina la lista de tipo_carroceria basándose en un conjunto
+#     de reglas de negocio aplicadas al estado del usuario.
+#     Si ninguna regla aplica, no modifica el campo tipo_carroceria.
+#     """
+#     print("--- Ejecutando Nodo: determinar_carroceria_por_reglas_node ---")
+#     logging.debug("--- Ejecutando Nodo: determinar_carroceria_por_reglas_node ---")
+
+#     preferencias_obj = state.get("preferencias_usuario")
+#     info_clima_obj = state.get("info_clima_usuario")
+#     info_pasajeros_obj = state.get("info_pasajeros")
+#     filtros_obj = state.get("filtros_inferidos")
+    
+#     if not filtros_obj:
+#         logging.warning("WARN (CarroceriaReglas) ► No hay objeto de filtros en el estado. No se puede actualizar tipo_carroceria.")
+#         return {} # No hacer nada si no hay objeto de filtros
+    
+#     # Trabajar con una copia para evitar efectos secundarios inesperados
+#     filtros_actualizados = filtros_obj.model_copy(deep=True)
+    
+#     carrocerias_sugeridas = set()
+
+#     # --- Regla 1: Si CP pertenece a [zona_clima_monta] ---
+#     if info_clima_obj and info_clima_obj.ZONA_CLIMA_MONTA is True:
+#         logging.debug("DEBUG (CarroceriaReglas) ► Aplicando regla ZONA_CLIMA_MONTA. Favoreciendo SUV, TODOTERRENO.")
+#         carrocerias_sugeridas.update(['SUV', 'TODOTERRENO'])
+
+#     # --- Regla 2: Si uso_profesional='sí' y suele_llevar_acompanantes=False ---
+#     if (preferencias_obj and preferencias_obj.uso_profesional is True and
+#         info_pasajeros_obj and info_pasajeros_obj.suele_llevar_acompanantes is False):
+#         logging.debug("DEBUG (CarroceriaReglas) ► Aplicando regla USO_PROFESIONAL sin pasajeros. Favoreciendo COMERCIAL.")
+#         carrocerias_sugeridas.add('COMERCIAL')
+        
+#     # --- Puedes añadir más reglas aquí en el futuro ---
+#     # Ejemplo:
+#     # if preferencias_obj and is_yes(preferencias_obj.arrastra_remolque):
+#     #     carrocerias_sugeridas.update(['PICKUP', 'TODOTERRENO', 'SUV'])
+
+#     # Si se aplicó alguna regla y se sugirieron carrocerías, actualizar el estado
+#     if carrocerias_sugeridas:
+#         lista_final_carrocerias = sorted(list(carrocerias_sugeridas)) # Ordenar para consistencia
+#         logging.info(f"INFO (CarroceriaReglas) ► Carrocerías sugeridas por reglas: {lista_final_carrocerias}")
+#         filtros_actualizados.tipo_carroceria = lista_final_carrocerias
+#         return {"filtros_inferidos": filtros_actualizados}
+#     else:
+#         logging.info("INFO (CarroceriaReglas) ► Ninguna regla de carrocería aplicó. Se dejará el campo 'tipo_carroceria' como está (o None).")
+#         # Si no hay sugerencias, no devolvemos cambios a filtros_inferidos
+#         # para que no se sobrescriba un valor que pudiera existir previamente.
+#         return {}
 
 # --- NUEVO NODO ---
 
@@ -1419,23 +1469,31 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     """
     print("--- Ejecutando Nodo: calcular_flags_dinamicos_node ---")
     logging.debug("--- Ejecutando Nodo: calcular_flags_dinamicos_node ---")
-    logger.info("--- Ejecutando Nodo: calcular_flags_dinamicos_node ---") # Usar INFO para asegurar visibilidad
+    
     preferencias_obj = state.get("preferencias_usuario")
     info_clima_obj = state.get("info_clima_usuario")
-    # Los flags 'penalizar_puertas_bajas' y 'priorizar_ancho' vienen de aplicar_filtros_pasajeros_node ya deberían estar en el estado si esa lógica se ejecutó.
-    penalizar_puertas_bajas_actual = state.get("penalizar_puertas_bajas", False)
+    penalizar_puertas_bajas_actual = state.get("penalizar_puertas_bajas", False) # # Los flags 'penalizar_puertas_bajas' y 'priorizar_ancho' vienen de aplicar_filtros_pasajeros_node ya deberían estar en el estado si esa lógica se ejecutó.
     #priorizar_ancho_actual = state.get("priorizar_ancho", False)
-    print(f"DEBUG contenido preferencias_obj: {preferencias_obj}") # Debug para ver qué contiene el objeto
+    info_pasajeros_obj = state.get("info_pasajeros") # <-- Obtener info de pasajeros
+    print(f"DEBUG contenido de los objetos:  preferencias_obj: {preferencias_obj} - pasajeros {info_pasajeros_obj} - clima {info_clima_obj}") # Debug para ver qué contiene el objeto
     # Inicializar flags para seleccion NivelAventura False por defecto
     flag_pen_bev_reev_avent_ocas = False
     flag_pen_phev_avent_ocas = False
     flag_pen_electrif_avent_extr = False # Para BEV, REEV, PHEV en aventura extrema
-    # Inicializar todos los flags que este nodo calcula
     flag_penalizar_lc_comod = False
     flag_penalizar_dep_comod = False
     flag_penalizar_ant_tec = False
     flag_aplicar_dist_amb = False
     flag_es_zbe = False
+    flag_fav_car_montana = False #  # --- NUEVOS FLAGS PARA LÓGICA DE CARROCERÍA ---
+    flag_fav_car_comercial = False
+    flag_fav_car_pasajeros_pro = False
+    flag_desfav_car_no_aventura = False#  
+    flag_fav_suv_aventura_ocasional = False
+    flag_fav_pickup_todoterreno_aventura_extrema = False
+    flag_aplicar_logica_objetos_especiales = False
+    flag_fav_carroceria_confort = False# --- NUEVOS FLAGS PARA LÓGICA DE CARROCERÍA ---
+    
 
     # Verificar que preferencias_obj exista para acceder a sus atributos
     if not preferencias_obj:
@@ -1451,9 +1509,61 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "penalizar_bev_reev_aventura_ocasional": flag_pen_bev_reev_avent_ocas,
             "penalizar_phev_aventura_ocasional": flag_pen_phev_avent_ocas,
             "penalizar_electrificados_aventura_extrema": flag_pen_electrif_avent_extr,
-            "es_municipio_zbe": flag_es_zbe
+            "es_municipio_zbe": flag_es_zbe,
+            "favorecer_carroceria_montana": flag_fav_car_montana,
+            "favorecer_carroceria_comercial": flag_fav_car_comercial,
+            "favorecer_carroceria_pasajeros_pro": flag_fav_car_pasajeros_pro,
+            "desfavorecer_carroceria_no_aventura": flag_desfav_car_no_aventura,
+            "favorecer_suv_aventura_ocasional": flag_fav_suv_aventura_ocasional,
+            "favorecer_pickup_todoterreno_aventura_extrema": flag_fav_pickup_todoterreno_aventura_extrema,
+            "aplicar_logica_objetos_especiales": flag_aplicar_logica_objetos_especiales,
+            "favorecer_carroceria_confort": flag_fav_carroceria_confort,            
         }
+    # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
+    # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
+    if info_clima_obj and hasattr(info_clima_obj, 'ZONA_CLIMA_MONTA') and info_clima_obj.ZONA_CLIMA_MONTA is True:
+        flag_fav_car_montana = True
+        logging.info(f"DEBUG (CalcFlags) ► ZONA_CLIMA_MONTA=True. Activando flag para favorecer carrocería de montaña.")
 
+    # Regla 2 y 3: Uso profesional con/sin pasajeros
+    if is_yes(preferencias_obj.uso_profesional):
+        if info_pasajeros_obj and info_pasajeros_obj.suele_llevar_acompanantes is False:
+            flag_fav_car_comercial = True
+            logging.info(f"DEBUG (CalcFlags) ► Uso profesional sin pasajeros. Activando flag para favorecer carrocería COMERCIAL.")
+        elif info_pasajeros_obj and info_pasajeros_obj.suele_llevar_acompanantes is True:
+            flag_fav_car_pasajeros_pro = True
+            logging.info(f"DEBUG (CalcFlags) ► Uso profesional con pasajeros. Activando flag para favorecer 3VOL/MONOVOLUMEN.")
+
+    # Regla 4: Aventura nula y no en montaña desfavorece PICKUP/TODOTERRENO
+    if (hasattr(preferencias_obj, 'aventura') and preferencias_obj.aventura == NivelAventura.ninguna and
+        (not info_clima_obj or not getattr(info_clima_obj, 'ZONA_CLIMA_MONTA', False))):
+        flag_desfav_car_no_aventura = True
+        logging.info(f"DEBUG (CalcFlags) ► Aventura 'ninguna' y no es clima de montaña. Activando flag para desfavorecer PICKUP/TODOTERRENO.")
+    
+    
+    # Regla 5 y 6: Aventura
+    aventura_val = preferencias_obj.aventura
+    if aventura_val:
+        if aventura_val == NivelAventura.ocasional:
+            flag_fav_suv_aventura_ocasional = True
+            logging.info(f"DEBUG (CalcFlags) ► Aventura OCASIONAL. Activando flag para favorecer carrocería SUV.")
+        elif aventura_val == NivelAventura.extrema:
+            flag_fav_pickup_todoterreno_aventura_extrema = True
+            logging.info(f"DEBUG (CalcFlags) ► Aventura EXTREMA. Activando flag para favorecer PICKUP/TODOTERRENO.")
+            
+    # Regla 7: Objetos Especiales
+    if is_yes(preferencias_obj.necesita_espacio_objetos_especiales) :
+        flag_aplicar_logica_objetos_especiales = True
+        logging.info(f"DEBUG (CalcFlags) ► necesita_espacio_objetos_especiales=True. Activando lógica de carrocería para objetos especiales.")
+
+    # Regla 8: Alta Comodidad
+    rating_comodidad_val = preferencias_obj.rating_comodidad
+    if rating_comodidad_val is not None and rating_comodidad_val >= UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA:
+        flag_fav_carroceria_confort = True
+        logging.info(f"DEBUG (CalcFlags) ► Rating Comodidad ({rating_comodidad_val}) >= {UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA}. Activando flag para favorecer carrocerías confortables.")
+        
+    # --- FIN NUEVA LÓGICA ---
+    
     # Lógica para Flags de Penalización por Comodidad
     if preferencias_obj.rating_comodidad is not None:
         if preferencias_obj.rating_comodidad >= UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS:
@@ -1479,9 +1589,6 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         flag_es_zbe = True
         logging.debug(f"DEBUG (CalcFlags) ► CP en MUNICIPIO_ZBE. Activando flag es_municipio_zbe.")
     
-    logging.debug(f"DEBUG (CalcFlags) ► Flags calculados: lc_comod={flag_penalizar_lc_comod}, dep_comod={flag_penalizar_dep_comod}, ant_tec={flag_penalizar_ant_tec}, dist_amb={flag_aplicar_dist_amb}, zbe={flag_es_zbe}")
-
-    
    # --- DEBUGGING AVENTURA ---
     if hasattr(preferencias_obj, 'aventura'):
         aventura_val = preferencias_obj.aventura
@@ -1505,7 +1612,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     else:
         logging.warning("WARN (CalcFlags) ► El objeto 'preferencias_usuario' no tiene el atributo 'aventura'.")
     # --- FIN DEBUGGING AVENTURA ---
-    
+    logging.debug(f"DEBUG (CalcFlags) ► Flags calculados: lowcost_comodidad={flag_penalizar_lc_comod}, deportividad_comodidad={flag_penalizar_dep_comod}, antiguo_por_tecnolog={flag_penalizar_ant_tec}, distint_ambiental={flag_aplicar_dist_amb}, zbe={flag_es_zbe}, penali_bev_reev_aventura_ocasional= {flag_pen_bev_reev_avent_ocas}")
     # Devolver solo los flags que este nodo es responsable de calcular/actualizar
     # y los que ya existían para asegurar que se propaguen.
     return {
@@ -1518,6 +1625,14 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "penalizar_bev_reev_aventura_ocasional": flag_pen_bev_reev_avent_ocas,
         "penalizar_phev_aventura_ocasional": flag_pen_phev_avent_ocas,
         "penalizar_electrificados_aventura_extrema": flag_pen_electrif_avent_extr,
+        "favorecer_carroceria_montana": flag_fav_car_montana,
+        "favorecer_carroceria_comercial": flag_fav_car_comercial,
+        "favorecer_carroceria_pasajeros_pro": flag_fav_car_pasajeros_pro,
+        "desfavorecer_carroceria_no_aventura": flag_desfav_car_no_aventura,
+        "favorecer_suv_aventura_ocasional": flag_fav_suv_aventura_ocasional,
+        "favorecer_pickup_todoterreno_aventura_extrema": flag_fav_pickup_todoterreno_aventura_extrema,
+        "aplicar_logica_objetos_especiales": flag_aplicar_logica_objetos_especiales,
+        "favorecer_carroceria_confort": flag_fav_carroceria_confort,
         "es_municipio_zbe": flag_es_zbe
     }
     
@@ -1664,12 +1779,20 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     flag_pen_bev_reev_avent_ocas = state.get("penalizar_bev_reev_aventura_ocasional", False)
     flag_pen_phev_avent_ocas= state.get("penalizar_phev_aventura_ocasional", False)
     flag_pen_electrif_avent_extr = state.get("penalizar_electrificados_aventura_extrema", False)
+    flag_fav_car_montana_val = state.get("favorecer_carroceria_montana", False)
+    flag_fav_car_comercial_val = state.get("favorecer_carroceria_comercial", False)
+    flag_fav_car_pasajeros_pro_val = state.get("favorecer_carroceria_pasajeros_pro", False)
+    flag_desfav_car_no_aventura_val = state.get("desfavorecer_carroceria_no_aventura", False)
+    flag_fav_suv_aventura_ocasional = state.get("favorecer_suv_aventura_ocasional")
+    flag_fav_pickup_todoterreno_aventura_extrema = state.get("favorecer_pickup_todoterreno_aventura_extrema")
+    flag_aplicar_logica_objetos_especiales= state.get("aplicar_logica_objetos_especiales")
+    flag_fav_carroceria_confort= state.get("favorecer_carroceria_confort")
     
     thread_id = "unknown_thread"
     if state.get("config") and isinstance(state["config"], dict) and \
        state["config"].get("configurable") and isinstance(state["config"]["configurable"], dict):
         thread_id = state["config"]["configurable"].get("thread_id", "unknown_thread")
-    k_coches = 7 
+    k_coches = 5 
     coches_encontrados_raw = [] 
     coches_encontrados = []
     sql_ejecutada = None 
@@ -1696,12 +1819,18 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         filtros_para_bq['flag_penalizar_deportividad_comodidad'] = flag_penalizar_dep_comod
         filtros_para_bq['flag_penalizar_antiguo_por_tecnologia'] = flag_penalizar_antiguo_tec_val
         filtros_para_bq['aplicar_logica_distintivo_ambiental'] = flag_aplicar_distintivo_val
-        
         filtros_para_bq['penalizar_bev_reev_aventura_ocasional'] = flag_pen_bev_reev_avent_ocas
         filtros_para_bq['penalizar_phev_aventura_ocasional'] = flag_pen_phev_avent_ocas
         filtros_para_bq['penalizar_electrificados_aventura_extrema'] = flag_pen_electrif_avent_extr
-        
         filtros_para_bq['es_municipio_zbe'] = flag_es_zbe_val
+        filtros_para_bq['favorecer_carroceria_montana'] = flag_fav_car_montana_val
+        filtros_para_bq['favorecer_carroceria_comercial'] = flag_fav_car_comercial_val
+        filtros_para_bq['favorecer_carroceria_pasajeros_pro'] = flag_fav_car_pasajeros_pro_val
+        filtros_para_bq['desfavorecer_carroceria_no_aventura'] = flag_desfav_car_no_aventura_val
+        filtros_para_bq['favorecer_suv_aventura_ocasional'] = flag_fav_suv_aventura_ocasional
+        filtros_para_bq['favorecer_pickup_todoterreno_aventura_extrema'] = flag_fav_pickup_todoterreno_aventura_extrema
+        filtros_para_bq['aplicar_logica_objetos_especiales'] = flag_aplicar_logica_objetos_especiales
+        filtros_para_bq['favorecer_carroceria_confort'] = flag_fav_carroceria_confort
         
         
         logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
@@ -1732,7 +1861,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
                 #coches_para_df = []
                 for i, coche_dict_completo in enumerate(coches_encontrados):
                     # --- LLAMAR AL NUEVO GENERADOR DE EXPLICACIONES ---
-                    explicacion_coche = generar_explicacion_coche_con_llm(
+                    explicacion_coche = generar_explicacion_coche_mejorada(
                         coche_dict_completo=coche_dict_completo,
                         preferencias_usuario=preferencias_obj,
                         pesos_normalizados=pesos_finales,
@@ -1880,7 +2009,6 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         "messages": historial_final,
         "coches_recomendados": coches_encontrados, 
         "tabla_resumen_criterios": tabla_resumen_criterios_md, # Propagar la tabla (útil para logging)
-        "pregunta_pendiente": None, # Este nodo es final para el turno
         # Propagar otros campos del estado que no se modifican aquí pero son necesarios
         "preferencias_usuario": state.get("preferencias_usuario"),
         "info_pasajeros": state.get("info_pasajeros"),
@@ -1899,6 +2027,15 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         "penalizar_electrificados_aventura_extrema": flag_pen_electrif_avent_extr,
         "codigo_postal_usuario": state.get("codigo_postal_usuario"),
         "info_clima_usuario": state.get("info_clima_usuario"),
+        "favorecer_carroceria_montana": flag_fav_car_montana_val,
+        "favorecer_carroceria_comercial": flag_fav_car_comercial_val,
+        "favorecer_carroceria_pasajeros_pro": flag_fav_car_pasajeros_pro_val,
+        "desfavorecer_carroceria_no_aventura": flag_desfav_car_no_aventura_val,
+        "favorecer_suv_aventura_ocasional" : flag_fav_suv_aventura_ocasional,
+        'favorecer_pickup_todoterreno_aventura_extrema' : flag_fav_pickup_todoterreno_aventura_extrema,
+        'aplicar_logica_objetos_especiales' : flag_aplicar_logica_objetos_especiales,
+        'favorecer_carroceria_confort' : flag_fav_carroceria_confort,
+        "pregunta_pendiente": None, # Este nodo es final para el turno
     }
 
 
