@@ -3,7 +3,7 @@ from typing import List, Optional, Annotated, Literal
 from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, model_validator
-from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesional, DimensionProblematica, EstiloConduccion
+from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesional, DimensionProblematica, EstiloConduccion,FrecuenciaUso , DistanciaTrayecto, FrecuenciaViajesLargos
 from typing import Literal, Optional
 
 
@@ -27,6 +27,12 @@ class PerfilUsuario(BaseModel):
     apasionado_motor : Optional[str] = Field(default=None, description="¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'")
     valora_estetica: Optional[str] = Field(default=None, description="¿Valora la estética del coche? Responde 'sí' o 'no'")
     coche_principal_hogar: Optional[str] = Field(default=None,description="¿Será el coche principal del hogar? Responde 'sí' o 'no'")
+     # --- NUEVOS CAMPOS PARA FRECUENCIA DE USO Y DISTANCIA ---
+    frecuencia_uso: Optional[FrecuenciaUso] = Field(default=None, description="Frecuencia con la que el usuario usará el coche semanalmente.")
+    distancia_trayecto: Optional[DistanciaTrayecto] = Field(default=None, description="Distancia del trayecto más frecuente o habitual en kilómetros.")
+    realiza_viajes_largos: Optional[str] = Field(default=None, description="¿El usuario realiza viajes largos (>150km) además de su trayecto habitual? Responde 'sí' o 'no'")
+    frecuencia_viajes_largos: Optional[FrecuenciaViajesLargos] = Field(default=None,description="Si realiza viajes largos, ¿con qué frecuencia lo hace?" )
+    # --- FIN NUEVOS CAMPOS ---
     uso_profesional: Optional[str] = Field(default=None, description="¿Usará el coche para trabajo? Responde 'sí' o 'no'")
     tipo_uso_profesional: Optional[TipoUsoProfesional] = Field(default=None, description="Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'")
     prefiere_diseno_exclusivo: Optional[str] = Field(default=None,description="¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?")
@@ -99,10 +105,10 @@ class InfoPasajeros(BaseModel):
 class FiltrosInferidos(BaseModel):
     #batalla_min: Optional[float] = Field(default=None, description="Valor mínimo de batalla recomendado (rango: 1500.0 a 4490.0 mm). Relevante si el usuario mide más de 189 cm.")
     #indice_altura_interior_min: Optional[float] = Field(default=None, description="Valor mínimo de índice de altura interior recomendado (rango: 0.90 a 3.020). Relevante si el usuario mide más de 189 cm.")
-    estetica_min: Optional[float] = Field(default=None, description="Mínimo valor de estética recomendado (0.0 a 10.0)")
+    #estetica_min: Optional[float] = Field(default=None, description="Mínimo valor de estética recomendado (0.0 a 10.0)")
     tipo_mecanica: Optional[List[TipoMecanica]] = Field(default=None, description="Lista de motorizaciones recomendadas")
-    premium_min: Optional[float] = Field(default=None, description="Mínimo valor de premium recomendado (0.0 a 10.0)")
-    singular_min: Optional[float] = Field(default=None, description="Mínimo valor de singularidad recomendado (0.0 a 10.0)")
+    #premium_min: Optional[float] = Field(default=None, description="Mínimo valor de premium recomendado (0.0 a 10.0)")
+    #singular_min: Optional[float] = Field(default=None, description="Mínimo valor de singularidad recomendado (0.0 a 10.0)")
     tipo_carroceria: Optional[List[str]] = Field(default=None, description="Lista de tipos de carrocería recomendados por RAG (ej: ['SUV', 'COUPE'])")
     modo_adquisicion_recomendado: Optional[Literal['Contado', 'Financiado']] = Field(
         default=None,
@@ -207,8 +213,15 @@ class EstadoAnalisisPerfil(TypedDict):
     favorecer_suv_aventura_ocasional: Optional[bool]
     favorecer_pickup_todoterreno_aventura_extrema:Optional[bool]
     aplicar_logica_objetos_especiales: Optional[bool]
-    favorecer_carroceria_confort: Optional[bool]    
+    favorecer_carroceria_confort: Optional[bool] 
+    flag_logica_uso_ocasional: Optional[bool]
+    flag_favorecer_bev_uso_definido: Optional[bool]
+    flag_penalizar_phev_uso_intensivo: Optional[bool]
+    flag_favorecer_electrificados_por_punto_carga: Optional[bool]
+    km_anuales_estimados: Optional[int]
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
+
+
 
 
 

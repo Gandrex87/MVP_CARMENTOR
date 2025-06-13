@@ -65,7 +65,12 @@ MIN_MAX_RANGES = {
     "alto_vehiculo": (1052.0, 2940.0),  # mm, para la altura total del vehículo
     "relacion_peso_potencia": (1.8, 28.3), # kg/CV, un valor menor es mejor, por lo que el escalado debe ser invertido. 
     "potencia_maxima": (41.0, 789.0),    # CV, más es mejor
-    "aceleracion_0_100": (2.5, 34.0)     # segundos, un valor menor es mejor, por lo que el escalado debe ser invertido.
+    "aceleracion_0_100": (2.5, 34.0),
+    'autonomia_uso_principal': (21.8, 1480.6),
+    'autonomia_uso_2nd_drive': (326.0, 936.4),
+    'tiempo_carga_min': (18.0, 640.1),
+    'potencia_maxima_carga_AC': (2.3, 22.0),
+    'potencia_maxima_carga_DC': (1.0, 270.0),# segundos, un valor menor es mejor, por lo que el escalado debe ser invertido.
 }
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- VALORES DE AJUSTE DIRECTO AL SCORE (BONUS/PENALIZACIONES) (`utils/bigquery_tools.py`) ---
@@ -110,7 +115,6 @@ PENALTY_ZBE_DISTINTIVO_DESFAVORABLE = -0.081 #  (B, NA)
 # Regla 6: si flag_fav_pickup_todoterreno_aventura_extrema es TRUE, coches 'PICKUP' favorece
 # Regla 7: si flag_aplicar_logica_objetos_especiales = TRUE, favorecer ('MONOVOLUMEN', 'FURGONETA', 'FAMILIAR', 'SUV'), penalty ('3VOL', 'COUPE', 'DESCAPOTABLE')
 # Regla 8: si flag_fav_carroceria_confort = TRUE, favorece ('3VOL', '2VOL', 'SUV', 'FAMILIAR', 'MONOVOLUMEN')
-
 BONUS_CARROCERIA_MONTANA = 0.05
 BONUS_CARROCERIA_COMERCIAL = 0.20
 BONUS_CARROCERIA_PASAJEROS_PRO = 0.20
@@ -122,6 +126,36 @@ BONUS_CARROCERIA_OBJETOS_ESPECIALES = 0.10
 PENALTY_CARROCERIA_OBJETOS_ESPECIALES = -0.20
 BONUS_CARROCERIA_CONFORT = 0.081
 
+# Lógica para FrecuenciaUso.OCASIONALMENTE
+BONUS_OCASION_POR_USO_OCASIONAL = 0.081  # Puntos extra si el coche es de OCASION y el uso es ocasional
+PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL = -0.10  # Puntos que se restan a BEV/PHEV/REEV si el uso es ocasional
+BONUS_BEV_REEV_USO_DEFINIDO = 0.10 # Bonus para BEV/REEV si el perfil de uso es el ideal para un eléctrico puro
+PENALTY_PHEV_USO_INTENSIVO_LARGO = -0.15 # Penalización para PHEVs si el uso es diario/frecuente en trayectos muy largos
+
+# --- BONUS/PENALIZACIONES BASADOS EN KM ANUALES ESTIMADOS ---
+# Rango Bajo (< 10.000 km/año)
+BONUS_MOTOR_POCO_KM = 0.10 
+PENALTY_OCASION_POCO_KM = -0.05  
+
+# Rango Medio (10.000 - 30.000 km/año)
+PENALTY_OCASION_MEDIO_KM = -0.10
+
+# Rango Alto (30.000 - 60.000 km/año)
+BONUS_MOTOR_MUCHO_KM = 0.10 
+PENALTY_OCASION_MUCHO_KM = -0.10
+
+# --- LÓGICA PARA USO MUY ALTO (> 60.000 km/año) ---
+# Bonus por tipo de motor
+BONUS_BEV_MUY_ALTO_KM = 0.05
+BONUS_REEV_MUY_ALTO_KM = 0.081
+BONUS_DIESEL_HEVD_MUY_ALTO_KM = 0.10
+BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM = 0.03
+
+# Penalización para coches de ocasión
+PENALTY_OCASION_MUY_ALTO_KM_V2 = -0.20 # Le pongo V2 para no confundir con la otra constante
+
+# Bonus para coches que pueden aprovechar un punto de carga propio
+BONUS_PUNTO_CARGA_PROPIO = 0.10
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- UMBRALES PARA ACTIVAR FLAGS EN PYTHON (`graph/perfil/nodes.py` - `finalizar_y_presentar_node`) ---
 
@@ -157,7 +191,7 @@ AJUSTE_CRUDO_TRACCION_POR_MONTA = 2.0 # Cuánto sumar al peso crudo de tracción
 # Aventura Pesos Crudos
 AVENTURA_RAW_WEIGHTS = {
   "ninguna":   {"altura_libre_suelo":  0.0,   "traccion":  0.0 ,  "reductoras":  0.0},
-  "ocasional": {"altura_libre_suelo":  10.0,   "traccion":  4.0,  "reductoras":  1.0},
+  "ocasional": {"altura_libre_suelo":  7.0,   "traccion":  4.0,  "reductoras":  1.0},
   "extrema":   {"altura_libre_suelo":  9.0,   "traccion": 10.0,  "reductoras":  10.0}}
 
 # Valores de Pesos basados en altura_mayor_190 en Wights.py
@@ -185,18 +219,19 @@ RAW_PESO_BASE_COSTE_USO_DIRECTO = 1.0
 RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO = 1.0
 RAW_WEIGHT_ADICIONAL_FAV_BAJO_PESO_POR_IMPACTO = 10.0
 RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_IMPACTO = 7.0
-RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES = 6.0 
+RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES = 5.0 
 RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO = 9.0
 RAW_WEIGHT_FAV_BAJO_COSTE_MANTENIMIENTO_DIRECTO = 7.0
 
-# --- Reglas para estetica_min, premium_min, singular_min postprocessing.py ---
-PESO_CRUDO_FAV_ESTETICA = 8.0
-PESO_CRUDO_FAV_PREMIUM = 8.0
-PESO_CRUDO_FAV_SINGULAR= 4.0
-PESO_CRUDO_BASE_ESTETICA= 1.0
-PESO_CRUDO_BASE_PREMIUM= 1.0
-PESO_CRUDO_BASE_SINGULAR= 1.0
 
+RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_USO_INTENSIVO = 5.0
+
+# --- Reglas para estetica_min, premium_min, singular_min postprocessing.py ---
+PESO_CRUDO_FAV_ESTETICA = 6.0
+
+PESO_CRUDO_FAV_PREMIUM_APASIONADO_MOTOR = 6.0
+PESO_CRUDO_FAV_SINGULAR_APASIONADO_MOTOR= 5.0
+PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO = 6.0
 
 # Pesos crudos para preferencias de garaje/aparcamiento
 PESO_CRUDO_FAV_MENOR_SUPERFICIE = 3.0 # fav_menor_superficie_planta
@@ -231,9 +266,40 @@ RAW_PESO_CAP_REMOLQUE_SF = 3.0
 # Pesos crudos base para remolque si es 'no' o None
 RAW_PESO_BASE_REMOLQUE = 1.0
 
+
+# Pesos para nuevas características de carga y autonomía Si km/año > 60.000 
+WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM = 9.0
+WEIGHT_AUTONOMIA_2ND_DRIVE_MUY_ALTO_KM = 3.0
+WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM = 9.0  # Menor tiempo es mejor
+WEIGHT_POTENCIA_AC_MUY_ALTO_KM = 1.0
+WEIGHT_POTENCIA_DC_MUY_ALTO_KM = 9.0
+
 # filtro de la cuota máxima en la funcion de busqueda en BigQuery bigquery_tools.py
 FACTOR_CONVERSION_PRECIO_CUOTA = 1.35 / 96
 
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
+# --- MAPEADOS PARA EL CÁLCULO DE KM ANUALES ESTIMADOS ---
+MAPA_FRECUENCIA_USO = {
+    "diario": 10,
+    "frecuentemente": 4,
+    "ocasionalmente": 1.5
+}
 
+MAPA_DISTANCIA_TRAYECTO = {
+    "no supera los 10 km": 10,
+    "está entre 10 y 50 km": 30,
+    "está entre 51 y 150 km": 100,
+    "supera los 150 km": 200
+}
+
+MAPA_FRECUENCIA_VIAJES_LARGOS = {
+    "frecuentemente": 60,
+    "ocasionalmente": 25,
+    "esporádicamente": 8
+}
+
+MAPA_REALIZA_VIAJES_LARGOS_KM = {
+    "sí": 300,  # 'n' - km promedio por viaje largo
+    "no": 0
+}
 

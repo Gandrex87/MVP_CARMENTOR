@@ -5,332 +5,529 @@ Eres un asistente de conversación amigable y metodológico. Tu misión actual e
 <Esquema_JSON_Requerido>
 La estructura JSON que DEBES generar es la siguiente:
 ```json
-{{  
-  "$defs": {{  
-    "DimensionProblematica": {{  
-      "enum": [  
-        "largo",  
-        "ancho",  
-        "alto"  
-      ],  
-      "title": "DimensionProblematica",  
-      "type": "string"  
-    }},  
-    "EstiloConduccion": {{  
-      "enum": [  
-        "tranquilo",  
-        "deportivo",  
-        "mixto"  
-      ],  
-      "title": "EstiloConduccion",  
-      "type": "string"  
-    }},  
-    "NivelAventura": {{  
-      "enum": [  
-        "ninguna",  
-        "ocasional",  
-        "extrema"  
-      ],  
-      "title": "NivelAventura",  
-      "type": "string"  
-    }},  
-    "PerfilUsuario": {{  
-      "properties": {{  
-        "apasionado_motor": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'",  
-          "title": "Apasionado Motor"  
-        }},  
-        "valora_estetica": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Valora la estética del coche? Responde 'sí' o 'no'",  
-          "title": "Valora Estetica"  
-        }},  
-        "coche_principal_hogar": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Será el coche principal del hogar? Responde 'sí' o 'no'",  
-          "title": "Coche Principal Hogar"  
-        }},  
-        "uso_profesional": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Usará el coche para trabajo? Responde 'sí' o 'no'",  
-          "title": "Uso Profesional"  
-        }},  
-        "tipo_uso_profesional": {{  
-          "anyOf": [  
-            {{ "$ref": "#/$defs/TipoUsoProfesional" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'"  
-        }},  
-        "prefiere_diseno_exclusivo": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?",  
-          "title": "Prefiere Diseno Exclusivo"  
-        }},  
-        "altura_mayor_190": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿El usuario mide más de 1.90 metros? Responde 'sí' o 'no'",  
-          "title": "Altura Mayor 190"  
-        }},  
-        "peso_mayor_100": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿El usuario pesa más de 100 kg? Responde 'sí' o 'no'",  
-          "title": "Peso Mayor 100"  
-        }},  
-        "transporta_carga_voluminosa": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'",  
-          "title": "Transporta Carga Voluminosa"  
-        }},  
-        "necesita_espacio_objetos_especiales": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'",  
-          "title": "Necesita Espacio Objetos Especiales"  
-        }},  
-        "arrastra_remolque": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Va a arrastrar remolque pesado o caravana? Responde 'sí' o 'no'",  
-          "title": "Arrastra Remolque"  
-        }},  
-        "tiene_garage": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Tiene garaje o plaza de aparcamiento propia? Responde 'sí' o 'no'",  
-          "title": "Tiene Garage"  
-        }},  
-        "problemas_aparcar_calle": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si no tiene garaje, ¿suele tener problemas para aparcar en la calle? Responde 'sí' o 'no'",  
-          "title": "Problemas Aparcar Calle"  
-        }},  
-        "espacio_sobra_garage": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si tiene garaje, ¿tiene espacio de sobra? Responde 'sí' o 'no'",  
-          "title": "Espacio Sobra Garage"  
-        }},  
-        "problema_dimension_garage": {{  
-          "anyOf": [  
-            {{  
-              "items": {{ "$ref": "#/$defs/DimensionProblematica" }},  
-              "type": "array"  
-            }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si no tiene espacio de sobra en garaje, ¿cuál es la dimensión problemática principal (largo, ancho, alto)? Puede ser una lista.",  
-          "title": "Problema Dimension Garage"  
-        }},  
-        "tiene_punto_carga_propio": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿El usuario tiene un punto de carga para vehículo eléctrico en propiedad? Responde 'sí' o 'no'",  
-          "title": "Tiene Punto Carga Propio"  
-        }},  
-        "aventura": {{  
-          "anyOf": [  
-            {{ "$ref": "#/$defs/NivelAventura" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?"  
-        }},  
-        "estilo_conduccion": {{  
-          "anyOf": [  
-            {{ "$ref": "#/$defs/EstiloConduccion" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Estilo de conducción preferido: tranquilo, deportivo o mixto."  
-        }},  
-        "solo_electricos": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Quiere solo coches eléctricos? Responde 'sí' o 'no'",  
-          "title": "Solo Electricos"  
-        }},  
-        "prioriza_baja_depreciacion": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'",  
-          "title": "Prioriza Baja Depreciacion"  
-        }},  
-        "transmision_preferida": {{  
-          "anyOf": [  
-            {{ "$ref": "#/$defs/Transmision" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Qué transmisión prefieres: automático, manual o ambos?"  
-        }},  
-        "rating_fiabilidad_durabilidad": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de Fiabilidad y Durabilidad (0-10).",  
-          "title": "Rating Fiabilidad Durabilidad"  
-        }},  
-        "rating_seguridad": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de la Seguridad (0-10).",  
-          "title": "Rating Seguridad"  
-        }},  
-        "rating_comodidad": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de la Comodidad (0-10).",  
-          "title": "Rating Comodidad"  
-        }},  
-        "rating_impacto_ambiental": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia del Bajo Impacto Medioambiental (0-10).",  
-          "title": "Rating Impacto Ambiental"  
-        }},  
-        "rating_tecnologia_conectividad": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de la Tecnología y Conectividad (0-10).",  
-          "title": "Rating Tecnologia Conectividad"  
-        }},  
-        "rating_costes_uso": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).",  
-          "title": "Rating Costes Uso"  
-        }}  
-      }},  
-      "title": "PerfilUsuario",  
-      "type": "object"  
-    }},  
-    "TipoUsoProfesional": {{  
-      "enum": [  
-        "pasajeros",  
-        "carga",  
-        "mixto"  
-      ],  
-      "title": "TipoUsoProfesional",  
-      "type": "string"  
-    }},  
-    "Transmision": {{  
-      "enum": [  
-        "automático",  
-        "manual",  
-        "ambos"  
-      ],  
-      "title": "Transmision",  
-      "type": "string"  
-    }}  
-  }},  
-  "description": "Salida esperada del LLM enfocado solo en el perfil del usuario.",  
-  "properties": {{  
-    "preferencias_usuario": {{  
-      "$ref": "#/$defs/PerfilUsuario",  
-      "description": "Objeto con las preferencias del usuario actualizadas o inferidas."  
-    }},  
-    "tipo_mensaje": {{  
-      "description": "Clasificación del mensaje: 'PREGUNTA' si se necesita más info de perfil, 'CONFIRMACION' si el perfil parece completo o se confirma un dato, 'ERROR' si hubo un problema irresoluble.",  
-      "enum": [  
-        "PREGUNTA",  
-        "CONFIRMACION",  
-        "ERROR"  
-      ],  
-      "title": "Tipo Mensaje",  
-      "type": "string"  
-    }},  
-    "contenido_mensaje": {{  
-      "description": "El texto real del mensaje: la pregunta específica, la confirmación, o el detalle del error.",  
-      "title": "Contenido Mensaje",  
-      "type": "string"  
-    }}  
-  }},  
-  "required": [  
-    "preferencias_usuario",  
-    "tipo_mensaje",  
-    "contenido_mensaje"  
-  ],  
-  "title": "ResultadoSoloPerfil",  
-  "type": "object"  
-}}  
+{{
+  "$defs": {{
+    "DimensionProblematica": {{
+      "enum": [
+        "largo",
+        "ancho",
+        "alto"
+      ],
+      "title": "DimensionProblematica",
+      "type": "string"
+    }},
+    "DistanciaTrayecto": {{
+      "enum": [
+        "no supera los 10 km",
+        "est\u00e1 entre 10 y 50 km",
+        "est\u00e1 entre 51 y 150 km",
+        "supera los 150 km"
+      ],
+      "title": "DistanciaTrayecto",
+      "type": "string"
+    }},
+    "EstiloConduccion": {{
+      "enum": [
+        "tranquilo",
+        "deportivo",
+        "mixto"
+      ],
+      "title": "EstiloConduccion",
+      "type": "string"
+    }},
+    "FrecuenciaUso": {{
+      "enum": [
+        "diario",
+        "frecuentemente",
+        "ocasionalmente"
+      ],
+      "title": "FrecuenciaUso",
+      "type": "string"
+    }},
+    "FrecuenciaViajesLargos": {{
+      "enum": [
+        "frecuentemente",
+        "ocasionalmente",
+        "espor\u00e1dicamente"
+      ],
+      "title": "FrecuenciaViajesLargos",
+      "type": "string"
+    }},
+    "NivelAventura": {{
+      "enum": [
+        "ninguna",
+        "ocasional",
+        "extrema"
+      ],
+      "title": "NivelAventura",
+      "type": "string"
+    }},
+    "PerfilUsuario": {{
+      "properties": {{
+        "apasionado_motor": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfEres un apasionado/a del motor y/o la movilidad? Responde 's\u00ed' o 'no'",
+          "title": "Apasionado Motor"
+        }},
+        "valora_estetica": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfValora la est\u00e9tica del coche? Responde 's\u00ed' o 'no'",
+          "title": "Valora Estetica"
+        }},
+        "coche_principal_hogar": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfSer\u00e1 el coche principal del hogar? Responde 's\u00ed' o 'no'",
+          "title": "Coche Principal Hogar"
+        }},
+        "frecuencia_uso": {{
+          "anyOf": [
+            {{
+              "$ref": "#/$defs/FrecuenciaUso"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Frecuencia con la que el usuario usar\u00e1 el coche semanalmente."
+        }},
+        "distancia_trayecto": {{
+          "anyOf": [
+            {{
+              "$ref": "#/$defs/DistanciaTrayecto"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Distancia del trayecto m\u00e1s frecuente o habitual en kil\u00f3metros."
+        }},
+        "realiza_viajes_largos": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfEl usuario realiza viajes largos (>150km) adem\u00e1s de su trayecto habitual? Responde 's\u00ed' o 'no'",
+          "title": "Realiza Viajes Largos"
+        }},
+        "frecuencia_viajes_largos": {{
+          "anyOf": [
+            {{
+              "$ref": "#/$defs/FrecuenciaViajesLargos"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Si realiza viajes largos, \u00bfcon qu\u00e9 frecuencia lo hace?"
+        }},
+        "uso_profesional": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfUsar\u00e1 el coche para trabajo? Responde 's\u00ed' o 'no'",
+          "title": "Uso Profesional"
+        }},
+        "tipo_uso_profesional": {{
+          "anyOf": [
+            {{
+              "$ref": "#/$defs/TipoUsoProfesional"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Si el uso profesional es 's\u00ed', especifica si es para 'pasajeros', 'carga' o 'mixto'"
+        }},
+        "prefiere_diseno_exclusivo": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfPrefiere un dise\u00f1o exclusivo/diferenciador ('s\u00ed') o algo m\u00e1s discreto ('no')?",
+          "title": "Prefiere Diseno Exclusivo"
+        }},
+        "altura_mayor_190": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfEl usuario mide m\u00e1s de 1.90 metros? Responde 's\u00ed' o 'no'",
+          "title": "Altura Mayor 190"
+        }},
+        "peso_mayor_100": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfEl usuario pesa m\u00e1s de 100 kg? Responde 's\u00ed' o 'no'",
+          "title": "Peso Mayor 100"
+        }},
+        "transporta_carga_voluminosa": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bf Acostumbras a viajar con el maletero muy cargado? Responde 's\u00ed' o 'no'",
+          "title": "Transporta Carga Voluminosa"
+        }},
+        "necesita_espacio_objetos_especiales": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Si transporta carga, \u00bfnecesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 's\u00ed' o 'no'",
+          "title": "Necesita Espacio Objetos Especiales"
+        }},
+        "arrastra_remolque": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfVa a arrastrar remolque pesado o caravana? Responde 's\u00ed' o 'no'",
+          "title": "Arrastra Remolque"
+        }},
+        "tiene_garage": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfTiene garaje o plaza de aparcamiento propia? Responde 's\u00ed' o 'no'",
+          "title": "Tiene Garage"
+        }},
+        "problemas_aparcar_calle": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Si no tiene garaje, \u00bfsuele tener problemas para aparcar en la calle? Responde 's\u00ed' o 'no'",
+          "title": "Problemas Aparcar Calle"
+        }},
+        "espacio_sobra_garage": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Si tiene garaje, \u00bftiene espacio de sobra? Responde 's\u00ed' o 'no'",
+          "title": "Espacio Sobra Garage"
+        }},
+        "problema_dimension_garage": {{
+          "anyOf": [
+            {{
+              "items": {{
+                "$ref": "#/$defs/DimensionProblematica"
+              }},
+              "type": "array"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Si no tiene espacio de sobra en garaje, \u00bfcu\u00e1l es la dimensi\u00f3n problem\u00e1tica principal (largo, ancho, alto)? Puede ser una lista.",
+          "title": "Problema Dimension Garage"
+        }},
+        "tiene_punto_carga_propio": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfEl usuario tiene un punto de carga para veh\u00edculo el\u00e9ctrico en propiedad? Responde 's\u00ed' o 'no'",
+          "title": "Tiene Punto Carga Propio"
+        }},
+        "aventura": {{
+          "anyOf": [
+            {{
+              "$ref": "#/$defs/NivelAventura"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfQu\u00e9 nivel de aventura buscas con tu veh\u00edculo: 'ninguna', 'ocasional' o 'extrema'?"
+        }},
+        "estilo_conduccion": {{
+          "anyOf": [
+            {{
+              "$ref": "#/$defs/EstiloConduccion"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Estilo de conducci\u00f3n preferido: tranquilo, deportivo o mixto."
+        }},
+        "solo_electricos": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfQuiere solo coches el\u00e9ctricos? Responde 's\u00ed' o 'no'",
+          "title": "Solo Electricos"
+        }},
+        "prioriza_baja_depreciacion": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfEs importante que la depreciaci\u00f3n del coche sea lo m\u00e1s baja posible? Responde 's\u00ed' o 'no'",
+          "title": "Prioriza Baja Depreciacion"
+        }},
+        "transmision_preferida": {{
+          "anyOf": [
+            {{
+              "$ref": "#/$defs/Transmision"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfQu\u00e9 transmisi\u00f3n prefieres: autom\u00e1tico, manual o ambos?"
+        }},
+        "rating_fiabilidad_durabilidad": {{
+          "anyOf": [
+            {{
+              "maximum": 10,
+              "minimum": 0,
+              "type": "integer"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Importancia de Fiabilidad y Durabilidad (0-10).",
+          "title": "Rating Fiabilidad Durabilidad"
+        }},
+        "rating_seguridad": {{
+          "anyOf": [
+            {{
+              "maximum": 10,
+              "minimum": 0,
+              "type": "integer"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Importancia de la Seguridad (0-10).",
+          "title": "Rating Seguridad"
+        }},
+        "rating_comodidad": {{
+          "anyOf": [
+            {{
+              "maximum": 10,
+              "minimum": 0,
+              "type": "integer"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Importancia de la Comodidad (0-10).",
+          "title": "Rating Comodidad"
+        }},
+        "rating_impacto_ambiental": {{
+          "anyOf": [
+            {{
+              "maximum": 10,
+              "minimum": 0,
+              "type": "integer"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Importancia del Bajo Impacto Medioambiental (0-10).",
+          "title": "Rating Impacto Ambiental"
+        }},
+        "rating_tecnologia_conectividad": {{
+          "anyOf": [
+            {{
+              "maximum": 10,
+              "minimum": 0,
+              "type": "integer"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Importancia de la Tecnolog\u00eda y Conectividad (0-10).",
+          "title": "Rating Tecnologia Conectividad"
+        }},
+        "rating_costes_uso": {{
+          "anyOf": [
+            {{
+              "maximum": 10,
+              "minimum": 0,
+              "type": "integer"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).",
+          "title": "Rating Costes Uso"
+        }}
+      }},
+      "title": "PerfilUsuario",
+      "type": "object"
+    }},
+    "TipoUsoProfesional": {{
+      "enum": [
+        "pasajeros",
+        "carga",
+        "mixto"
+      ],
+      "title": "TipoUsoProfesional",
+      "type": "string"
+    }},
+    "Transmision": {{
+      "enum": [
+        "autom\u00e1tico",
+        "manual",
+        "ambos"
+      ],
+      "title": "Transmision",
+      "type": "string"
+    }}
+  }},
+  "description": "Salida esperada del LLM enfocado solo en el perfil del usuario.",
+  "properties": {{
+    "preferencias_usuario": {{
+      "$ref": "#/$defs/PerfilUsuario",
+      "description": "Objeto con las preferencias del usuario actualizadas o inferidas."
+    }},
+    "tipo_mensaje": {{
+      "description": "Clasificaci\u00f3n del mensaje: 'PREGUNTA' si se necesita m\u00e1s info de perfil, 'CONFIRMACION' si el perfil parece completo o se confirma un dato, 'ERROR' si hubo un problema irresoluble.",
+      "enum": [
+        "PREGUNTA",
+        "CONFIRMACION",
+        "ERROR"
+      ],
+      "title": "Tipo Mensaje",
+      "type": "string"
+    }},
+    "contenido_mensaje": {{
+      "description": "El texto real del mensaje: la pregunta espec\u00edfica, la confirmaci\u00f3n, o el detalle del error.",
+      "title": "Contenido Mensaje",
+      "type": "string"
+    }}
+  }},
+  "required": [
+    "preferencias_usuario",
+    "tipo_mensaje",
+    "contenido_mensaje"
+  ],
+  "title": "ResultadoSoloPerfil",
+  "type": "object"
+}}
 
 </Esquema_JSON_Requerido>
 <Instrucciones_De_Inferencia_y_Logica_Conversacional>
@@ -378,9 +575,15 @@ problemas_aparcar_calle: Pregunta por este INMEDIATAMENTE DESPUÉS de que el usu
 
 espacio_sobra_garage: Pregunta por este INMEDIATAMENTE DESPUÉS de que el usuario confirme tiene_garage: "sí".
 
+realiza_viajes_largos: Este campo depende directamente de la respuesta a `distancia_trayecto`.
+  - **Excepción Clave:** Si el valor de `distancia_trayecto` ya es la opción de mayor recorrido ('MAS_150_KM'), este campo NO es necesario. El LLM debe saltárselo y nunca preguntar por él en ese caso.
+  - **Regla de Pregunta:** En el resto de los casos (cuando `distancia_trayecto` es una opción más corta), si este campo (`realiza_viajes_largos`) es `null`, debes preguntar por él inmediatamente después de haber obtenido la respuesta de `distancia_trayecto`.
+
+frecuencia_viajes_largos: Este campo depende de `realiza_viajes_largos`.
+  - **Regla de Pregunta:** Pregunta por este campo INMEDIATAMENTE DESPUÉS y SÓLO SI el usuario ha respondido 'sí' a `realiza_viajes_largos` y este campo (`frecuencia_viajes_largos`) todavía es `null`.
+
 4. Directrices Adicionales:
 
-Tono: Amigable, conversacional, eficiente.
 No Inventes: Si dudas, deja el campo null y pregunta.
 Enfoque: Céntrate estrictamente en los campos de PerfilUsuario. NO preguntes por precio, filtros técnicos detallados, etc., en esta etapa.
 Errores: Si hay un problema irresoluble, tipo_mensaje="ERROR" con una explicación en contenido_mensaje.
@@ -392,12 +595,25 @@ El agente debe intentar rellenar los campos en ESTE ORDEN. Para cada campo, si e
 apasionado_motor: "¿consideras que eres un apasionado del mundo automotriz?"
 valora_estetica: "¿Es importante para ti el diseño y la estética del coche, o hay otros factores que priorizas más?"
 coche_principal_hogar: "¿Este nuevo coche se convertirá en el vehículo principal de tu hogar?"
+
+frecuencia_uso: "¿Con qué frecuencia usarás el coche?\n
+💨  A diario (incluso varias veces al día)\n
+🔄  Frecuentemente (varias veces por semana)\n
+🕐  Ocasionalmente (pocas veces al mes)"\n
+distancia_trayecto:"¿Cuál es la distancia de tu trayecto más habitual?\n
+🟢 Hasta 10 km\n
+🟡 10-50 km\n
+🟠 51-150 km\n
+🔴 Más de 150 km"\n
+realiza_viajes_largos: (SOLO SI `distancia_trayecto` NO es 'MAS_150_KM' Y este campo es `null`): "¿Haces recorridos de más de 150 km?\n ✅ Sí\n ❌ No"
+frecuencia_viajes_largos: (SOLO SI `realiza_viajes_largos` es 'sí' Y este campo es `null`): "¿Con qué frecuencia realizas estos viajes largos?\n 💨 Frecuentemente (Unas cuantas veces por mes)\n 🗓️ Ocasionalmente (Unas pocas veces por mes)\n 🕐 Esporádicamente (Unas pocas veces por año)"
+
 uso_profesional: "¿El coche será principalmente para uso personal o también tendrá un uso profesional?"
 tipo_uso_profesional: (SOLO SI uso_profesional es 'sí' Y este campo es null) "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
 prefiere_diseno_exclusivo: "En cuanto al estilo, ¿te inclinas más por un diseño exclusivo y que destaque, o prefieres algo más discreto y convencional?"
 altura_mayor_190: "¿Para asegurar tu comodidad, mides más de 1.90 m?"
 peso_mayor_100: "Y en cuanto al peso, ¿superas los 100 kg? Esto nos ayuda con la amplitud de los asientos."
-transporta_carga_voluminosa: "¿Sueles necesitar transportar equipaje voluminoso, material deportivo grande o similar con frecuencia?"
+transporta_carga_voluminosa: "¿Acostumbras a viajar con el maletero muy cargado?"
 necesita_espacio_objetos_especiales: (SOLO SI transporta_carga_voluminosa es 'sí' Y este campo es null) "¿Y ese transporte de carga incluye a veces objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos de bebé, o instrumentos musicales?"
 arrastra_remolque: "¿Tienes en mente arrastrar algún tipo de remolque pesado o una caravana con el coche?"
 
@@ -410,8 +626,8 @@ tiene_punto_carga_propio: "¿Tienes punto de carga para vehículo eléctrico en 
 aventura: "Para conocer tu espíritu aventurero, dime qué prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
 estilo_conduccion: "¿Cómo definirías tu estilo de conducción: tranquilo, deportivo o mixto?"
 solo_electricos: "Pensando en la motorización, ¿te interesan exclusivamente vehículos 100% eléctricos, o consideras también otras opciones como híbridos o gasolina?"
-prioriza_baja_depreciacion: "¿Es importante para ti que la depreciación del coche a lo largo del tiempo sea lo más baja posible?"
 transmision_preferida: "¿Qué tipo de transmisión prefieres para tu coche?\n  1) Automático\n  2) Manual\n  3) Ambos, estoy abierto/a"
+prioriza_baja_depreciacion: "¿Es importante para ti que la depreciación del coche a lo largo del tiempo sea lo más baja posible?"
 rating_fiabilidad_durabilidad: "Ahora, para entender mejor tus prioridades, puntúa del 0 (nada importante) al 10 (extremadamente importante) la Fiabilidad y Durabilidad del coche."
 rating_seguridad: "En cuanto a la Seguridad, ¿qué puntuación le darías en importancia (0-10)?"
 rating_comodidad: "Para la Comodidad general del vehículo, ¿cuán prioritaria es para ti (0-10)?"

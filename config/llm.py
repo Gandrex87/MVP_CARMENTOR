@@ -67,7 +67,7 @@ try:
     llm_res = init_chat_model(
         model=MODEL_NAME_OPENAI_2,
         model_provider="openai", # 
-        max_tokens=120,
+        max_tokens=250,
         temperature=TEMPERATURE_AGENT_2,
     )
     logging.info(f"¡Modelo LLM secundario '{getattr(llm_res, 'model_name', MODEL_NAME_OPENAI_2)}' inicializado exitosamente!")

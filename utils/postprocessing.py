@@ -5,12 +5,11 @@
 
 # utils/postprocessing.py
 from utils.enums import Transmision , TipoMecanica
-from typing import Optional, List, Set
-from config.settings import (PESO_CRUDO_FAV_ESTETICA , PESO_CRUDO_FAV_PREMIUM, PESO_CRUDO_FAV_SINGULAR , PESO_CRUDO_BASE_ESTETICA ,PESO_CRUDO_BASE_PREMIUM,
-                            PESO_CRUDO_BASE_SINGULAR )
-from graph.perfil.state import PerfilUsuario, FiltrosInferidos,InfoClimaUsuario 
+from typing import Optional, List, Set, Dict
+from graph.perfil.state import PerfilUsuario, FiltrosInferidos,InfoClimaUsuario , EstadoAnalisisPerfil
 from .conversion import is_yes
-import logging 
+import logging
+
 
 
 # --- Helper interno para simplificar comprobaciones ---
@@ -110,16 +109,16 @@ def aplicar_postprocesamiento_filtros(
     # Si solo_electricos_val es None, se procede con lo que haya en mecanicas_set (del LLM o vacío).
 
     # 3. Lógica para Punto de Carga (se aplica sobre mecanicas_set)
-    if preferencias and is_yes(preferencias.tiene_punto_carga_propio):
-        # Solo añadir si el usuario NO está restringido a solo eléctricos puros (BEV/REEV)
-        # O si solo_electricos es None (abierto)
-        if not is_yes(solo_electricos_val) or solo_electricos_val is None:
-            logging.debug("PostProc Filtros: Usuario tiene punto de carga y no es 'solo eléctricos puros'. Asegurando BEV/PHEV/REEV.")
-            mecanicas_a_asegurar_con_punto_carga = {
-                TipoMecanica.BEV, TipoMecanica.PHEVD, 
-                TipoMecanica.PHEVG, TipoMecanica.REEV
-            }
-            mecanicas_set.update(mecanicas_a_asegurar_con_punto_carga)
+    # if preferencias and is_yes(preferencias.tiene_punto_carga_propio):
+    #     # Solo añadir si el usuario NO está restringido a solo eléctricos puros (BEV/REEV)
+    #     # O si solo_electricos es None (abierto)
+    #     if not is_yes(solo_electricos_val) or solo_electricos_val is None:
+    #         logging.debug("PostProc Filtros: Usuario tiene punto de carga y no es 'solo eléctricos puros'. Asegurando BEV/PHEV/REEV.")
+    #         mecanicas_a_asegurar_con_punto_carga = {
+    #             TipoMecanica.BEV, TipoMecanica.PHEVD, 
+    #             TipoMecanica.PHEVG, TipoMecanica.REEV
+    #         }
+    #         mecanicas_set.update(mecanicas_a_asegurar_con_punto_carga)
 
     # 4. Lógica para GLP/GNV por Zona (se aplica sobre mecanicas_set)
     if info_clima and info_clima.cp_valido_encontrado: 
@@ -136,7 +135,6 @@ def aplicar_postprocesamiento_filtros(
         elif not is_yes(solo_electricos_val) or solo_electricos_val is None: # Si SÍ hay ZONA_GNV y no es solo_electricos
             mecanicas_set.add(TipoMecanica.GNV)
             logging.debug(f"PostProc Filtros: CP en ZONA_GNV y no solo_electricos. GNV asegurado.")
-    # ... (logs para info_clima no concluyente o no disponible) ...
 
     # 5. Lógica adicional por ZBE (ejemplo, sobre mecanicas_set)
     if info_clima and info_clima.cp_valido_encontrado and info_clima.MUNICIPIO_ZBE:
@@ -155,7 +153,7 @@ def aplicar_postprocesamiento_filtros(
     if preferencias and isinstance(preferencias.solo_electricos, str) and \
        preferencias.solo_electricos.strip().lower() == 'no':
         if not mecanicas_set or \
-           (len(mecanicas_set) <= 2 and all(mec in {TipoMecanica.GLP, TipoMecanica.GNV} for mec in mecanicas_set)):
+           (len(mecanicas_set) <= 3 and all(mec in {TipoMecanica.GLP, TipoMecanica.GNV} for mec in mecanicas_set)):
             logging.warning(f"PostProc Filtros: solo_electricos='no' pero mecánicas es {mecanicas_set}. Ampliando.")
             mecanicas_base_adicionales = {TipoMecanica.GASOLINA, TipoMecanica.HEVG, TipoMecanica.PHEVG}
             mecanicas_set.update(mecanicas_base_adicionales)
@@ -167,32 +165,31 @@ def aplicar_postprocesamiento_filtros(
         filtros_actualizado.tipo_mecanica = lista_final_mecanicas
         cambios_efectuados_en_este_nodo = True
 
-    
-    # --- Reglas para estetica_min, premium_min, singular_min ---
-    if preferencias:
-        # Estética
-        estetica_target = PESO_CRUDO_FAV_ESTETICA if is_yes(preferencias.valora_estetica) else PESO_CRUDO_BASE_ESTETICA
-        if filtros_actualizado.estetica_min != estetica_target:
-            logging.debug(f"PostProc Filtros: Aplicando regla estetica: de {filtros_actualizado.estetica_min} a {estetica_target}")
-            filtros_actualizado.estetica_min = estetica_target
-            cambios_efectuados_en_este_nodo = True
+    # # --- Reglas para estetica_min, premium_min, singular_min ---
+    # if preferencias:
+    #     # Estética
+    #     estetica_target = PESO_CRUDO_FAV_ESTETICA if is_yes(preferencias.valora_estetica) else PESO_CRUDO_BASE_ESTETICA
+    #     if filtros_actualizado.estetica_min != estetica_target:
+    #         logging.debug(f"PostProc Filtros: Aplicando regla estetica: de {filtros_actualizado.estetica_min} a {estetica_target}")
+    #         filtros_actualizado.estetica_min = estetica_target
+    #         cambios_efectuados_en_este_nodo = True
             
-        # Premium
-        premium_min_target = PESO_CRUDO_FAV_PREMIUM if is_yes(preferencias.apasionado_motor) else PESO_CRUDO_BASE_PREMIUM 
-        if filtros_actualizado.premium_min != premium_min_target:
-            logging.debug(f"PostProc Filtros: Aplicando regla premium: de {filtros_actualizado.premium_min} a {premium_min_target}")
-            filtros_actualizado.premium_min = premium_min_target
-            cambios_efectuados_en_este_nodo = True
+    #     # Premium
+    #     premium_min_target = PESO_CRUDO_FAV_PREMIUM if is_yes(preferencias.apasionado_motor) else PESO_CRUDO_BASE_PREMIUM 
+    #     if filtros_actualizado.premium_min != premium_min_target:
+    #         logging.debug(f"PostProc Filtros: Aplicando regla premium: de {filtros_actualizado.premium_min} a {premium_min_target}")
+    #         filtros_actualizado.premium_min = premium_min_target
+    #         cambios_efectuados_en_este_nodo = True
 
-        # Singular (Aditiva)
-        singular_min_calculado = (PESO_CRUDO_FAV_SINGULAR if is_yes(preferencias.apasionado_motor) else PESO_CRUDO_BASE_SINGULAR) + \
-                                 (PESO_CRUDO_FAV_SINGULAR if is_yes(preferencias.prefiere_diseno_exclusivo) else PESO_CRUDO_BASE_SINGULAR)
-        singular_min_calculado = max(0.0, min(10.0, singular_min_calculado)) # Clamp
+    #     # Singular (Aditiva)
+    #     singular_min_calculado = (PESO_CRUDO_FAV_SINGULAR if is_yes(preferencias.apasionado_motor) else PESO_CRUDO_BASE_SINGULAR) + \
+    #                              (PESO_CRUDO_FAV_SINGULAR if is_yes(preferencias.prefiere_diseno_exclusivo) else PESO_CRUDO_BASE_SINGULAR)
+    #     singular_min_calculado = max(0.0, min(10.0, singular_min_calculado)) # Clamp
 
-        if filtros_actualizado.singular_min != singular_min_calculado:
-            logging.debug(f"PostProc Filtros: Aplicando regla singular (aditiva): de {filtros_actualizado.singular_min} a {singular_min_calculado}")
-            filtros_actualizado.singular_min = singular_min_calculado
-            cambios_efectuados_en_este_nodo = True
+    #     if filtros_actualizado.singular_min != singular_min_calculado:
+    #         logging.debug(f"PostProc Filtros: Aplicando regla singular (aditiva): de {filtros_actualizado.singular_min} a {singular_min_calculado}")
+    #         filtros_actualizado.singular_min = singular_min_calculado
+    #         cambios_efectuados_en_este_nodo = True
 
     if cambios_efectuados_en_este_nodo:
         logging.debug(f"--- FIN DEBUG PostProc Filtros --- Filtros actualizados finales: {filtros_actualizado.model_dump_json(indent=2) if filtros_actualizado else None}")

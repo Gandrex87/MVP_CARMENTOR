@@ -24,8 +24,10 @@ from config.settings import (
     MIN_MAX_RANGES,PENALTY_PUERTAS_BAJAS,PENALTY_LOW_COST_POR_COMODIDAD, PENALTY_DEPORTIVIDAD_POR_COMODIDAD,UMBRAL_LOW_COST_PENALIZABLE_SCALED, UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED, 
     PENALTY_ANTIGUEDAD_MAS_10_ANOS, PENALTY_ANTIGUEDAD_7_A_10_ANOS, PENALTY_ANTIGUEDAD_5_A_7_ANOS, BONUS_DISTINTIVO_ECO_CERO_C, PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,
     BONUS_ZBE_DISTINTIVO_FAVORABLE,PENALTY_ZBE_DISTINTIVO_DESFAVORABLE,   PENALTY_BEV_REEV_AVENTURA_OCASIONAL,PENALTY_PHEV_AVENTURA_OCASIONAL, PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA,
-    BONUS_CARROCERIA_MONTANA, BONUS_CARROCERIA_COMERCIAL,BONUS_CARROCERIA_PASAJEROS_PRO, PENALTY_CARROCERIA_NO_AVENTURA , BONUS_SUV_AVENTURA_OCASIONAL,
-    BONUS_TODOTERRENO_AVENTURA_EXTREMA, BONUS_PICKUP_AVENTURA_EXTREMA, BONUS_CARROCERIA_OBJETOS_ESPECIALES, PENALTY_CARROCERIA_OBJETOS_ESPECIALES,  BONUS_CARROCERIA_CONFORT, FACTOR_CONVERSION_PRECIO_CUOTA,
+    BONUS_CARROCERIA_MONTANA, BONUS_CARROCERIA_COMERCIAL,BONUS_CARROCERIA_PASAJEROS_PRO, PENALTY_CARROCERIA_NO_AVENTURA , BONUS_SUV_AVENTURA_OCASIONAL, BONUS_TODOTERRENO_AVENTURA_EXTREMA, BONUS_PICKUP_AVENTURA_EXTREMA, BONUS_CARROCERIA_OBJETOS_ESPECIALES, PENALTY_CARROCERIA_OBJETOS_ESPECIALES,  BONUS_CARROCERIA_CONFORT, FACTOR_CONVERSION_PRECIO_CUOTA,
+    BONUS_OCASION_POR_USO_OCASIONAL, PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL, BONUS_BEV_REEV_USO_DEFINIDO,PENALTY_PHEV_USO_INTENSIVO_LARGO, BONUS_MOTOR_POCO_KM, PENALTY_OCASION_POCO_KM, PENALTY_OCASION_MEDIO_KM, BONUS_MOTOR_MUCHO_KM, PENALTY_OCASION_MUCHO_KM,
+     PENALTY_OCASION_MUY_ALTO_KM_V2 ,BONUS_BEV_MUY_ALTO_KM , BONUS_REEV_MUY_ALTO_KM , BONUS_DIESEL_HEVD_MUY_ALTO_KM, BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM, BONUS_PUNTO_CARGA_PROPIO
+    
 )
 
 
@@ -82,7 +84,12 @@ def buscar_coches_bq(
         "fav_menor_rel_peso_potencia_score": pesos.get("fav_menor_rel_peso_potencia_score", 0.0),
         "potencia_maxima_style_score": pesos.get("potencia_maxima_style_score", 0.0),
         "par_motor_style_score": pesos.get("par_motor_style_score", 0.0),
-        "fav_menor_aceleracion_score": pesos.get("fav_menor_aceleracion_score", 0.0),       
+        "fav_menor_aceleracion_score": pesos.get("fav_menor_aceleracion_score", 0.0),
+        "peso_autonomia_uso_principal": pesos.get("autonomia_uso_principal", 0.0),
+        "peso_autonomia_uso_2nd_drive":  pesos.get("autonomia_uso_2nd_drive", 0.0),
+        "peso_menor_tiempo_carga_min": pesos.get("menor_tiempo_carga_min", 0.0),
+        "peso_potencia_maxima_carga_AC":  pesos.get("potencia_maxima_carga_AC", 0.0),
+        "peso_potencia_maxima_carga_DC":  pesos.get("potencia_maxima_carga_DC", 0.0),     
     }
 
     penalizar_puertas_val = bool(filtros.get("penalizar_puertas_bajas", False))
@@ -102,11 +109,16 @@ def buscar_coches_bq(
     flag_fav_pickup_todoterreno_aventura_extrema = bool(filtros.get("favorecer_pickup_todoterreno_aventura_extrema", False))
     flag_aplicar_logica_objetos_especiales = bool(filtros.get("aplicar_logica_objetos_especiales", False))
     flag_fav_carroceria_confort = bool(filtros.get("favorecer_carroceria_confort", False))
-
+    flag_logica_uso_ocasional_val = bool(filtros.get("flag_logica_uso_ocasional", False)) # 
+    flag_favorecer_bev_val = bool(filtros.get("flag_favorecer_bev_uso_definido", False)) # 
+    flag_penalizar_phev_val = bool(filtros.get("flag_penalizar_phev_uso_intensivo", False))
+    flag_favorecer_electrificados_val = bool(filtros.get("flag_favorecer_electrificados_por_punto_carga", False))
+    km_anuales_estimados_val = filtros.get("km_anuales_estimados") or 0 # 
+    
     m = MIN_MAX_RANGES
     min_est, max_est = m["estetica"]; min_prem, max_prem = m["premium"]; min_sing, max_sing = m["singular"]
     min_alt_ls, max_alt_ls = m["altura_libre_suelo"]; min_bat, max_bat = m["batalla"]; min_ind_alt, max_ind_alt = m["indice_altura_interior"]
-    min_anc, max_anc = m["ancho"]; min_fiab, max_fiab = m["fiabilidad"]; min_durab, max_durab = m["durabilidad"]
+    min_anc, max_anc = m["ancho"]; min_fiab, max_fiab = m["fiabilidad"]; min_durab, max_durab = m["durabilidad"] 
     min_seg, max_seg = m["seguridad"]; min_comod, max_comod = m["comodidad"]; min_tec, max_tec = m["tecnologia"]
     min_deval, max_deval = m["devaluacion"]; min_mal_min, max_mal_min = m["maletero_minimo"]; min_mal_max, max_mal_max = m["maletero_maximo"]
     min_largo, max_largo = m["largo"]; min_acc_lc, max_acc_lc = m["acceso_low_cost"]; min_depor_bq, max_depor_bq = m["deportividad"]
@@ -114,8 +126,10 @@ def buscar_coches_bq(
     min_coste_uso, max_coste_uso = m["costes_de_uso"]; min_coste_mante, max_coste_mante = m["costes_mantenimiento"]
     min_par, max_par = m["par"]; min_cap_cf, max_cap_cf = m["capacidad_remolque_con_freno"]; min_cap_sf, max_cap_sf = m["capacidad_remolque_sin_freno"]
     min_sup_planta, max_sup_planta = m["superficie_planta"]; min_diam_giro, max_diam_giro = m["diametro_giro"]
-    min_alto_veh, max_alto_veh = m["alto_vehiculo"]
-    min_rel_pp, max_rel_pp = m["relacion_peso_potencia"]; min_pot_max, max_pot_max = m["potencia_maxima"]; min_acel, max_acel = m["aceleracion_0_100"]
+    min_alto_veh, max_alto_veh = m["alto_vehiculo"]; min_rel_pp, max_rel_pp = m["relacion_peso_potencia"]; min_pot_max, max_pot_max = m["potencia_maxima"]; min_acel, max_acel = m["aceleracion_0_100"] 
+    min_auto_p, max_auto_p = m["autonomia_uso_principal"]; min_auto_2, max_auto_2 = m["autonomia_uso_2nd_drive"]
+    min_t_carga, max_t_carga = m["tiempo_carga_min"]; min_pot_ac, max_pot_ac = m["potencia_maxima_carga_AC"]
+    min_pot_dc, max_pot_dc = m["potencia_maxima_carga_DC"]
 
     # PASO 2: CONSTRUCCIÓN DE PARÁMETROS Y FILTROS
     # Primero, inicializa la lista de parámetros con los valores ESTÁTICOS.
@@ -157,6 +171,11 @@ def buscar_coches_bq(
         bigquery.ScalarQueryParameter("peso_fav_menor_rel_peso_potencia_score", "FLOAT64", pesos_completos["fav_menor_rel_peso_potencia_score"]),
         bigquery.ScalarQueryParameter("peso_potencia_maxima_style_score", "FLOAT64", pesos_completos["potencia_maxima_style_score"]),
         bigquery.ScalarQueryParameter("peso_par_motor_style_score", "FLOAT64", pesos_completos["par_motor_style_score"]),
+        bigquery.ScalarQueryParameter("peso_autonomia_uso_principal", "FLOAT64", pesos_completos["peso_autonomia_uso_principal"]),
+        bigquery.ScalarQueryParameter("peso_autonomia_uso_2nd_drive", "FLOAT64", pesos_completos["peso_autonomia_uso_2nd_drive"]),
+        bigquery.ScalarQueryParameter("peso_menor_tiempo_carga_min", "FLOAT64", pesos_completos["peso_menor_tiempo_carga_min"]),
+        bigquery.ScalarQueryParameter("peso_potencia_maxima_carga_AC", "FLOAT64", pesos_completos["peso_potencia_maxima_carga_AC"]),
+        bigquery.ScalarQueryParameter("peso_potencia_maxima_carga_DC", "FLOAT64", pesos_completos["peso_potencia_maxima_carga_DC"]),
         bigquery.ScalarQueryParameter("peso_fav_menor_aceleracion_score", "FLOAT64", pesos_completos["fav_menor_aceleracion_score"]),
         bigquery.ScalarQueryParameter("flag_penalizar_low_cost_comodidad", "BOOL", flag_penalizar_low_cost_comod),
         bigquery.ScalarQueryParameter("flag_penalizar_deportividad_comodidad", "BOOL", flag_penalizar_deportividad_comod),
@@ -173,7 +192,12 @@ def buscar_coches_bq(
         bigquery.ScalarQueryParameter("flag_fav_suv_aventura_ocasional", "BOOL", flag_fav_suv_aventura_ocasional),
         bigquery.ScalarQueryParameter("flag_fav_pickup_todoterreno_aventura_extrema", "BOOL", flag_fav_pickup_todoterreno_aventura_extrema),
         bigquery.ScalarQueryParameter("flag_aplicar_logica_objetos_especiales", "BOOL", flag_aplicar_logica_objetos_especiales),
-        bigquery.ScalarQueryParameter("flag_fav_carroceria_confort", "BOOL", flag_fav_carroceria_confort),       
+        bigquery.ScalarQueryParameter("flag_fav_carroceria_confort", "BOOL", flag_fav_carroceria_confort),
+        bigquery.ScalarQueryParameter("flag_logica_uso_ocasional", "BOOL", flag_logica_uso_ocasional_val),
+        bigquery.ScalarQueryParameter("flag_favorecer_bev_uso_definido", "BOOL", flag_favorecer_bev_val),
+        bigquery.ScalarQueryParameter("flag_penalizar_phev_uso_intensivo", "BOOL", flag_penalizar_phev_val),
+        bigquery.ScalarQueryParameter("flag_favorecer_electrificados_por_punto_carga", "BOOL", flag_favorecer_electrificados_val),
+        bigquery.ScalarQueryParameter("km_anuales_estimados", "INT64", km_anuales_estimados_val),
         bigquery.ScalarQueryParameter("k", "INT64", k)
     ]
     
@@ -191,16 +215,16 @@ def buscar_coches_bq(
             sql_where_clauses.append(f"sd.cambio_automatico = @{param_name_trans}")
             params.append(bigquery.ScalarQueryParameter(param_name_trans, "BOOL", False))
 
-    numeric_filters_map = {
-        "estetica_min": ("sd.estetica", "FLOAT64"),
-        "premium_min": ("sd.premium", "FLOAT64"),
-        "singular_min": ("sd.singular", "FLOAT64"),
-    }
-    for key, (column, dtype) in numeric_filters_map.items():
-        value = filtros.get(key)
-        if value is not None:
-            sql_where_clauses.append(f"COALESCE({column}, 0) >= @{key}") 
-            params.append(bigquery.ScalarQueryParameter(key, dtype, float(value)))
+    # numeric_filters_map = {
+    #     "estetica_min": ("sd.estetica", "FLOAT64"),
+    #     "premium_min": ("sd.premium", "FLOAT64"),
+    #     "singular_min": ("sd.singular", "FLOAT64"),
+    # }
+    # for key, (column, dtype) in numeric_filters_map.items():
+    #     value = filtros.get(key)
+    #     if value is not None:
+    #         sql_where_clauses.append(f"COALESCE({column}, 0) >= @{key}") 
+    #         params.append(bigquery.ScalarQueryParameter(key, dtype, float(value)))
     
     plazas_min_val = filtros.get("plazas_min")
     if plazas_min_val is not None and isinstance(plazas_min_val, int) and plazas_min_val > 0:
@@ -213,10 +237,10 @@ def buscar_coches_bq(
         sql_where_clauses.append(f"sd.tipo_mecanica IN UNNEST(@tipos_mecanica)")
         params.append(bigquery.ArrayQueryParameter("tipos_mecanica", "STRING", tipos_mecanica_str_list))
 
-    tipos_carroceria_list = filtros.get("tipo_carroceria")
-    if isinstance(tipos_carroceria_list, list) and tipos_carroceria_list:
-        sql_where_clauses.append(f"sd.tipo_carroceria IN UNNEST(@tipos_carroceria)")
-        params.append(bigquery.ArrayQueryParameter("tipos_carroceria", "STRING", tipos_carroceria_list))
+    # tipos_carroceria_list = filtros.get("tipo_carroceria")
+    # if isinstance(tipos_carroceria_list, list) and tipos_carroceria_list:
+    #     sql_where_clauses.append(f"sd.tipo_carroceria IN UNNEST(@tipos_carroceria)")
+    #     params.append(bigquery.ArrayQueryParameter("tipos_carroceria", "STRING", tipos_carroceria_list))
 
     modo_adq_rec = filtros.get("modo_adquisicion_recomendado")
     precio_a_filtrar, cuota_a_filtrar = None, None
@@ -280,6 +304,20 @@ def buscar_coches_bq(
             COALESCE(SAFE_DIVIDE({max_rel_pp} - COALESCE(relacion_peso_potencia, {max_rel_pp}), NULLIF({max_rel_pp} - {min_rel_pp}, 0)), 0) AS menor_rel_peso_potencia_scaled,
             COALESCE(SAFE_DIVIDE(COALESCE(potencia_maxima, {min_pot_max}) - {min_pot_max}, NULLIF({max_pot_max} - {min_pot_max}, 0)), 0) AS potencia_maxima_style_scaled,
             COALESCE(SAFE_DIVIDE({max_acel} - COALESCE(aceleracion_0_100, {max_acel}), NULLIF({max_acel} - {min_acel}, 0)), 0) AS menor_aceleracion_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(autonomia_uso_principal, {min_auto_p}) - {min_auto_p}, NULLIF({max_auto_p} - {min_auto_p}, 0)), 0) AS autonomia_uso_principal_scaled,
+            COALESCE(SAFE_DIVIDE(COALESCE(autonomia_uso_2nd_drive, {min_auto_2}) - {min_auto_2}, NULLIF({max_auto_2} - {min_auto_2}, 0)), 0) AS autonomia_uso_2nd_drive_scaled, 
+            (CASE
+                WHEN COALESCE(tiempo_carga_min, 0) = 0 THEN 0.0 -- Si no tiene tiempo de carga, su puntuación escalada es 0 menor es mejor
+                ELSE COALESCE(SAFE_DIVIDE({max_t_carga} - tiempo_carga_min, NULLIF({max_t_carga} - {min_t_carga}, 0)), 0)
+            END) AS menor_tiempo_carga_min_scaled,
+            (CASE
+                WHEN COALESCE(potencia_maxima_carga_AC, 0) = 0 THEN 0.0 -- Si no tiene carga AC, su puntuación escalada es 0
+                ELSE COALESCE(SAFE_DIVIDE(potencia_maxima_carga_AC - {min_pot_ac}, NULLIF({max_pot_ac} - {min_pot_ac}, 0)), 0)
+            END) AS potencia_maxima_carga_AC_scaled,
+            (CASE
+                WHEN COALESCE(potencia_maxima_carga_DC, 0) = 0 THEN 0.0 -- Si no tiene carga DC, su puntuación escalada es 0
+                ELSE COALESCE(SAFE_DIVIDE(potencia_maxima_carga_DC - {min_pot_dc}, NULLIF({max_pot_dc} - {min_pot_dc}, 0)), 0)
+            END) AS potencia_maxima_carga_DC_scaled,
             CASE WHEN traccion = 'ALL' THEN 1.0 WHEN traccion = 'RWD' THEN 0.5 ELSE 0.0 END AS traccion_scaled,
             (CASE WHEN COALESCE(reductoras, FALSE) THEN 1.0 ELSE 0.0 END) AS reductoras_scaled,
             (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END) AS puertas_penalty
@@ -327,6 +365,11 @@ def buscar_coches_bq(
             + sd.menor_rel_peso_potencia_scaled * @peso_fav_menor_rel_peso_potencia_score
             + sd.potencia_maxima_style_scaled * @peso_potencia_maxima_style_score
             + sd.par_scaled * @peso_par_motor_style_score 
+            + sd.autonomia_uso_principal_scaled * @peso_autonomia_uso_principal
+            + sd.autonomia_uso_2nd_drive_scaled * @peso_autonomia_uso_2nd_drive
+            + sd.menor_tiempo_carga_min_scaled * @peso_menor_tiempo_carga_min
+            + sd.potencia_maxima_carga_AC_scaled * @peso_potencia_maxima_carga_AC
+            + sd.potencia_maxima_carga_DC_scaled * @peso_potencia_maxima_carga_DC
             + sd.menor_aceleracion_scaled * @peso_fav_menor_aceleracion_score
             + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND sd.acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE_SCALED} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
             + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND sd.deportividad_bq_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
@@ -346,6 +389,64 @@ def buscar_coches_bq(
             + (CASE WHEN @flag_fav_pickup_todoterreno_aventura_extrema = TRUE AND sd.tipo_carroceria IN ('PICKUP') THEN {BONUS_PICKUP_AVENTURA_EXTREMA} ELSE 0.0 END)
             + (CASE WHEN @flag_aplicar_logica_objetos_especiales = TRUE THEN CASE WHEN sd.tipo_carroceria IN ('MONOVOLUMEN', 'FURGONETA', 'FAMILIAR', 'SUV') THEN {BONUS_CARROCERIA_OBJETOS_ESPECIALES} WHEN sd.tipo_carroceria IN ('3VOL', 'COUPE', 'DESCAPOTABLE') THEN {PENALTY_CARROCERIA_OBJETOS_ESPECIALES} ELSE 0.0 END ELSE 0.0 END)
             + (CASE WHEN @flag_fav_carroceria_confort = TRUE AND sd.tipo_carroceria IN ('3VOL', '2VOL', 'SUV', 'FAMILIAR', 'MONOVOLUMEN') THEN {BONUS_CARROCERIA_CONFORT} ELSE 0.0 END)
+            + (CASE 
+                WHEN @flag_logica_uso_ocasional = TRUE AND COALESCE(sd.ocasion, FALSE) = TRUE 
+                THEN {BONUS_OCASION_POR_USO_OCASIONAL} 
+                ELSE 0.0 
+              END)
+            + (CASE 
+                WHEN @flag_logica_uso_ocasional = TRUE AND sd.tipo_mecanica IN ('PHEVD', 'PHEVG', 'BEV', 'REEV')
+                THEN {PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL}
+                ELSE 0.0
+              END)
+            + (CASE 
+                WHEN @flag_favorecer_bev_uso_definido = TRUE AND sd.tipo_mecanica IN ('BEV', 'REEV')
+                THEN {BONUS_BEV_REEV_USO_DEFINIDO}
+                ELSE 0.0
+              END)
+            + (CASE
+                WHEN @flag_penalizar_phev_uso_intensivo = TRUE AND sd.tipo_mecanica IN ('PHEVD', 'PHEVG')
+                THEN {PENALTY_PHEV_USO_INTENSIVO_LARGO}
+                ELSE 0.0
+              END)
+            + (CASE
+                WHEN @flag_favorecer_electrificados_por_punto_carga = TRUE AND sd.tipo_mecanica IN ('BEV', 'PHEVD', 'PHEVG', 'REEV')
+                THEN {BONUS_PUNTO_CARGA_PROPIO}
+                ELSE 0.0
+              END) 
+            + (CASE
+                -- BUCKET 1: Uso bajo (< 10.000 km/año)
+                WHEN @km_anuales_estimados > 0 AND @km_anuales_estimados < 10000 THEN
+                    (CASE WHEN sd.tipo_mecanica IN ('GASOLINA', 'MHEVG', 'HEVG') THEN {BONUS_MOTOR_POCO_KM} ELSE 0 END) +
+                    (CASE WHEN COALESCE(sd.km_ocasion, 0) > 250000 THEN {PENALTY_OCASION_POCO_KM} ELSE 0 END)
+                
+                -- BUCKET 2: Uso medio (10.000 - 30.000 km/año)
+                WHEN @km_anuales_estimados >= 10000 AND @km_anuales_estimados < 30000 THEN
+                    (CASE WHEN COALESCE(sd.km_ocasion, 0) > 120000 THEN {PENALTY_OCASION_MEDIO_KM} ELSE 0 END)
+                
+                -- BUCKET 3: Uso alto (30.000 - 60.000 km/año)
+                WHEN @km_anuales_estimados >= 30000 AND @km_anuales_estimados < 60000 THEN
+                    (CASE WHEN sd.tipo_mecanica IN ('DIESEL', 'MHEVD', 'HEVD', 'GLP', 'GNV') THEN {BONUS_MOTOR_MUCHO_KM} ELSE 0 END) +
+                    (CASE WHEN COALESCE(sd.km_ocasion, 0) > 80000 THEN {PENALTY_OCASION_MUCHO_KM} ELSE 0 END)
+                
+                -- BUCKET 4: Solo contiene los bonus de motor y la penalización de ocasión
+                WHEN @km_anuales_estimados >= 60000 THEN
+                    (CASE sd.tipo_mecanica
+                        WHEN 'BEV' THEN {BONUS_BEV_MUY_ALTO_KM}
+                        WHEN 'REEV' THEN {BONUS_REEV_MUY_ALTO_KM}
+                        WHEN 'HEVD' THEN {BONUS_DIESEL_HEVD_MUY_ALTO_KM}
+                        WHEN 'DIESEL' THEN {BONUS_DIESEL_HEVD_MUY_ALTO_KM}
+                        WHEN 'MHEVD' THEN {BONUS_DIESEL_HEVD_MUY_ALTO_KM}
+                        WHEN 'PHEVD' THEN {BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM}
+                        WHEN 'GLP' THEN {BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM}
+                        WHEN 'GNV' THEN {BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM}
+                        ELSE 0.0
+                    END) +
+                    -- Penalización por km de ocasión
+                    (CASE WHEN COALESCE(sd.km_ocasion, 0) > 20000 THEN {PENALTY_OCASION_MUY_ALTO_KM_V2} ELSE 0 END)
+                -- Si no entra en ningún rango, no se aplica bonus ni penalización
+                ELSE 0.0
+              END)
           ) AS score_total
         FROM ScaledData sd
         WHERE 1=1 {sql_where_clauses_str} 
@@ -354,7 +455,7 @@ def buscar_coches_bq(
         SELECT
             *,
             ROW_NUMBER() OVER(
-                PARTITION BY nombre, modelo, tipo_mecanica, cambio_automatico
+                PARTITION BY modelo, tipo_mecanica
                 ORDER BY score_total DESC, precio_compra_contado ASC
             ) as rn
         FROM 
@@ -396,3 +497,12 @@ def buscar_coches_bq(
         logging.error(f"❌ Error al ejecutar la query en BigQuery: {e}")
         traceback.print_exc()
         return [], sql, log_params_for_logging
+
+
+# Agrupación de coches "iguales" (PARTITION BY):
+# El sistema considera que dos coches son "el mismo" si coinciden exactamente en estas cuatro características:
+
+# nombre (la marca, ej: "Seat") para pruebas este no va por ahora
+# modelo (el modelo, ej: "León")
+# tipo_mecanica (el motor, ej: "GLP")
+# cambio_automatico (si es automático o manual)

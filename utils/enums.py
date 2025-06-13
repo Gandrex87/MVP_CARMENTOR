@@ -56,3 +56,24 @@ class EstiloConduccion(str, Enum):
     DEPORTIVO = "deportivo"
     MIXTO     = "mixto"
     
+
+class FrecuenciaUso(str, Enum):
+    DIARIO = "diario"
+    FRECUENTEMENTE = "frecuentemente"
+    OCASIONALMENTE = "ocasionalmente"
+
+class DistanciaTrayecto(str, Enum):
+    MENOS_10_KM = "no supera los 10 km"
+    ENTRE_10_Y_50_KM = "está entre 10 y 50 km"
+    ENTRE_51_Y_150_KM = "está entre 51 y 150 km"
+    MAS_150_KM = "supera los 150 km"
+    
+  
+class FrecuenciaViajesLargos(str, Enum):
+    FRECUENTEMENTE = "frecuentemente"
+    OCASIONALMENTE = "ocasionalmente"
+    ESPORADICAMENTE = "esporádicamente"
+    
+
+
+

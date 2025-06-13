@@ -1,7 +1,7 @@
 # En utils/validation.py (o donde prefieras)
 from typing import Optional
 from pydantic import ValidationError
-from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario, InfoPasajeros
+from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario, InfoPasajeros,DistanciaTrayecto
 from utils.conversion import is_yes
 import logging
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     if prefs is None:
         return False
     campos_obligatorios = [
-        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100",
+        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "frecuencia_uso", "distancia_trayecto","uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100",
         "transporta_carga_voluminosa", "arrastra_remolque","aventura", "estilo_conduccion", "tiene_garage", "tiene_punto_carga_propio", "solo_electricos",  "prioriza_baja_depreciacion","transmision_preferida","rating_fiabilidad_durabilidad", 
         "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_tecnologia_conectividad", "rating_costes_uso"
     ] # por ahora no va 
@@ -24,6 +24,17 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         if valor is None or (isinstance(valor, str) and not valor.strip()):
              print(f"DEBUG (Validation Perfil) ► Campo '{campo}' está vacío/None.")
              return False
+    # 0. distancia_trayecto    
+    if prefs.distancia_trayecto is not None and prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value:
+        # Si el trayecto es corto/medio, la pregunta sobre viajes largos es obligatoria
+        if prefs.realiza_viajes_largos is None:
+            print("DEBUG (Validation Perfil) ► 'distancia_trayecto' es corta/media, pero 'realiza_viajes_largos' es None. Perfil INCOMPLETO.")
+            return False
+        
+        # Si la respuesta es 'sí', la frecuencia es obligatoria
+        if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
+            print("DEBUG (Validation Perfil) ► 'realiza_viajes_largos' es 'sí', pero 'frecuencia_viajes_largos' es None. Perfil INCOMPLETO.")
+            return False  
     # 1. tipo_uso_profesional
     if is_yes(prefs.uso_profesional): 
         if prefs.tipo_uso_profesional is None: # El tipo es Enum, Pydantic maneja valores inválidos

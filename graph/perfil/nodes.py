@@ -6,7 +6,7 @@ from .state import (EstadoAnalisisPerfil,
                     FiltrosInferidos, ResultadoSoloFiltros,
                     EconomiaUsuario,ResultadoEconomia ,
                     InfoPasajeros, ResultadoPasajeros,
-                    InfoClimaUsuario, ResultadoCP, NivelAventura 
+                    InfoClimaUsuario, ResultadoCP, NivelAventura , FrecuenciaUso, DistanciaTrayecto, FrecuenciaViajesLargos
 )
 from config.llm import llm_solo_perfil, llm_solo_filtros, llm_economia, llm_pasajeros, llm_cp_extractor
 from prompts.loader import system_prompt_perfil, system_prompt_filtros_template, prompt_economia_structured_sys_msg, system_prompt_pasajeros, system_prompt_cp
@@ -321,143 +321,6 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
         "preferencias_usuario": preferencias_para_actualizar_estado,
         "pregunta_pendiente": mensaje_para_pregunta_pendiente
     }
-# def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Procesa entrada humana, llama a llm_solo_perfil, actualiza preferencias_usuario,
-#     y guarda el contenido del mensaje devuelto en 'pregunta_pendiente'.
-#     """
-#     print("--- Ejecutando Nodo: recopilar_preferencias_node ---")
-#     historial = state.get("messages", [])
-#     preferencias_actuales = state.get("preferencias_usuario") 
-
-#     # 1. Comprobar si el último mensaje es de la IA
-#     if historial and isinstance(historial[-1], AIMessage):
-#         print("DEBUG (Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
-#         return {**state, "pregunta_pendiente": None} # Limpiar pregunta pendiente
-
-#     print("DEBUG (Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
-    
-#     # Inicializar variables que se usarán después del try/except
-#     preferencias_post = preferencias_actuales # Usar el actual como fallback inicial
-#     contenido_msg_llm = None # Mensaje a guardar para el siguiente nodo
-    
-#     # 2. Llamar al LLM enfocado en el perfil
-#     try:
-#         # LLM ahora devuelve ResultadoSoloPerfil (con tipo_mensaje y contenido_mensaje)
-#         response: ResultadoSoloPerfil = llm_solo_perfil.invoke(
-#             [system_prompt_perfil, *historial],
-#             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
-#         )
-#         print(f"DEBUG (Perfil) ► Respuesta llm_solo_perfil: {response}")
-
-#         # --- CAMBIO: Extraer de la nueva estructura ---
-#         preferencias_nuevas = response.preferencias_usuario 
-#         tipo_msg_llm = response.tipo_mensaje # Puedes usarlo para logging o lógica futura si quieres
-#         contenido_msg_llm = response.contenido_mensaje # Este es el texto que guardaremos
-
-#         # 3. Aplicar post-procesamiento
-#         try:
-#             resultado_post_proc = aplicar_postprocesamiento_perfil(preferencias_nuevas)
-#             if resultado_post_proc is not None:
-#                 preferencias_post = resultado_post_proc
-#             else:
-#                  print("WARN (Perfil) ► aplicar_postprocesamiento_perfil devolvió None.")
-#                  preferencias_post = preferencias_nuevas # Fallback
-#             print(f"DEBUG (Perfil) ► Preferencias TRAS post-procesamiento: {preferencias_post}")
-#         except Exception as e_post:
-#             print(f"ERROR (Perfil) ► Fallo en postprocesamiento de perfil: {e_post}")
-#             preferencias_post = preferencias_nuevas # Fallback
-
-#     # Manejo de errores de la llamada LLM
-#     except ValidationError as e_val:
-#         print(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val}")
-#         contenido_msg_llm = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {e_val}"
-#         # Mantener preferencias anteriores si falla validación
-#         preferencias_post = preferencias_actuales
-        
-#     except ValidationError as e_val:
-#         logging.error(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val.errors()}")
-        
-#         # --- LÓGICA MEJORADA PARA ERRORES DE RATING ---
-#         custom_error_message = None
-#         campo_rating_erroneo = None
-
-#         for error in e_val.errors():
-#             # error['loc'] es una tupla, ej: ('preferencias_usuario', 'rating_seguridad')
-#             if len(error['loc']) > 1 and str(error['loc'][0]) == 'preferencias_usuario' and \
-#                str(error['loc'][1]).startswith('rating_'):
-                
-#                 campo_rating = str(error['loc'][1])
-#                 tipo_error_pydantic = error['type']
-#                 valor_input = error.get('input')
-
-#                 if tipo_error_pydantic in ['less_than_equal', 'greater_than_equal', 'less_than', 'greater_than', 'finite_number']:
-#                     nombre_amigable = MAPA_RATING_A_PREGUNTA_AMIGABLE.get(campo_rating, f"el campo '{campo_rating}'")
-#                     custom_error_message = (
-#                         f"Para {nombre_amigable}, necesito una puntuación entre 0 y 10. "
-#                         f"Parece que ingresaste '{valor_input}'. ¿Podrías darme un valor en la escala de 0 a 10, por favor?"
-#                     )
-#                     campo_rating_erroneo = campo_rating # Guardar para resetear
-#                     break # Manejar solo el primer error de rating encontrado
-        
-#         if custom_error_message:
-#             contenido_msg_llm = custom_error_message
-#             tipo_msg_llm = "PREGUNTA" # Forzar repregunta
-#             # Resetear el campo erróneo en el objeto de preferencias para que se vuelva a preguntar
-#             if campo_rating_erroneo and preferencias_post: # Usar el objeto antes de la fallida actualización del LLM
-#                 if hasattr(preferencias_post, campo_rating_erroneo):
-#                     setattr(preferencias_post, campo_rating_erroneo, None)
-#                 preferencias_post = preferencias_post # Usar la versión reseteada
-#         else:
-#             # Error de validación genérico (no de rating o no manejado específicamente)
-#             contenido_msg_llm = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {e_val.errors()[0]['msg'] if e_val.errors() else 'Error desconocido'}"
-#             tipo_msg_llm = "PREGUNTA"
-#             # En este caso, también es bueno usar las preferencias previas o resetear.
-#             preferencias_post = preferencias_post
- 
-#     except Exception as e:
-#         print(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil: {e}")
-#         print("--- TRACEBACK FALLO LLM PERFIL ---")
-#         traceback.print_exc() # Imprimir traceback para depurar
-#         print("--------------------------------")
-#         contenido_msg_llm = "Lo siento, tuve un problema técnico al procesar tus preferencias."
-#         # Mantener preferencias anteriores
-#         preferencias_post = preferencias_actuales 
-
-#     # 4. Actualizar el estado 'preferencias_usuario' (fusionando)
-#     preferencias_actualizadas = preferencias_post # Usar resultado post-proc o el fallback
-#     if preferencias_actuales and preferencias_post: 
-#         try:
-#             if hasattr(preferencias_post, "model_dump"):
-#                 # Usar exclude_none=True para evitar que Nones del LLM borren datos existentes
-#                 update_data = preferencias_post.model_dump(exclude_unset=True, exclude_none=True) 
-#                 if update_data: # Solo actualizar si hay algo que actualizar
-#                      preferencias_actualizadas = preferencias_actuales.model_copy(update=update_data)
-#                 else: # Si post-proc no devolvió nada útil, mantener el actual
-#                      preferencias_actualizadas = preferencias_actuales
-#             else:
-#                  preferencias_actualizadas = preferencias_post 
-#         except Exception as e_merge:
-#              print(f"ERROR (Perfil) ► Fallo al fusionar preferencias: {e_merge}")
-#              preferencias_actualizadas = preferencias_actuales 
-
-#     print(f"DEBUG (Perfil) ► Estado preferencias_usuario actualizado: {preferencias_actualizadas}")
-    
-#     # 5. Guardar la pregunta/confirmación pendiente para el siguiente nodo
-#     pregunta_para_siguiente_nodo = None
-#     if contenido_msg_llm and contenido_msg_llm.strip():
-#         pregunta_para_siguiente_nodo = contenido_msg_llm.strip()
-#         print(f"DEBUG (Perfil) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
-#     else:
-#         print(f"DEBUG (Perfil) ► No hay mensaje pendiente.")
-        
-#     # 6. Devolver estado actualizado (SIN modificar messages, CON pregunta_pendiente)
-#     return {
-#         **state,
-#         "preferencias_usuario": preferencias_actualizadas,
-#         # "messages": historial_con_nuevo_mensaje, # <-- NO se actualiza aquí
-#         "pregunta_pendiente": pregunta_para_siguiente_nodo # <-- Se guarda el CONTENIDO del mensaje
-#     }
 
 
 def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
@@ -489,14 +352,26 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if prefs.apasionado_motor is None: return "¿Te consideras una persona entusiasta del mundo del motor y la tecnología automotriz?"
     if prefs.valora_estetica is None: return "¿La Estética es importante para ti o crees que hay factores más importantes?"
     if prefs.coche_principal_hogar is None: return "¿El coche que estamos buscando será el vehículo principal de tu hogar?."
+    if prefs.frecuencia_uso is None:return "¿Con qué frecuencia usarás el coche?\n 💨 A diario (incluso varias veces al día)\n 🔄 Frecuentemente (varias veces por semana)\n  🕐 Ocasionalmente (pocas veces al mes)"
+    if prefs.distancia_trayecto is None:  return "¿Cuál es la distancia de tu trayecto más habitual?\n 🟢 Hasta 10 km\n 🟡 10-50 km\n 🟠 51-150 km\n 🔴 Más de 150 km" 
+    # Solo pregunta por viajes largos si el trayecto habitual NO es ya un viaje largo
+    if prefs.distancia_trayecto is not None and \
+       prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value and \
+       prefs.realiza_viajes_largos is None:
+        return "¿Haces recorridos de más de 150 km además de tus trayectos habituales? (Sí/No)"
+    # Si la respuesta anterior fue 'sí', pregunta por la frecuencia
+    if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
+        return (
+            "¿y con qué frecuencia realizas estos viajes largos?\n 💨 Frecuentemente (Unas cuantas veces por mes)\n 🗓️ Ocasionalmente (Unas pocas veces por mes)\n 🕐 Esporádicamente (Unas pocas veces por año)"
+        )
+    # --- FIN NUEVA LÓGICA ---
     if prefs.uso_profesional is None: return "¿El coche lo destinaras principalmente para uso personal o más para fines profesionales (trabajo)?"
     if is_yes(prefs.uso_profesional) and prefs.tipo_uso_profesional is None:
         return "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
     if prefs.prefiere_diseno_exclusivo is None: return "En cuanto al estilo del coche, ¿te inclinas más por un diseño exclusivo y llamativo, o por algo más discreto y convencional?"
     if prefs.altura_mayor_190 is None: return "Para recomendarte un vehículo con espacio adecuado, ¿tu altura supera los 1.90 metros?"
     if prefs.peso_mayor_100 is None: return "Para garantizar tu máxima comodidad, ¿tienes un peso superior a 100 kg?"
-    if prefs.transporta_carga_voluminosa is None:
-        return "¿Transportas con frecuencia equipaje o carga voluminosa? (Responde 'sí' o 'no')"
+    if prefs.transporta_carga_voluminosa is None: return "¿Acostumbras a viajar con el maletero muy cargado? (Responde 'sí' o 'no')"
     if is_yes(prefs.transporta_carga_voluminosa) and prefs.necesita_espacio_objetos_especiales is None:
         return "¿Y ese transporte de carga incluye objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos para bebé, sillas de ruedas, instrumentos musicales, etc?"
     if prefs.arrastra_remolque is None: return "¿Vas a arrastrar remolque pesado o caravana?"
@@ -1343,124 +1218,6 @@ def calcular_recomendacion_economia_modo1_node(state: EstadoAnalisisPerfil) -> d
         # Para LangGraph, es mejor devolver el objeto aunque no haya cambiado, si la clave existe en el estado.
         return {"filtros_inferidos": filtros_actualizados} 
 
-# def obtener_tipos_carroceria_rag_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Llama a la función RAG para obtener tipos de carrocería recomendados, basándose en las preferencias, filtros parciales, 
-#     info de pasajeros e info de clima. Actualiza filtros_inferidos.tipo_carroceria en el estado.
-#     """
-#     print("--- Ejecutando Nodo: obtener_tipos_carroceria_rag_node ---")
-#     logging.debug("--- Ejecutando Nodo: obtener_tipos_carroceria_rag_node ---")
-
-#     preferencias_obj = state.get("preferencias_usuario")
-#     filtros_obj = state.get("filtros_inferidos") # Este ya puede tener la rec. Modo 1
-#     info_pasajeros_obj = state.get("info_pasajeros")
-#     info_clima_obj = state.get("info_clima_usuario")
-#     k_rag = 4 # Número de recomendaciones a obtener, puedes hacerlo configurable
-#     k_candidates = 8 #Numero de candidatos a reordenar.
-
-#     # Verificar pre-condiciones para RAG (al menos preferencias)
-#     if not preferencias_obj:
-#         logging.error("ERROR (RAG Node) ► 'preferencias_usuario' no existe en el estado. No se puede llamar a RAG.")
-#         # Devolver el estado como está si faltan datos críticos para RAG
-#         return {"filtros_inferidos": filtros_obj if filtros_obj else FiltrosInferidos()}
-
-#     # Si filtros_obj es None (poco probable si el nodo anterior lo inicializó), crear uno
-#     if filtros_obj is None:
-#         logging.warning("WARN (RAG Node) ► filtros_inferidos era None. Inicializando uno nuevo.")
-#         filtros_obj = FiltrosInferidos()
-        
-#     filtros_actualizados = filtros_obj.model_copy(deep=True)
-
-#     # # Convertir a dicts para pasar a get_recommended_carrocerias - La función RAG espera diccionarios según su firma actual
-#     # prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
-#     # # filtros_tecnicos_dict se refiere a los filtros ya inferidos/actualizados hasta este punto
-#     # filtros_tecnicos_dict = filtros_actualizados.model_dump(mode='json', exclude_none=False) 
-#     # info_pasajeros_dict = info_pasajeros_obj.model_dump(mode='json') if info_pasajeros_obj else None
-#     # info_clima_dict = info_clima_obj.model_dump(mode='json') if info_clima_obj else None
-    
-#     tipos_carroceria_recomendados = None # Default
-
-#     # Solo llamar a RAG si tipo_carroceria aún no está definido o está vacío, esto evita re-llamar a RAG si ya se hizo en una ejecución anterior (si el nodo se re-ejecuta)
-#     if not filtros_actualizados.tipo_carroceria: 
-#         logging.debug("DEBUG (RAG Node) ► Llamando a get_recommended_carrocerias...")
-#         try:
-#             tipos_carroceria_recomendados = get_recommended_carrocerias(
-#             # 1. Pasamos los objetos Pydantic directamente, sin .model_dump()
-#             preferencias=preferencias_obj, 
-#             info_pasajeros=info_pasajeros_obj,
-#             info_clima=info_clima_obj,
-#             filtros_inferidos=filtros_actualizados, # 2. El argumento ahora se llama 'filtros_inferidos
-#             k=k_rag,# 3. Añadimos los parámetros de control
-#             num_candidates_to_rerank=k_candidates # Puedes hacerlo configurable si quieres
-#         )  
-#             logging.debug(f"DEBUG (RAG Node) ► RAG recomendó: {tipos_carroceria_recomendados}")
-#             if tipos_carroceria_recomendados: # Solo actualizar si RAG devolvió algo
-#                 filtros_actualizados.tipo_carroceria = tipos_carroceria_recomendados
-#             else:
-#                 logging.warning("WARN (RAG Node) ► get_recommended_carrocerias devolvió una lista vacía o None.")
-#                 filtros_actualizados.tipo_carroceria = ["SUV", "FAMILIAR" ,"MONOVOLUMEN"] # Un fallback muy genérico si RAG falla
-#         except Exception as e_rag:
-#             logging.error(f"ERROR (RAG Node) ► Fallo en la llamada a get_recommended_carrocerias: {e_rag}")
-#             traceback.print_exc()
-#             filtros_actualizados.tipo_carroceria = ["ErrorAlObtenerCarrocerias"] 
-#     else:
-#         logging.debug(f"DEBUG (RAG Node) ► tipo_carroceria ya existe en filtros_inferidos ({filtros_actualizados.tipo_carroceria}). Omitiendo llamada a RAG.")
-
-#     return {"filtros_inferidos": filtros_actualizados}
-# def determinar_carroceria_por_reglas_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Determina la lista de tipo_carroceria basándose en un conjunto
-#     de reglas de negocio aplicadas al estado del usuario.
-#     Si ninguna regla aplica, no modifica el campo tipo_carroceria.
-#     """
-#     print("--- Ejecutando Nodo: determinar_carroceria_por_reglas_node ---")
-#     logging.debug("--- Ejecutando Nodo: determinar_carroceria_por_reglas_node ---")
-
-#     preferencias_obj = state.get("preferencias_usuario")
-#     info_clima_obj = state.get("info_clima_usuario")
-#     info_pasajeros_obj = state.get("info_pasajeros")
-#     filtros_obj = state.get("filtros_inferidos")
-    
-#     if not filtros_obj:
-#         logging.warning("WARN (CarroceriaReglas) ► No hay objeto de filtros en el estado. No se puede actualizar tipo_carroceria.")
-#         return {} # No hacer nada si no hay objeto de filtros
-    
-#     # Trabajar con una copia para evitar efectos secundarios inesperados
-#     filtros_actualizados = filtros_obj.model_copy(deep=True)
-    
-#     carrocerias_sugeridas = set()
-
-#     # --- Regla 1: Si CP pertenece a [zona_clima_monta] ---
-#     if info_clima_obj and info_clima_obj.ZONA_CLIMA_MONTA is True:
-#         logging.debug("DEBUG (CarroceriaReglas) ► Aplicando regla ZONA_CLIMA_MONTA. Favoreciendo SUV, TODOTERRENO.")
-#         carrocerias_sugeridas.update(['SUV', 'TODOTERRENO'])
-
-#     # --- Regla 2: Si uso_profesional='sí' y suele_llevar_acompanantes=False ---
-#     if (preferencias_obj and preferencias_obj.uso_profesional is True and
-#         info_pasajeros_obj and info_pasajeros_obj.suele_llevar_acompanantes is False):
-#         logging.debug("DEBUG (CarroceriaReglas) ► Aplicando regla USO_PROFESIONAL sin pasajeros. Favoreciendo COMERCIAL.")
-#         carrocerias_sugeridas.add('COMERCIAL')
-        
-#     # --- Puedes añadir más reglas aquí en el futuro ---
-#     # Ejemplo:
-#     # if preferencias_obj and is_yes(preferencias_obj.arrastra_remolque):
-#     #     carrocerias_sugeridas.update(['PICKUP', 'TODOTERRENO', 'SUV'])
-
-#     # Si se aplicó alguna regla y se sugirieron carrocerías, actualizar el estado
-#     if carrocerias_sugeridas:
-#         lista_final_carrocerias = sorted(list(carrocerias_sugeridas)) # Ordenar para consistencia
-#         logging.info(f"INFO (CarroceriaReglas) ► Carrocerías sugeridas por reglas: {lista_final_carrocerias}")
-#         filtros_actualizados.tipo_carroceria = lista_final_carrocerias
-#         return {"filtros_inferidos": filtros_actualizados}
-#     else:
-#         logging.info("INFO (CarroceriaReglas) ► Ninguna regla de carrocería aplicó. Se dejará el campo 'tipo_carroceria' como está (o None).")
-#         # Si no hay sugerencias, no devolvemos cambios a filtros_inferidos
-#         # para que no se sobrescriba un valor que pudiera existir previamente.
-#         return {}
-
-# --- NUEVO NODO ---
-
-
 def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Calcula todos los flags booleanos dinámicos basados en las preferencias del usuario
@@ -1493,8 +1250,12 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     flag_fav_pickup_todoterreno_aventura_extrema = False
     flag_aplicar_logica_objetos_especiales = False
     flag_fav_carroceria_confort = False# --- NUEVOS FLAGS PARA LÓGICA DE CARROCERÍA ---
-    
-
+    flag_logica_uso_ocasional = False # 
+    flag_pen_bev_reev_avent_ocas = False
+    flag_favorecer_bev_uso_definido = False 
+    flag_penalizar_phev_uso_intensivo = False
+    flag_favorecer_electrificados_por_punto_carga = False
+     
     # Verificar que preferencias_obj exista para acceder a sus atributos
     if not preferencias_obj:
         logging.error("ERROR (CalcFlags) ► 'preferencias_usuario' no existe en el estado. No se pueden calcular flags dinámicos.")
@@ -1517,7 +1278,11 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "favorecer_suv_aventura_ocasional": flag_fav_suv_aventura_ocasional,
             "favorecer_pickup_todoterreno_aventura_extrema": flag_fav_pickup_todoterreno_aventura_extrema,
             "aplicar_logica_objetos_especiales": flag_aplicar_logica_objetos_especiales,
-            "favorecer_carroceria_confort": flag_fav_carroceria_confort,            
+            "favorecer_carroceria_confort": flag_fav_carroceria_confort,  
+            "flag_logica_uso_ocasional": flag_logica_uso_ocasional,
+            "flag_favorecer_bev_uso_definido": flag_favorecer_bev_uso_definido, 
+             "flag_penalizar_phev_uso_intensivo": flag_penalizar_phev_uso_intensivo, #
+             "flag_favorecer_electrificados_por_punto_carga" : flag_favorecer_electrificados_por_punto_carga    
         }
     # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
     # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
@@ -1562,7 +1327,6 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         flag_fav_carroceria_confort = True
         logging.info(f"DEBUG (CalcFlags) ► Rating Comodidad ({rating_comodidad_val}) >= {UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA}. Activando flag para favorecer carrocerías confortables.")
         
-    # --- FIN NUEVA LÓGICA ---
     
     # Lógica para Flags de Penalización por Comodidad
     if preferencias_obj.rating_comodidad is not None:
@@ -1588,6 +1352,40 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
        hasattr(info_clima_obj, 'MUNICIPIO_ZBE') and info_clima_obj.MUNICIPIO_ZBE is True:
         flag_es_zbe = True
         logging.debug(f"DEBUG (CalcFlags) ► CP en MUNICIPIO_ZBE. Activando flag es_municipio_zbe.")
+    
+    # --- LÓGICA PARA EL NUEVO FLAG DE USO OCASIONAL ---
+    if preferencias_obj.frecuencia_uso == FrecuenciaUso.OCASIONALMENTE.value:
+        flag_logica_uso_ocasional = True
+        logging.info("DEBUG (CalcFlags) ► Uso OCASIONAL detectado. Activando lógica de bonus para 'OCASION' y penalización para electrificados.")
+   
+    # --- NUEVA LÓGICA PARA FAVORECER BEV/REEV EN PERFIL DE USO IDEAL ---
+    # Parte 1: El uso principal es intensivo
+    es_uso_diario_frecuente = preferencias_obj.frecuencia_uso in [FrecuenciaUso.DIARIO.value, FrecuenciaUso.FRECUENTEMENTE.value]
+    es_trayecto_medio_largo = preferencias_obj.distancia_trayecto in [DistanciaTrayecto.ENTRE_10_Y_50_KM.value, DistanciaTrayecto.ENTRE_51_Y_150_KM.value]
+    
+    # Parte 2: El problema de los viajes muy largos está mitigado
+    sin_viajes_largos = not is_yes(preferencias_obj.realiza_viajes_largos) # Cubre 'no' y None
+    viajes_largos_esporadicos = preferencias_obj.frecuencia_viajes_largos == FrecuenciaViajesLargos.ESPORADICAMENTE.value
+    
+    # Condición final combinada
+    if (es_uso_diario_frecuente and es_trayecto_medio_largo) and (sin_viajes_largos or viajes_largos_esporadicos):
+        flag_favorecer_bev_uso_definido = True
+        print("DEBUG (CalcFlags) ► Perfil de uso ideal para BEV/REEV detectado. Activando bonus.")
+        logging.info("DEBUG (CalcFlags) ► Perfil de uso ideal para BEV/REEV detectado. Activando bonus.")
+    # --- FIN NUEVA LÓGICA ---
+    # --- LÓGICA PARA PENALIZAR PHEV EN TRAYECTOS LARGOS Y FRECUENTES ---
+    es_uso_diario_frecuente = preferencias_obj.frecuencia_uso in [FrecuenciaUso.DIARIO.value, FrecuenciaUso.FRECUENTEMENTE.value]
+    es_trayecto_muy_largo = preferencias_obj.distancia_trayecto == DistanciaTrayecto.MAS_150_KM.value
+    
+    if es_uso_diario_frecuente and es_trayecto_muy_largo:
+        flag_penalizar_phev_uso_intensivo = True
+        logging.info("DEBUG (CalcFlags) ► Patrón de uso intensivo y largo detectado. Activando penalización para PHEVs.")
+
+     # --- ✅ NUEVA LÓGICA PARA PUNTO DE CARGA PROPIO ---
+    if is_yes(preferencias_obj.tiene_punto_carga_propio):
+        flag_favorecer_electrificados_por_punto_carga = True
+        logging.info("DEBUG (CalcFlags) ► Usuario tiene punto de carga propio. Activando bonus para BEV/PHEV/REEV.")
+    # --- FIN NUEVA LÓGICA ---  
     
    # --- DEBUGGING AVENTURA ---
     if hasattr(preferencias_obj, 'aventura'):
@@ -1633,6 +1431,10 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "favorecer_pickup_todoterreno_aventura_extrema": flag_fav_pickup_todoterreno_aventura_extrema,
         "aplicar_logica_objetos_especiales": flag_aplicar_logica_objetos_especiales,
         "favorecer_carroceria_confort": flag_fav_carroceria_confort,
+        "flag_favorecer_bev_uso_definido": flag_favorecer_bev_uso_definido,
+        "flag_logica_uso_ocasional": flag_logica_uso_ocasional,
+        "flag_penalizar_phev_uso_intensivo": flag_penalizar_phev_uso_intensivo,
+        "flag_favorecer_electrificados_por_punto_carga": flag_favorecer_electrificados_por_punto_carga,
         "es_municipio_zbe": flag_es_zbe
     }
     
@@ -1649,7 +1451,9 @@ def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
     filtros_obj = state.get("filtros_inferidos") # Contiene estetica_min, premium_min, singular_min
     info_clima_obj = state.get("info_clima_usuario")
     info_pasajeros_obj = state.get("info_pasajeros")
-    print(f"DEBUG_MIO (info_pasajeros_obj): {info_pasajeros_obj}")
+    print(f"DEBUG_MIO (info_pasajeros_o     bj): {info_pasajeros_obj}")
+    km_anuales_val = state.get("km_anuales_estimados")
+    print(f"DEBUG_MIO_2: (km_anuales_val): {km_anuales_val}")
     # Por ahora, los extraemos aquí de info_clima_obj para pasarlos a compute_raw_weights.
 
     es_nieblas_val = False
@@ -1670,25 +1474,25 @@ def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
         prefs_dict_para_weights = preferencias_obj.model_dump(mode='json', exclude_none=False)
         info_pasajeros_dict_para_weights = info_pasajeros_obj.model_dump(mode='json', exclude_none=False) if info_pasajeros_obj else None
         
-        estetica_min_val = filtros_obj.estetica_min
-        premium_min_val = filtros_obj.premium_min
-        singular_min_val = filtros_obj.singular_min
+        # estetica_min_val = filtros_obj.estetica_min
+        # premium_min_val = filtros_obj.premium_min
+        # singular_min_val = filtros_obj.singular_min
 
         logging.debug(f"DEBUG (CalcPesos) ► Entradas para compute_raw_weights:\n"
                       f"  Preferencias: {prefs_dict_para_weights.get('apasionado_motor')}, {prefs_dict_para_weights.get('aventura')}, etc.\n"
-                      f"  EsteticaMin: {estetica_min_val}, PremiumMin: {premium_min_val}, SingularMin: {singular_min_val}\n"
                       f"  InfoPasajeros: {info_pasajeros_dict_para_weights}\n"
                       f"  ZonaNieblas: {es_nieblas_val}, ZonaNieve: {es_nieve_val}, ZonaMonta: {es_monta_val}")
 
         raw_weights = compute_raw_weights(
             preferencias=prefs_dict_para_weights, # Usar el dict que ya tenías
-            estetica_min_val=estetica_min_val,
-            premium_min_val=premium_min_val,
-            singular_min_val=singular_min_val,
+            # estetica_min_val=estetica_min_val,
+            # premium_min_val=premium_min_val,
+            # singular_min_val=singular_min_val,
             info_pasajeros_dict=info_pasajeros_dict_para_weights,
             es_zona_nieblas=es_nieblas_val,
             es_zona_nieve=es_nieve_val,
-            es_zona_clima_monta=es_monta_val
+            es_zona_clima_monta=es_monta_val,
+            km_anuales_estimados=km_anuales_val
         )
         pesos_calculados_normalizados = normalize_weights(raw_weights)
         logging.debug(f"DEBUG (CalcPesos) ► Pesos finales calculados y normalizados: {pesos_calculados_normalizados}") 
@@ -1749,7 +1553,46 @@ def formatear_tabla_resumen_node(state: EstadoAnalisisPerfil) -> dict:
     }
 
   # --- Fin Etapa 4 ---
+from config.settings import (MAPA_FRECUENCIA_USO, MAPA_DISTANCIA_TRAYECTO, MAPA_FRECUENCIA_VIAJES_LARGOS, MAPA_REALIZA_VIAJES_LARGOS_KM )
 
+# --- ✅ NUEVA FUNCIÓN PARA SER USADA COMO NODO INDEPENDIENTE ---
+def calcular_km_anuales_postprocessing_node(state: EstadoAnalisisPerfil) -> Dict[str, Optional[int]]:
+    """
+    Calcula los kilómetros anuales estimados basándose en las preferencias del usuario.
+    Actúa como un nodo del grafo que lee el estado y devuelve el nuevo campo calculado.
+    """
+    print("--- Ejecutando Nodo: calcular_km_anuales_postprocessing_node ---")
+    preferencias = state.get("preferencias_usuario")
+    
+    if not preferencias:
+        logging.warning("WARN (CalcKM) ► No hay 'preferencias_usuario' en el estado. No se pueden calcular los km.")
+        return {"km_anuales_estimados": None}
+
+    # --- Parte 1: Kilometraje por uso habitual (Fórmula: 52 * a * b) ---
+    frecuencia_uso_val = getattr(preferencias, 'frecuencia_uso', None)
+    a = MAPA_FRECUENCIA_USO.get(frecuencia_uso_val, 0)
+    
+    distancia_trayecto_val = getattr(preferencias, 'distancia_trayecto', None)
+    b = MAPA_DISTANCIA_TRAYECTO.get(distancia_trayecto_val, 0)
+    
+    km_habituales = 52 * a * b
+
+    # --- Parte 2: Kilometraje por viajes largos (Fórmula: n * c) ---
+    realiza_viajes_largos_val = getattr(preferencias, 'realiza_viajes_largos', 'no')
+    n_key = "sí" if is_yes(realiza_viajes_largos_val) else "no"
+    n = MAPA_REALIZA_VIAJES_LARGOS_KM.get(n_key, 0)
+
+    frecuencia_viajes_largos_val = getattr(preferencias, 'frecuencia_viajes_largos', None)
+    c = MAPA_FRECUENCIA_VIAJES_LARGOS.get(frecuencia_viajes_largos_val, 0)
+
+    km_viajes_largos = n * c
+    
+    # --- Parte 3: Cálculo Final ---
+    km_totales = int(km_habituales + km_viajes_largos)
+
+    logging.info(f"DEBUG (CalcKM) ► Cálculo: (52 * {a} * {b}) + ({n} * {c}) = {km_totales} km/año")
+    
+    return {"km_anuales_estimados": km_totales}
 
 
 
@@ -1787,7 +1630,14 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     flag_fav_pickup_todoterreno_aventura_extrema = state.get("favorecer_pickup_todoterreno_aventura_extrema")
     flag_aplicar_logica_objetos_especiales= state.get("aplicar_logica_objetos_especiales")
     flag_fav_carroceria_confort= state.get("favorecer_carroceria_confort")
+    flag_logica_uso_ocasional = state.get("flag_logica_uso_ocasional")
+    flag_favorecer_bev_uso_definido = state.get("flag_favorecer_bev_uso_definido")
+    flag_penalizar_phev_uso_intensivo = state.get("flag_penalizar_phev_uso_intensivo")
+    flag_favorecer_electrificados_por_punto_carga = state.get("flag_favorecer_electrificados_por_punto_carga")
     
+    km_anuales_val = state.get("km_anuales_estimados")
+    
+  
     thread_id = "unknown_thread"
     if state.get("config") and isinstance(state["config"], dict) and \
        state["config"].get("configurable") and isinstance(state["config"]["configurable"], dict):
@@ -1831,6 +1681,11 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         filtros_para_bq['favorecer_pickup_todoterreno_aventura_extrema'] = flag_fav_pickup_todoterreno_aventura_extrema
         filtros_para_bq['aplicar_logica_objetos_especiales'] = flag_aplicar_logica_objetos_especiales
         filtros_para_bq['favorecer_carroceria_confort'] = flag_fav_carroceria_confort
+        filtros_para_bq['flag_logica_uso_ocasional'] = flag_logica_uso_ocasional
+        filtros_para_bq['flag_favorecer_bev_uso_definido'] = flag_favorecer_bev_uso_definido
+        filtros_para_bq['flag_penalizar_phev_uso_intensivo'] = flag_penalizar_phev_uso_intensivo
+        filtros_para_bq['flag_favorecer_electrificados_por_punto_carga'] = flag_favorecer_electrificados_por_punto_carga
+        filtros_para_bq['km_anuales_estimados'] = km_anuales_val
         
         
         logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
@@ -2035,6 +1890,10 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         'favorecer_pickup_todoterreno_aventura_extrema' : flag_fav_pickup_todoterreno_aventura_extrema,
         'aplicar_logica_objetos_especiales' : flag_aplicar_logica_objetos_especiales,
         'favorecer_carroceria_confort' : flag_fav_carroceria_confort,
+        'flag_logica_uso_ocasional' : flag_logica_uso_ocasional,
+        'flag_favorecer_bev_uso_definido' : flag_favorecer_bev_uso_definido,
+        'flag_penalizar_phev_uso_intensivo': flag_penalizar_phev_uso_intensivo,
+        'flag_favorecer_electrificados_por_punto_carga': flag_favorecer_electrificados_por_punto_carga,
         "pregunta_pendiente": None, # Este nodo es final para el turno
     }
 

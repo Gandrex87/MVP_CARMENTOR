@@ -8,7 +8,7 @@
 from typing import Optional, Dict, Any # Añadir tipos
 from .conversion import is_yes
 import logging
-from .enums import NivelAventura 
+from .enums import NivelAventura , FrecuenciaUso, DistanciaTrayecto
 from graph.perfil.state import PerfilUsuario # Importar para type hint
 from config.settings import (MAX_SINGLE_RAW_WEIGHT , MIN_SINGLE_RAW_WEIGHT , AVENTURA_RAW_WEIGHTS,
                             AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA , AJUSTE_CRUDO_TRACCION_POR_NIEVE, AJUSTE_CRUDO_TRACCION_POR_MONTA,
@@ -22,19 +22,21 @@ from config.settings import (MAX_SINGLE_RAW_WEIGHT , MIN_SINGLE_RAW_WEIGHT , AVE
                             RAW_PESO_PAR_MOTOR_REMOLQUE, RAW_PESO_CAP_REMOLQUE_CF, RAW_PESO_CAP_REMOLQUE_SF, RAW_PESO_BASE_REMOLQUE, RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD, RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD,
                             RAW_PESO_BASE_COSTE_USO_DIRECTO, RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO, PESO_CRUDO_BASE_MALETERO,PESO_CRUDO_FAV_MALETERO_MAX, PESO_CRUDO_FAV_MALETERO_MIN, PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES, RAW_PESO_BASE_AUT_VEHI,
                             PESO_CRUDO_BASE_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_BASE_ANCHO_GRAL, PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190,PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL, PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE , PESO_CRUDO_BASE_DEVALUACION, PESO_CRUDO_FAV_DEVALUACION,
-                            
+                            RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_USO_INTENSIVO, WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM,WEIGHT_AUTONOMIA_2ND_DRIVE_MUY_ALTO_KM, WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM, PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO,
+                            WEIGHT_POTENCIA_AC_MUY_ALTO_KM, WEIGHT_POTENCIA_DC_MUY_ALTO_KM,PESO_CRUDO_FAV_ESTETICA , PESO_CRUDO_FAV_PREMIUM_APASIONADO_MOTOR, PESO_CRUDO_FAV_SINGULAR_APASIONADO_MOTOR,
                             )
 
 # --- Función compute_raw_weights CORREGIDA ---
 def compute_raw_weights(
     preferencias: Optional[PerfilUsuario], # <-- Cambiar Type Hint a PerfilUsuario
-    estetica_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.estetica_min)
-    premium_min_val: Optional[float],       # Renombrado para claridad (viene de filtros.premium_min)
-    singular_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.singular_min)
+    #estetica_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.estetica_min)
+    #premium_min_val: Optional[float],       # Renombrado para claridad (viene de filtros.premium_min)
+    #singular_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.singular_min)
     info_pasajeros_dict: Optional[Dict[str, Any]],
     es_zona_nieblas: bool = False,
     es_zona_nieve: bool = False,
     es_zona_clima_monta: bool = False,
+    km_anuales_estimados: Optional[int] = None,
     ) -> Dict[str, float]: 
     """
     Calcula pesos crudos. Accede a preferencias usando notación de punto.
@@ -43,14 +45,46 @@ def compute_raw_weights(
     raw = {} # Inicializar el diccionario de pesos crudos
     pasajeros_info = info_pasajeros_dict if info_pasajeros_dict else {}
     
-    # Usar 0.0 como fallback si los valores de filtro son None
-    raw = {
-        "estetica": float(estetica_min_val or 0.0),
-        "premium":  float(premium_min_val or 0.0),
-        "singular": float(singular_min_val or 0.0)
-    }
-    print(f"DEBUG (Weights) ► Pesos crudos iniciales (est/prem/sing): {raw}")
+   
+    # Estética (basado en valora_estetica)
+    # Si el usuario valora la estética, "¿Es importante para ti el diseño y la estética del coche, o hay otros factores que priorizas más?"
+    raw["estetica"] = PESO_CRUDO_FAV_ESTETICA if is_yes(preferencias.get("valora_estetica")) else 0.0
+    logging.debug(f"Weights: Peso crudo para 'estetica' basado en valora_estetica='{preferencias.get('valora_estetica')}': {raw['estetica']}")
 
+    # Premium (basado en apasionado_motor)
+    # Si es un apasionado del motor, favorecemos coches con carácter premium.
+    raw["premium"] = PESO_CRUDO_FAV_PREMIUM_APASIONADO_MOTOR if is_yes(preferencias.get("apasionado_motor")) else 0.0 # Base para no apasionado
+    logging.debug(f"Weights: Peso crudo para 'premium' basado en apasionado_motor='{preferencias.get('apasionado_motor')}': {raw['premium']}")
+    
+    # Singularidad (Aditiva)
+    singular_raw_weight = 0.0
+    # Contribución de apasionado_motor
+    if is_yes(preferencias.get("apasionado_motor")):
+        singular_raw_weight += PESO_CRUDO_FAV_SINGULAR_APASIONADO_MOTOR
+    else: # 'no' o None (False)
+        singular_raw_weight += 0.0 # Un peso base bajo si no es apasionado
+
+    # Contribución prefiere_diseno_exclusivo:¿te inclinas más por un diseño exclusivo, o prefieres algo más discreto y convencional?"
+    if is_yes(preferencias.get("prefiere_diseno_exclusivo")):
+        singular_raw_weight += PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO
+    else: # 'no' o None (False)
+        singular_raw_weight += 0.0 # Un peso base bajo si no le importa la exclusividad
+        
+    raw["singular"] = singular_raw_weight
+    logging.debug(f"Weights: Peso crudo para 'singular' (aditivo): {raw['singular']}")
+    # --- FIN NUEVA LÓGICA ---
+    
+     # --- ✅ 2. AÑADIR NUEVA LÓGICA PARA "GRAN VIAJERO" ---
+    if km_anuales_estimados is not None and km_anuales_estimados > 60000:
+        logging.info(f"DEBUG (Weights) ► Perfil 'Gran Viajero' detectado ({km_anuales_estimados} km/año). Añadiendo pesos crudos para autonomía y carga.")
+        # Añadimos estos factores como si fueran preferencias más del usuario
+        raw['autonomia_uso_principal'] = WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM
+        raw['autonomia_uso_2nd_drive'] = WEIGHT_AUTONOMIA_2ND_DRIVE_MUY_ALTO_KM
+        raw['menor_tiempo_carga_min'] = WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM
+        raw['potencia_maxima_carga_AC'] = WEIGHT_POTENCIA_AC_MUY_ALTO_KM
+        raw['potencia_maxima_carga_DC'] = WEIGHT_POTENCIA_DC_MUY_ALTO_KM
+
+    
     # 1. Pesos de Aventura
     aventura_level_str = None
     if preferencias: # Verificar si el diccionario preferencias existe
@@ -186,6 +220,18 @@ def compute_raw_weights(
         raw["fav_bajo_coste_uso_directo"] = RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO    # 
         raw["fav_bajo_coste_mantenimiento_directo"] = RAW_WEIGHT_FAV_BAJO_COSTE_MANTENIMIENTO_DIRECTO 
     
+    # --- NUEVA LÓGICA DE USO INTENSIVO ---
+    frecuencia_val = preferencias.get("frecuencia_uso")
+    distancia_val = preferencias.get("distancia_trayecto")
+    
+    # Comprobamos si las condiciones de uso intensivo se cumplen
+    es_uso_frecuente = frecuencia_val in [FrecuenciaUso.DIARIO.value, FrecuenciaUso.FRECUENTEMENTE.value]
+    es_trayecto_largo = distancia_val in [DistanciaTrayecto.ENTRE_51_Y_150_KM.value, DistanciaTrayecto.MAS_150_KM.value]
+    
+    if es_uso_frecuente and es_trayecto_largo:
+        print(f"DEBUG (Weights) ► Uso intensivo detectado (frecuencia='{frecuencia_val}', distancia='{distancia_val}'). Aumentando peso para bajo consumo.")
+        raw["fav_bajo_consumo"] += RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_USO_INTENSIVO
+
     # --- LÓGICA PARA PESOS DE ARRASTRE DE REMOLQUE ---
     # Usaremos claves distintas para estos pesos para que sean específicos
     raw["par_motor_remolque_score"] = RAW_PESO_BASE_REMOLQUE # Peso base muy bajo si no arrastra
@@ -279,10 +325,10 @@ def compute_raw_weights(
         raw["par_motor_style_score"] = RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO
         raw["fav_menor_aceleracion_score"] = RAW_PESO_MENOR_ACELERACION_BAJO
 
-    #  # Clamp final para todos los pesos que podrían haberse acumulado
-    # for key in list(raw.keys()): # Iterar sobre una copia de las claves si modificas el dict
-    #     if isinstance(raw[key], (int, float)): # Solo clampear números
-    #         raw[key] = max(MIN_SINGLE_RAW_WEIGHT, min(MAX_SINGLE_RAW_WEIGHT, raw[key]))
+     # Clamp final para todos los pesos que podrían haberse acumulado
+    for key in list(raw.keys()): # Iterar sobre una copia de las claves si modificas el dict
+        if isinstance(raw[key], (int, float)): # Solo clampear números
+            raw[key] = max(MIN_SINGLE_RAW_WEIGHT, min(MAX_SINGLE_RAW_WEIGHT, raw[key]))
     
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}

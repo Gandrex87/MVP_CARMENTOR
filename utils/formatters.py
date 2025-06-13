@@ -181,9 +181,6 @@ def formatear_preferencias_en_tabla(
         texto += "|-----------------------|----------------------------------|\n"
         texto += f"| Tipo de mecánica     | {mech} |\n"
         texto += f"| Tipo de carrocería   | {card} |\n" # Asegúrate que tipo_carroceria esté en FiltrosInferidos
-        texto += f"| Estética mínima      | {filtros_dict.get('estetica_min','No definido')} |\n"
-        texto += f"| Premium mínima       | {filtros_dict.get('premium_min','No definido')}  |\n"
-        texto += f"| Singularidad mínima  | {filtros_dict.get('singular_min','No definido')} |\n"
 
     # --- AÑADIR FILAS PARA RECOMENDACIÓN MODO 1 ---
         modo_adq = filtros_dict.get("modo_adquisicion_recomendado")

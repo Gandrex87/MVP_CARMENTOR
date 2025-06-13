@@ -6,7 +6,7 @@ from graph.perfil.nodes import (preguntar_cp_inicial_node,   recopilar_cp_node, 
     recopilar_preferencias_node,validar_preferencias_node, inferir_filtros_node,validar_filtros_node,recopilar_economia_node, preguntar_economia_node,
     validar_economia_node, preguntar_preferencias_node, preguntar_filtros_node, preguntar_economia_node,buscar_coches_finales_node,
     recopilar_info_pasajeros_node, validar_info_pasajeros_node,  preguntar_info_pasajeros_node,aplicar_filtros_pasajeros_node, calcular_recomendacion_economia_modo1_node,
-    calcular_flags_dinamicos_node,calcular_pesos_finales_node,formatear_tabla_resumen_node)
+    calcular_flags_dinamicos_node,calcular_pesos_finales_node,formatear_tabla_resumen_node, calcular_km_anuales_postprocessing_node)
 from graph.perfil.memory import get_memory 
 from graph.perfil.condition import (ruta_decision_cp, ruta_decision_economia, ruta_decision_filtros, ruta_decision_perfil,ruta_decision_pasajeros, 
                                     decidir_ruta_inicial, route_based_on_state_node)
@@ -46,7 +46,8 @@ def build_sequential_agent_graph():
     #workflow.add_node("obtener_tipos_carroceria_rag", obtener_tipos_carroceria_rag_node)
     workflow.add_node("calcular_flags_dinamicos", calcular_flags_dinamicos_node)
     workflow.add_node("calcular_pesos_finales", calcular_pesos_finales_node)
-    workflow.add_node("formatear_tabla_resumen", formatear_tabla_resumen_node)
+    workflow.add_node("formatear_tabla_resumen", formatear_tabla_resumen_node) 
+    workflow.add_node("calcular_km_anuales_postprocessing", calcular_km_anuales_postprocessing_node)
     workflow.add_node("buscar_coches_finales", buscar_coches_finales_node)
 
 # 2. Definir punto de entrada FIJO al ROUTER
@@ -109,18 +110,20 @@ def build_sequential_agent_graph():
  
     # Etapa 3: Economía -> Finalizar
     workflow.add_edge("recopilar_economia", "validar_economia")
-    workflow.add_conditional_edges( "validar_economia",ruta_decision_economia, 
+    workflow.add_conditional_edges("validar_economia",ruta_decision_economia, 
         {
             "necesita_pregunta_economia": "preguntar_economia", # Usa el nodo genérico
              "iniciar_finalizacion": "calcular_recomendacion_economia_modo1" 
         }
     )
     workflow.add_edge("preguntar_economia", END) 
-    workflow.add_edge("calcular_recomendacion_economia_modo1", "calcular_flags_dinamicos")
+    workflow.add_edge("calcular_recomendacion_economia_modo1", "calcular_km_anuales_postprocessing")
+    workflow.add_edge("calcular_km_anuales_postprocessing", "calcular_flags_dinamicos")
     workflow.add_edge("calcular_flags_dinamicos", "calcular_pesos_finales")
     workflow.add_edge("calcular_pesos_finales", "formatear_tabla_resumen")
-    workflow.add_edge("formatear_tabla_resumen", 'buscar_coches_finales') # <-- Termina el turno para mostrar la tabla
-
+    #workflow.add_edge("formatear_tabla_resumen", 'buscar_coches_finales') # <-- Termina el turno para mostrar la tabla
+    workflow.add_edge("formatear_tabla_resumen", "buscar_coches_finales") 
+    
     # Etapa 5: Finalización y Búsqueda
     workflow.add_edge("buscar_coches_finales", END) 
 
