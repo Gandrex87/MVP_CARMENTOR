@@ -152,6 +152,19 @@ La estructura JSON que DEBES generar es la siguiente:
           "default": null,
           "description": "Si realiza viajes largos, \u00bfcon qu\u00e9 frecuencia lo hace?"
         }},
+        "circula_principalmente_ciudad": {{
+          "anyOf": [
+            {{
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "\u00bfEl usuario circula principalmente por ciudad? Responde 's\u00ed' o 'no'",
+          "title": "Circula Principalmente Ciudad"
+        }},
         "uso_profesional": {{
           "anyOf": [
             {{
@@ -226,7 +239,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bf Acostumbras a viajar con el maletero muy cargado? Responde 's\u00ed' o 'no'",
+          "description": "\u00bfTransporta con frecuencia equipaje o carga voluminosa? Responde 's\u00ed' o 'no'",
           "title": "Transporta Carga Voluminosa"
         }},
         "necesita_espacio_objetos_especiales": {{
@@ -528,7 +541,6 @@ La estructura JSON que DEBES generar es la siguiente:
   "title": "ResultadoSoloPerfil",
   "type": "object"
 }}
-
 </Esquema_JSON_Requerido>
 <Instrucciones_De_Inferencia_y_Logica_Conversacional>
 Objetivo Principal: Rellenar TODOS los campos del objeto preferencias_usuario de forma secuencial y conversacional.
@@ -607,7 +619,7 @@ distancia_trayecto:"¿Cuál es la distancia de tu trayecto más habitual?\n
 🔴 Más de 150 km"\n
 realiza_viajes_largos: (SOLO SI `distancia_trayecto` NO es 'MAS_150_KM' Y este campo es `null`): "¿Haces recorridos de más de 150 km?\n ✅ Sí\n ❌ No"
 frecuencia_viajes_largos: (SOLO SI `realiza_viajes_largos` es 'sí' Y este campo es `null`): "¿Con qué frecuencia realizas estos viajes largos?\n 💨 Frecuentemente (Unas cuantas veces por mes)\n 🗓️ Ocasionalmente (Unas pocas veces por mes)\n 🕐 Esporádicamente (Unas pocas veces por año)"
-
+circula_principalmente_ciudad: "Cuentame, ¿circulas principalmente por ciudad? (Sí/No)"
 uso_profesional: "¿El coche será principalmente para uso personal o también tendrá un uso profesional?"
 tipo_uso_profesional: (SOLO SI uso_profesional es 'sí' Y este campo es null) "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
 prefiere_diseno_exclusivo: "En cuanto al estilo, ¿te inclinas más por un diseño exclusivo y que destaque, o prefieres algo más discreto y convencional?"

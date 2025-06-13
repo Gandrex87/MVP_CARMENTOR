@@ -156,6 +156,10 @@ PENALTY_OCASION_MUY_ALTO_KM_V2 = -0.20 # Le pongo V2 para no confundir con la ot
 
 # Bonus para coches que pueden aprovechar un punto de carga propio
 BONUS_PUNTO_CARGA_PROPIO = 0.10
+
+# Bonus/Penalty favorecer por conducir en ciudad
+PENALTY_DIESEL_CIUDAD = -0.15
+BONUS_DIESEL_CIUDAD_OCASIONAL = 0.15
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- UMBRALES PARA ACTIVAR FLAGS EN PYTHON (`graph/perfil/nodes.py` - `finalizar_y_presentar_node`) ---
 
@@ -266,6 +270,8 @@ RAW_PESO_CAP_REMOLQUE_SF = 3.0
 # Pesos crudos base para remolque si es 'no' o None
 RAW_PESO_BASE_REMOLQUE = 1.0
 
+#Peso crudo favorecer por conducir en ciudad
+PESO_CRUDO_FAV_DIAMETRO_GIRO_CONDUC_CIUDAD = 7.0
 
 # Pesos para nuevas características de carga y autonomía Si km/año > 60.000 
 WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM = 9.0

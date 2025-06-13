@@ -32,7 +32,10 @@ class PerfilUsuario(BaseModel):
     distancia_trayecto: Optional[DistanciaTrayecto] = Field(default=None, description="Distancia del trayecto más frecuente o habitual en kilómetros.")
     realiza_viajes_largos: Optional[str] = Field(default=None, description="¿El usuario realiza viajes largos (>150km) además de su trayecto habitual? Responde 'sí' o 'no'")
     frecuencia_viajes_largos: Optional[FrecuenciaViajesLargos] = Field(default=None,description="Si realiza viajes largos, ¿con qué frecuencia lo hace?" )
-    # --- FIN NUEVOS CAMPOS ---
+    circula_principalmente_ciudad: Optional[str] = Field(
+        default=None,
+        description="¿El usuario circula principalmente por ciudad? Responde 'sí' o 'no'"
+    )
     uso_profesional: Optional[str] = Field(default=None, description="¿Usará el coche para trabajo? Responde 'sí' o 'no'")
     tipo_uso_profesional: Optional[TipoUsoProfesional] = Field(default=None, description="Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'")
     prefiere_diseno_exclusivo: Optional[str] = Field(default=None,description="¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?")
@@ -218,6 +221,7 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_favorecer_bev_uso_definido: Optional[bool]
     flag_penalizar_phev_uso_intensivo: Optional[bool]
     flag_favorecer_electrificados_por_punto_carga: Optional[bool]
+    flag_logica_diesel_ciudad: Optional[str]
     km_anuales_estimados: Optional[int]
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
 

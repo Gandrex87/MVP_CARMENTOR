@@ -361,10 +361,8 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
         return "¿Haces recorridos de más de 150 km además de tus trayectos habituales? (Sí/No)"
     # Si la respuesta anterior fue 'sí', pregunta por la frecuencia
     if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
-        return (
-            "¿y con qué frecuencia realizas estos viajes largos?\n 💨 Frecuentemente (Unas cuantas veces por mes)\n 🗓️ Ocasionalmente (Unas pocas veces por mes)\n 🕐 Esporádicamente (Unas pocas veces por año)"
-        )
-    # --- FIN NUEVA LÓGICA ---
+        return ("¿y con qué frecuencia realizas estos viajes largos?\n 💨 Frecuentemente (Unas cuantas veces por mes)\n 🗓️ Ocasionalmente (Unas pocas veces por mes)\n 🕐 Esporádicamente (Unas pocas veces por año)")
+    if prefs.circula_principalmente_ciudad is None: return "Cuentame, ¿circulas principalmente por ciudad? (Sí/No)"
     if prefs.uso_profesional is None: return "¿El coche lo destinaras principalmente para uso personal o más para fines profesionales (trabajo)?"
     if is_yes(prefs.uso_profesional) and prefs.tipo_uso_profesional is None:
         return "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
@@ -1255,6 +1253,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     flag_favorecer_bev_uso_definido = False 
     flag_penalizar_phev_uso_intensivo = False
     flag_favorecer_electrificados_por_punto_carga = False
+    flag_logica_diesel_ciudad = False
      
     # Verificar que preferencias_obj exista para acceder a sus atributos
     if not preferencias_obj:
@@ -1281,8 +1280,9 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "favorecer_carroceria_confort": flag_fav_carroceria_confort,  
             "flag_logica_uso_ocasional": flag_logica_uso_ocasional,
             "flag_favorecer_bev_uso_definido": flag_favorecer_bev_uso_definido, 
-             "flag_penalizar_phev_uso_intensivo": flag_penalizar_phev_uso_intensivo, #
-             "flag_favorecer_electrificados_por_punto_carga" : flag_favorecer_electrificados_por_punto_carga    
+            "flag_penalizar_phev_uso_intensivo": flag_penalizar_phev_uso_intensivo, #
+            "flag_favorecer_electrificados_por_punto_carga" : flag_favorecer_electrificados_por_punto_carga,
+            "flag_logica_diesel_ciudad" : flag_logica_diesel_ciudad , 
         }
     # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
     # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
@@ -1358,7 +1358,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         flag_logica_uso_ocasional = True
         logging.info("DEBUG (CalcFlags) ► Uso OCASIONAL detectado. Activando lógica de bonus para 'OCASION' y penalización para electrificados.")
    
-    # --- NUEVA LÓGICA PARA FAVORECER BEV/REEV EN PERFIL DE USO IDEAL ---
+    # --- LÓGICA PARA FAVORECER BEV/REEV EN PERFIL DE USO IDEAL ---
     # Parte 1: El uso principal es intensivo
     es_uso_diario_frecuente = preferencias_obj.frecuencia_uso in [FrecuenciaUso.DIARIO.value, FrecuenciaUso.FRECUENTEMENTE.value]
     es_trayecto_medio_largo = preferencias_obj.distancia_trayecto in [DistanciaTrayecto.ENTRE_10_Y_50_KM.value, DistanciaTrayecto.ENTRE_51_Y_150_KM.value]
@@ -1372,7 +1372,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         flag_favorecer_bev_uso_definido = True
         print("DEBUG (CalcFlags) ► Perfil de uso ideal para BEV/REEV detectado. Activando bonus.")
         logging.info("DEBUG (CalcFlags) ► Perfil de uso ideal para BEV/REEV detectado. Activando bonus.")
-    # --- FIN NUEVA LÓGICA ---
+ 
     # --- LÓGICA PARA PENALIZAR PHEV EN TRAYECTOS LARGOS Y FRECUENTES ---
     es_uso_diario_frecuente = preferencias_obj.frecuencia_uso in [FrecuenciaUso.DIARIO.value, FrecuenciaUso.FRECUENTEMENTE.value]
     es_trayecto_muy_largo = preferencias_obj.distancia_trayecto == DistanciaTrayecto.MAS_150_KM.value
@@ -1381,11 +1381,21 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         flag_penalizar_phev_uso_intensivo = True
         logging.info("DEBUG (CalcFlags) ► Patrón de uso intensivo y largo detectado. Activando penalización para PHEVs.")
 
-     # --- ✅ NUEVA LÓGICA PARA PUNTO DE CARGA PROPIO ---
+     # --- LÓGICA PARA PUNTO DE CARGA PROPIO ---
     if is_yes(preferencias_obj.tiene_punto_carga_propio):
         flag_favorecer_electrificados_por_punto_carga = True
         logging.info("DEBUG (CalcFlags) ► Usuario tiene punto de carga propio. Activando bonus para BEV/PHEV/REEV.")
-    # --- FIN NUEVA LÓGICA ---  
+   
+   # --- LÓGICA PARA FLAG DIÉSEL - RECORRE CAMINOS CIUDAD ---
+    if is_yes(preferencias_obj.circula_principalmente_ciudad):
+        if preferencias_obj.frecuencia_uso == FrecuenciaUso.OCASIONALMENTE.value:
+            # Caso excepcional: uso ocasional en ciudad, no se penaliza, se bonifica
+            flag_logica_diesel_ciudad = "BONIFICAR"
+            logging.info("DEBUG (CalcFlags) ► Conductor urbano ocasional. Activando pequeño bonus para diésel.")
+        else:
+            # Caso general: conductor urbano, se penaliza diésel
+            flag_logica_diesel_ciudad = "PENALIZAR"
+            logging.info("DEBUG (CalcFlags) ► Conductor urbano frecuente. Activando penalización para diésel.")
     
    # --- DEBUGGING AVENTURA ---
     if hasattr(preferencias_obj, 'aventura'):
@@ -1435,6 +1445,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_logica_uso_ocasional": flag_logica_uso_ocasional,
         "flag_penalizar_phev_uso_intensivo": flag_penalizar_phev_uso_intensivo,
         "flag_favorecer_electrificados_por_punto_carga": flag_favorecer_electrificados_por_punto_carga,
+        "flag_logica_diesel_ciudad": flag_logica_diesel_ciudad,
         "es_municipio_zbe": flag_es_zbe
     }
     
@@ -1634,7 +1645,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     flag_favorecer_bev_uso_definido = state.get("flag_favorecer_bev_uso_definido")
     flag_penalizar_phev_uso_intensivo = state.get("flag_penalizar_phev_uso_intensivo")
     flag_favorecer_electrificados_por_punto_carga = state.get("flag_favorecer_electrificados_por_punto_carga")
-    
+    flag_logica_diesel_ciudad= state.get("flag_logica_diesel_ciudad")
     km_anuales_val = state.get("km_anuales_estimados")
     
   
@@ -1685,8 +1696,8 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         filtros_para_bq['flag_favorecer_bev_uso_definido'] = flag_favorecer_bev_uso_definido
         filtros_para_bq['flag_penalizar_phev_uso_intensivo'] = flag_penalizar_phev_uso_intensivo
         filtros_para_bq['flag_favorecer_electrificados_por_punto_carga'] = flag_favorecer_electrificados_por_punto_carga
+        filtros_para_bq['flag_logica_diesel_ciudad'] = flag_logica_diesel_ciudad
         filtros_para_bq['km_anuales_estimados'] = km_anuales_val
-        
         
         logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
         logging.debug(f"DEBUG (Buscar BQ) ► Filtros para BQ: {filtros_para_bq}") 
@@ -1713,31 +1724,32 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
             if coches_encontrados:
                 mensaje_coches = f"¡Listo! Basado en todo lo que hablamos, aquí tienes {len(coches_encontrados)} coche(s) que podrían interesarte:\n\n"
                 
-                #coches_para_df = []
-                for i, coche_dict_completo in enumerate(coches_encontrados):
-                    # --- LLAMAR AL NUEVO GENERADOR DE EXPLICACIONES ---
-                    explicacion_coche = generar_explicacion_coche_mejorada(
-                        coche_dict_completo=coche_dict_completo,
-                        preferencias_usuario=preferencias_obj,
-                        pesos_normalizados=pesos_finales,
-                        flag_penalizar_lc_comod=flag_penalizar_lc_comod,
-                        flag_penalizar_dep_comod=flag_penalizar_dep_comod,
-                        flag_penalizar_ant_tec=flag_penalizar_antiguo_tec_val,
-                        flag_es_zbe=flag_es_zbe_val,
-                        flag_aplicar_dist_gen=flag_aplicar_distintivo_val,
-                        flag_penalizar_puertas = penalizar_puertas_flag,                 
-                    )
-                    # --- FIN LLAMADA ---
-                    # Añadir la explicación al string del mensaje
-                    # (Formato más integrado con la tabla)
-                    mensaje_coches += f"\n**{i+1}. {coche_dict_completo.get('nombre', 'Coche Desconocido')}**"
-                    if coche_dict_completo.get('precio_compra_contado') is not None:
-                        precio_f = f"{coche_dict_completo.get('precio_compra_contado'):,.0f}€".replace(",",".")
-                        mensaje_coches += f" - {precio_f}"
-                    if coche_dict_completo.get('score_total') is not None:
-                        score_f = f"{coche_dict_completo.get('score_total'):.3f}"
-                        mensaje_coches += f" (Score: {score_f})"
-                    mensaje_coches += f"\n   *Por qué podría interesarte:* {explicacion_coche}\n"
+                ##CODIGO BUCLE PARA CUANDO INTEGREMOS LOGICA EXPLICACION LLM
+                # #coches_para_df = []
+                # for i, coche_dict_completo in enumerate(coches_encontrados):
+                #     # --- LLAMAR AL NUEVO GENERADOR DE EXPLICACIONES ---
+                #     explicacion_coche = generar_explicacion_coche_mejorada(
+                #         coche_dict_completo=coche_dict_completo,
+                #         preferencias_usuario=preferencias_obj,
+                #         pesos_normalizados=pesos_finales,
+                #         flag_penalizar_lc_comod=flag_penalizar_lc_comod,
+                #         flag_penalizar_dep_comod=flag_penalizar_dep_comod,
+                #         flag_penalizar_ant_tec=flag_penalizar_antiguo_tec_val,
+                #         flag_es_zbe=flag_es_zbe_val,
+                #         flag_aplicar_dist_gen=flag_aplicar_distintivo_val,
+                #         flag_penalizar_puertas = penalizar_puertas_flag,                 
+                #     )
+                #     # --- FIN LLAMADA ---
+                #     # Añadir la explicación al string del mensaje
+                #     # (Formato más integrado con la tabla)
+                #     mensaje_coches += f"\n**{i+1}. {coche_dict_completo.get('nombre', 'Coche Desconocido')}**"
+                #     if coche_dict_completo.get('precio_compra_contado') is not None:
+                #         precio_f = f"{coche_dict_completo.get('precio_compra_contado'):,.0f}€".replace(",",".")
+                #         mensaje_coches += f" - {precio_f}"
+                #     if coche_dict_completo.get('score_total') is not None:
+                #         score_f = f"{coche_dict_completo.get('score_total'):.3f}"
+                #         mensaje_coches += f" (Score: {score_f})"
+                #     mensaje_coches += f"\n   *Por qué podría interesarte:* {explicacion_coche}\n"
 
 
                 # Si quieres una tabla resumen de los coches (además de la explicación individual)
@@ -1894,6 +1906,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
         'flag_favorecer_bev_uso_definido' : flag_favorecer_bev_uso_definido,
         'flag_penalizar_phev_uso_intensivo': flag_penalizar_phev_uso_intensivo,
         'flag_favorecer_electrificados_por_punto_carga': flag_favorecer_electrificados_por_punto_carga,
+        'flag_logica_diesel_ciudad': flag_logica_diesel_ciudad ,
         "pregunta_pendiente": None, # Este nodo es final para el turno
     }
 
