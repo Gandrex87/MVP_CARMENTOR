@@ -4,334 +4,141 @@ Eres un asistente técnico experto en vehículos. Tu función es traducir las pr
 <Contexto_Entrada>
 Recibirás un contexto formateado que puede incluir <preferencias_usuario> (con las preferencias generales del perfil) y, opcionalmente, <info_clima> (con datos booleanos sobre las condiciones climáticas y de infraestructura del código postal del usuario). Usa AMBAS piezas de información si están disponibles.
 
-Ejemplo de estructura del contexto que recibirás en el placeholder {contexto_preferencias}:
-<preferencias_usuario>
-{{  
-  "$defs": {{  
-    "DimensionProblematica": {{  
-      "enum": [  
-        "largo",  
-        "ancho",  
-        "alto"  
-      ],  
-      "title": "DimensionProblematica",  
-      "type": "string"  
-    }},  
-    "EstiloConduccion": {{  
-      "enum": [  
-        "tranquilo",  
-        "deportivo",  
-        "mixto"  
-      ],  
-      "title": "EstiloConduccion",  
-      "type": "string"  
-    }},  
-    "NivelAventura": {{  
-      "enum": [  
-        "ninguna",  
-        "ocasional",  
-        "extrema"  
-      ],  
-      "title": "NivelAventura",  
-      "type": "string"  
-    }},  
-    "PerfilUsuario": {{  
-      "properties": {{  
-        "apasionado_motor": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'",  
-          "title": "Apasionado Motor"  
-        }},  
-        "valora_estetica": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Valora la estética del coche? Responde 'sí' o 'no'",  
-          "title": "Valora Estetica"  
-        }},  
-        "coche_principal_hogar": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Será el coche principal del hogar? Responde 'sí' o 'no'",  
-          "title": "Coche Principal Hogar"  
-        }},  
-        "uso_profesional": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Usará el coche para trabajo? Responde 'sí' o 'no'",  
-          "title": "Uso Profesional"  
-        }},  
-        "tipo_uso_profesional": {{  
-          "anyOf": [  
-            {{ "$ref": "#/$defs/TipoUsoProfesional" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'"  
-        }},  
-        "prefiere_diseno_exclusivo": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?",  
-          "title": "Prefiere Diseno Exclusivo"  
-        }},  
-        "altura_mayor_190": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿El usuario mide más de 1.90 metros? Responde 'sí' o 'no'",  
-          "title": "Altura Mayor 190"  
-        }},  
-        "peso_mayor_100": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿El usuario pesa más de 100 kg? Responde 'sí' o 'no'",  
-          "title": "Peso Mayor 100"  
-        }},  
-        "transporta_carga_voluminosa": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'",  
-          "title": "Transporta Carga Voluminosa"  
-        }},  
-        "necesita_espacio_objetos_especiales": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'",  
-          "title": "Necesita Espacio Objetos Especiales"  
-        }},  
-        "arrastra_remolque": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Va a arrastrar remolque pesado o caravana? Responde 'sí' o 'no'",  
-          "title": "Arrastra Remolque"  
-        }},  
-        "tiene_garage": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Tiene garaje o plaza de aparcamiento propia? Responde 'sí' o 'no'",  
-          "title": "Tiene Garage"  
-        }},  
-        "problemas_aparcar_calle": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si no tiene garaje, ¿suele tener problemas para aparcar en la calle? Responde 'sí' o 'no'",  
-          "title": "Problemas Aparcar Calle"  
-        }},  
-        "espacio_sobra_garage": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si tiene garaje, ¿tiene espacio de sobra? Responde 'sí' o 'no'",  
-          "title": "Espacio Sobra Garage"  
-        }},  
-        "problema_dimension_garage": {{  
-          "anyOf": [  
-            {{  
-              "items": {{ "$ref": "#/$defs/DimensionProblematica" }},  
-              "type": "array"  
-            }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Si no tiene espacio de sobra en garaje, ¿cuál es la dimensión problemática principal (largo, ancho, alto)? Puede ser una lista.",  
-          "title": "Problema Dimension Garage"  
-        }},  
-        "tiene_punto_carga_propio": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿El usuario tiene un punto de carga para vehículo eléctrico en propiedad? Responde 'sí' o 'no'",  
-          "title": "Tiene Punto Carga Propio"  
-        }},  
-        "aventura": {{  
-          "anyOf": [  
-            {{ "$ref": "#/$defs/NivelAventura" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?"  
-        }},  
-        "estilo_conduccion": {{  
-          "anyOf": [  
-            {{ "$ref": "#/$defs/EstiloConduccion" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Estilo de conducción preferido: tranquilo, deportivo o mixto."  
-        }},  
-        "solo_electricos": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Quiere solo coches eléctricos? Responde 'sí' o 'no'",  
-          "title": "Solo Electricos"  
-        }},  
-        "prioriza_baja_depreciacion": {{  
-          "anyOf": [  
-            {{ "type": "string" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'",  
-          "title": "Prioriza Baja Depreciacion"  
-        }},  
-        "transmision_preferida": {{  
-          "anyOf": [  
-            {{ "$ref": "#/$defs/Transmision" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "¿Qué transmisión prefieres: automático, manual o ambos?"  
-        }},  
-        "rating_fiabilidad_durabilidad": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de Fiabilidad y Durabilidad (0-10).",  
-          "title": "Rating Fiabilidad Durabilidad"  
-        }},  
-        "rating_seguridad": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de la Seguridad (0-10).",  
-          "title": "Rating Seguridad"  
-        }},  
-        "rating_comodidad": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de la Comodidad (0-10).",  
-          "title": "Rating Comodidad"  
-        }},  
-        "rating_impacto_ambiental": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia del Bajo Impacto Medioambiental (0-10).",  
-          "title": "Rating Impacto Ambiental"  
-        }},  
-        "rating_tecnologia_conectividad": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de la Tecnología y Conectividad (0-10).",  
-          "title": "Rating Tecnologia Conectividad"  
-        }},  
-        "rating_costes_uso": {{  
-          "anyOf": [  
-            {{ "maximum": 10, "minimum": 0, "type": "integer" }},  
-            {{ "type": "null" }}  
-          ],  
-          "default": null,  
-          "description": "Importancia de Costes de Uso y Mantenimiento Reducidos (0-10).",  
-          "title": "Rating Costes Uso"  
-        }}  
-      }},  
-      "title": "PerfilUsuario",  
-      "type": "object"  
-    }},  
-    "TipoUsoProfesional": {{  
-      "enum": [  
-        "pasajeros",  
-        "carga",  
-        "mixto"  
-      ],  
-      "title": "TipoUsoProfesional",  
-      "type": "string"  
-    }},  
-    "Transmision": {{  
-      "enum": [  
-        "automático",  
-        "manual",  
-        "ambos"  
-      ],  
-      "title": "Transmision",  
-      "type": "string"  
-    }}  
-  }},  
-  "description": "Salida esperada del LLM enfocado solo en el perfil del usuario.",  
-  "properties": {{  
-    "preferencias_usuario": {{  
-      "$ref": "#/$defs/PerfilUsuario",  
-      "description": "Objeto con las preferencias del usuario actualizadas o inferidas."  
-    }},  
-    "tipo_mensaje": {{  
-      "description": "Clasificación del mensaje: 'PREGUNTA' si se necesita más info de perfil, 'CONFIRMACION' si el perfil parece completo o se confirma un dato, 'ERROR' si hubo un problema irresoluble.",  
-      "enum": [  
-        "PREGUNTA",  
-        "CONFIRMACION",  
-        "ERROR"  
-      ],  
-      "title": "Tipo Mensaje",  
-      "type": "string"  
-    }},  
-    "contenido_mensaje": {{  
-      "description": "El texto real del mensaje: la pregunta específica, la confirmación, o el detalle del error.",  
-      "title": "Contenido Mensaje",  
-      "type": "string"  
-    }}  
-  }},  
-  "required": [  
-    "preferencias_usuario",  
-    "tipo_mensaje",  
-    "contenido_mensaje"  
-  ],  
-  "title": "ResultadoSoloPerfil",  
-  "type": "object"  
-}}  
+<Esquema_JSON_Requerido>
+{{
+  "$defs": {{
+    "FiltrosInferidos": {{
+      "properties": {{
+        "tipo_mecanica": {{
+          "anyOf": [
+            {{
+              "items": {{
+                "$ref": "#/$defs/TipoMecanica"
+              }},
+              "type": "array"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Lista de motorizaciones recomendadas",
+          "title": "Tipo Mecanica"
+        }},
+        "tipo_carroceria": {{
+          "anyOf": [
+            {{
+              "items": {{
+                "type": "string"
+              }},
+              "type": "array"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Lista de tipos de carrocer\u00eda recomendados por RAG (ej: ['SUV', 'COUPE'])",
+          "title": "Tipo Carroceria"
+        }},
+        "modo_adquisicion_recomendado": {{
+          "anyOf": [
+            {{
+              "enum": [
+                "Contado",
+                "Financiado"
+              ],
+              "type": "string"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Modo de compra recomendado (Contado/Financiado) basado en an\u00e1lisis Modo 1.",
+          "title": "Modo Adquisicion Recomendado"
+        }},
+        "precio_max_contado_recomendado": {{
+          "anyOf": [
+            {{
+              "type": "number"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Precio m\u00e1ximo recomendado si se aconseja comprar al contado (Modo 1).",
+          "title": "Precio Max Contado Recomendado"
+        }},
+        "cuota_max_calculada": {{
+          "anyOf": [
+            {{
+              "type": "number"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "Cuota mensual m\u00e1xima calculada si se aconseja financiar (Modo 1).",
+          "title": "Cuota Max Calculada"
+        }},
+        "plazas_min": {{
+          "anyOf": [
+            {{
+              "type": "integer"
+            }},
+            {{
+              "type": "null"
+            }}
+          ],
+          "default": null,
+          "description": "N\u00famero m\u00ednimo de plazas recomendadas (conductor + pasajeros).",
+          "title": "Plazas Min"
+        }}
+      }},
+      "title": "FiltrosInferidos",
+      "type": "object"
+    }},
+    "TipoMecanica": {{
+      "enum": [
+        "GASOLINA",
+        "DIESEL",
+        "BEV",
+        "FCEV",
+        "GLP",
+        "GNV",
+        "HEVD",
+        "HEVG",
+        "MHEVD",
+        "MHEVG",
+        "PHEVD",
+        "PHEVG",
+        "REEV"
+      ],
+      "title": "TipoMecanica",
+      "type": "string"
+    }}
+  }},
+  "description": "Salida esperada del LLM enfocado solo en inferir filtros t\u00e9cnicos.",
+  "properties": {{
+    "filtros_inferidos": {{
+      "$ref": "#/$defs/FiltrosInferidos"
+    }},
+    "mensaje_validacion": {{
+      "description": "Pregunta de seguimiento CLARA y CORTA si falta informaci\u00f3n ESENCIAL para completar los FiltrosInferidos (ej: tipo_mecanica), o un mensaje de confirmaci\u00f3n si los filtros est\u00e1n completos.",
+      "title": "Mensaje Validacion",
+      "type": "string"
+    }}
+  }},
+  "required": [
+    "filtros_inferidos",
+    "mensaje_validacion"
+  ],
+  "title": "ResultadoSoloFiltros",
+  "type": "object"
+}}
 </Esquema_JSON_Requerido>
 <Instrucciones_Detalladas_Inferencia>
 Analiza el {contexto_preferencias} proporcionado, que incluye <preferencias_usuario> y posiblemente <info_clima>.
@@ -339,41 +146,17 @@ Infiere los valores para los campos DENTRO de filtros_inferidos en el JSON de sa
 
 1. Campos a Inferir por Ti:
 
-* estetica_min:
-
-- Si preferencias_usuario.valora_estetica es 'sí', asigna un valor numérico entre 5.0 y 7.0.
-- Si es 'no' o null, asigna 1.0.
-
 * tipo_mecanica: ¡CAMPO CRÍTICO! Este campo DEBE contener una lista de strings (valores del enum TipoMecanica) con al menos un valor si es posible inferirlo.
-
 - Si preferencias_usuario.solo_electricos es 'sí', la lista DEBE ser ["BEV", "REEV"]. (Puedes añadir "FCEV" si lo consideras apropiado para "solo eléctricos").
-- Si preferencias_usuario.solo_electricos es 'no':
+
 
 Considera otras preferencias como aventura, uso_profesional, y los ratings de impacto_ambiental o costes_uso.
-
 - Si info_clima.ZONA_GLP es true (y no es solo eléctricos), considera añadir "GLP".
-
 - Si info_clima.ZONA_GNV es true (y no es solo eléctricos), considera añadir "GNV".
-
 - Si info_clima.MUNICIPIO_ZBE es true, prioriza mecánicas con etiquetas ECO o CERO (BEV, REEV, FCEV, PHEVG, PHEVD, HEVG, HEVD, GLP, GNV).
-
 - Proporciona una lista sensata. Ejemplo para uso urbano y solo_electricos: 'no': ["GASOLINA", "HEVG", "PHEVG", "BEV"]. Evita DIESEL para uso predominantemente urbano si no hay otra indicación fuerte.
 
 Si preferencias_usuario.solo_electricos es null o no se proporciona información clara para determinar el tipo de mecánica, DEBES dejar tipo_mecanica como null y usar mensaje_validacion para preguntar al respecto.
-
-* premium_min:
-
-Si preferencias_usuario.apasionado_motor es 'sí', asigna un valor entre 4.0 y 6.0.
-
-Si es 'no' o null, asigna 1.0.
-
-* singular_min:
-
-Si preferencias_usuario.apasionado_motor es 'sí' Y preferencias_usuario.prefiere_diseno_exclusivo es 'sí', asigna un valor entre 5.0 y 7.0.
-
-Si solo una de esas dos preferencias es 'sí', asigna un valor entre 3.0 y 4.0.
-
-Si ambas son 'no' o null, asigna 1.0.
 
 2. Campos que NO Debes Inferir (DEJAR SIEMPRE COMO null):
 
@@ -420,10 +203,7 @@ Salida JSON Esperada:
 
 {{
   "filtros_inferidos": {{
-    "estetica_min": 1.0,
     "tipo_mecanica": ["BEV", "REEV"],
-    "premium_min": 5.0, // Ejemplo, podría ser entre 4-6
-    "singular_min": 6.0, // Ejemplo, podría ser entre 5-7
     "tipo_carroceria": null, "plazas_min": null, "modo_adquisicion_recomendado": null, 
     "precio_max_contado_recomendado": null, "cuota_max_calculada": null
   }},
@@ -446,10 +226,7 @@ Salida JSON Esperada:
 
 {{
   "filtros_inferidos": {{
-    "estetica_min": 5.0,
     "tipo_mecanica": null, 
-    "premium_min": 1.0,
-    "singular_min": 1.0,
     "tipo_carroceria": null, "plazas_min": null, "modo_adquisicion_recomendado": null, 
     "precio_max_contado_recomendado": null, "cuota_max_calculada": null
   }},

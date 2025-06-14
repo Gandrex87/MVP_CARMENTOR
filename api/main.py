@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 load_dotenv() 
 
 # --- Configuración de Logging ---
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG) #INFO PARA CUANDO PASE A PRODUCCION
 logger = logging.getLogger(__name__) # Logger para este módulo
 
 # --- Importaciones del Agente LangGraph ---

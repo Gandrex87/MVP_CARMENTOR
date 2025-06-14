@@ -1,8 +1,10 @@
 # En utils/validation.py (o donde prefieras)
 from typing import Optional
 from pydantic import ValidationError
-from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario, InfoPasajeros
+from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario, InfoPasajeros,DistanciaTrayecto
 from utils.conversion import is_yes
+import logging
+logger = logging.getLogger(__name__)
 
 # --- Función de Validación de Perfil (Definida anteriormente) ---
 def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
@@ -12,7 +14,7 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     if prefs is None:
         return False
     campos_obligatorios = [
-        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100",
+        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "frecuencia_uso", "distancia_trayecto", "circula_principalmente_ciudad" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100",
         "transporta_carga_voluminosa", "arrastra_remolque","aventura", "estilo_conduccion", "tiene_garage", "tiene_punto_carga_propio", "solo_electricos",  "prioriza_baja_depreciacion","transmision_preferida","rating_fiabilidad_durabilidad", 
         "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_tecnologia_conectividad", "rating_costes_uso"
     ] # por ahora no va 
@@ -22,6 +24,17 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         if valor is None or (isinstance(valor, str) and not valor.strip()):
              print(f"DEBUG (Validation Perfil) ► Campo '{campo}' está vacío/None.")
              return False
+    # 0. distancia_trayecto    
+    if prefs.distancia_trayecto is not None and prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value:
+        # Si el trayecto es corto/medio, la pregunta sobre viajes largos es obligatoria
+        if prefs.realiza_viajes_largos is None:
+            print("DEBUG (Validation Perfil) ► 'distancia_trayecto' es corta/media, pero 'realiza_viajes_largos' es None. Perfil INCOMPLETO.")
+            return False
+        
+        # Si la respuesta es 'sí', la frecuencia es obligatoria
+        if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
+            print("DEBUG (Validation Perfil) ► 'realiza_viajes_largos' es 'sí', pero 'frecuencia_viajes_largos' es None. Perfil INCOMPLETO.")
+            return False  
     # 1. tipo_uso_profesional
     if is_yes(prefs.uso_profesional): 
         if prefs.tipo_uso_profesional is None: # El tipo es Enum, Pydantic maneja valores inválidos
@@ -159,47 +172,64 @@ def check_economia_completa(econ: Optional[EconomiaUsuario]) -> bool:
     return False 
 
 
-# --- Función de Validación de Pasajeros ---
 def check_pasajeros_completo(info: Optional[InfoPasajeros]) -> bool:
     """
-    Verifica si la información sobre pasajeros está completa.
-    - Si frecuencia es 'nunca', se considera completo.
-    - Si frecuencia es 'ocasional' o 'frecuente', requiere tener valores 
-      (incluso 0) para num_ninos_silla y num_otros_pasajeros.
-    - Si falta frecuencia, no está completo.
+    Verifica si la información de pasajeros está completa según el nuevo flujo.
     """
-    print("--- DEBUG CHECK PASAJEROS ---")
-    print(f"Input info pasajeros: {info}")
-    
+    # logger.debug("--- DEBUG CHECK PASAJEROS ---")
     if info is None:
-        print("DEBUG (Validation Pasajeros) ► Objeto InfoPasajeros es None.")
-        return False # No hay objeto, no está completo
-
-    frecuencia = info.frecuencia
-    num_ninos_silla = info.num_ninos_silla
-    num_otros_pasajeros = info.num_otros_pasajeros
-
-    if frecuencia is None:
-        print("DEBUG (Validation Pasajeros) ► info.frecuencia es None.")
-        return False # Si no sabemos la frecuencia, no está completo
-
-    if frecuencia == "nunca":
-        # Si nunca lleva pasajeros, no necesitamos saber cuántos niños/otros.
-        print("DEBUG (Validation Pasajeros) ► Frecuencia es 'nunca'. Considerado COMPLETO.")
-        return True 
-    elif frecuencia in ["ocasional", "frecuente"]:
-        # Si lleva pasajeros ocasional o frecuentemente, necesitamos saber cuántos.
-        # Comprobamos que ambos campos numéricos NO sean None.
-        if num_ninos_silla is not None and num_otros_pasajeros is not None:
-            print(f"DEBUG (Validation Pasajeros) ► Frecuencia='{frecuencia}'. Niños silla y otros pasajeros tienen valor. Considerado COMPLETO.")
-            return True
-        else:
-            missing = []
-            if num_ninos_silla is None: missing.append("num_ninos_silla")
-            if num_otros_pasajeros is None: missing.append("num_otros_pasajeros")
-            print(f"DEBUG (Validation Pasajeros) ► Frecuencia='{frecuencia}'. Faltan datos: {', '.join(missing)}. Considerado INCOMPLETO.")
-            return False
-    else:
-        # Caso inesperado para frecuencia (no debería ocurrir con Literal)
-        print(f"WARN (Validation Pasajeros) ► Valor de frecuencia inesperado: '{frecuencia}'. Considerado INCOMPLETO.")
+        logger.debug("DEBUG (Validation Pasajeros) ► Objeto InfoPasajeros es None. INCOMPLETO.")
         return False
+
+    # Imprimir el objeto para depurar
+    # if hasattr(info, "model_dump_json"):
+    #     logger.debug(f"Input info pasajeros: {info.model_dump_json(indent=2)}")
+    # else:
+    #     logger.debug(f"Input info pasajeros: {info}")
+
+    # 1. Verificar el campo principal: suele_llevar_acompanantes
+    if info.suele_llevar_acompanantes is None:
+        logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es None. INCOMPLETO.")
+        return False
+
+    # 2. Si no suele llevar acompañantes, se considera completo en esta etapa
+    if info.suele_llevar_acompanantes is False:
+        # En este caso, el nodo recopilar_info_pasajeros_node debería haber inferido:
+        # info.frecuencia = "nunca"
+        # info.num_ninos_silla = 0
+        # info.num_otros_pasajeros = 0
+        # Y el LLM debería haber devuelto tipo_mensaje="CONFIRMACION"
+        logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es False. Considerado COMPLETO para el flujo de preguntas.")
+        return True
+
+    # 3. Si SÍ suele llevar acompañantes, los siguientes campos son necesarios:
+    if info.suele_llevar_acompanantes is True:
+        if info.frecuencia_viaje_con_acompanantes is None:
+            logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es True, pero 'frecuencia_viaje_con_acompanantes' es None. INCOMPLETO.")
+            return False
+        
+        # composicion_pasajeros_texto es un campo de ayuda para el LLM, no estrictamente
+        # necesario para la completitud si los campos numéricos están llenos.
+        # Pero si está vacío y los números también, es incompleto.
+
+        if info.num_ninos_silla is None:
+            logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es True, pero 'num_ninos_silla' es None. INCOMPLETO.")
+            return False
+        
+        if info.num_otros_pasajeros is None:
+            logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es True, pero 'num_otros_pasajeros' es None. INCOMPLETO.")
+            return False
+            
+        # Adicionalmente, el campo 'frecuencia' (el general) debería tener un valor
+        # si 'frecuencia_viaje_con_acompanantes' lo tiene.
+        if info.frecuencia is None and info.frecuencia_viaje_con_acompanantes is not None:
+             logger.debug("DEBUG (Validation Pasajeros) ► 'frecuencia_viaje_con_acompanantes' tiene valor, pero 'frecuencia' general es None. Considerado INCOMPLETO para la lógica final (aunque el LLM debería inferirlo).")
+             # Esto podría ser un punto donde el LLM no infirió 'frecuencia' correctamente.
+             # Sin embargo, para el flujo de *preguntas*, si los campos anteriores están, se podría considerar completo
+             # y dejar que el nodo de recopilación infiera 'frecuencia'.
+             # Por ahora, lo marcamos como incompleto si 'frecuencia' falta.
+             return False
+
+
+    logger.debug("DEBUG (Validation Pasajeros) ► Todos los campos necesarios de InfoPasajeros están presentes según el flujo. COMPLETO.")
+    return True

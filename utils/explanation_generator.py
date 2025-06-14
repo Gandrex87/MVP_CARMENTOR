@@ -8,74 +8,19 @@ from graph.perfil.state import EstadoAnalisisPerfil, PerfilUsuario
 from utils.conversion import is_yes
 # Modelos LLM y prompts
 from config.llm import llm_explicacion_coche 
-from prompts.loader import system_prompt_explicacion_coche
+from prompts.loader import system_prompt_explicacion_coche_mejorado
 from langchain_core.messages import SystemMessage, HumanMessage
-
-try:
-    from config.settings import (
-        UMBRAL_LOW_COST_PENALIZABLE_SCALED,
-        UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED
-    )
-except ImportError:
-    logging.warning("WARN (ExplanationGenerator) ► Constantes de umbral no encontradas en config.settings. Usando valores default.")
-    UMBRAL_LOW_COST_PENALIZABLE_SCALED = 0.6 # Valor por defecto
-    UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED = 0.6 # Valor por defecto
+from pydantic import BaseModel, Field
 
 
 # Mapeo de claves de peso a información para la explicación
 # Esta es una versión simplificada, necesitarás el mapa completo que ya tienes
 # en _generar_explicacion_simple_coche o uno similar.
-# ¡DEBES COMPLETAR Y REFINAR ESTE MAPA!
 MAPA_PESOS_A_INFO_EXPLICACION = {
-    "estetica": {
-        "nombre_amigable_caracteristica":    "un buen diseño",
-        "pref_usuario_campo":                 "valora_estetica",
-        "pref_usuario_texto_si":              "valoras la estética"
-    },
-    "premium": {
-        "nombre_amigable_caracteristica":    "un carácter premium",
-        "pref_usuario_campo":                 "apasionado_motor",
-        "pref_usuario_texto_si":              "eres un apasionado del motor"
-    },
-    "singular": {
-        "nombre_amigable_caracteristica":    "un toque de singularidad",
-        "pref_usuario_campo":                 "prefiere_diseno_exclusivo",
-        "pref_usuario_texto_si":              "prefieres un diseño exclusivo"
-    },
-    "altura_libre_suelo": {
-        "nombre_amigable_caracteristica":    "buena altura libre al suelo",
-        "pref_usuario_campo":                 "aventura",
-        "pref_usuario_texto_si":              "buscas aventura"
-    },
-    "traccion": {
-        "nombre_amigable_caracteristica":    "un sistema de tracción eficaz",
-        "pref_usuario_campo":                 "aventura",
-        "pref_usuario_texto_si":              "buscas aventura"
-    },
-    "reductoras": {
-        "nombre_amigable_caracteristica":    "capacidades off-road (reducción)",
-        "pref_usuario_campo":                 "aventura",
-        "pref_usuario_texto_si":              "buscas aventura extrema"
-    },
     "batalla": {
         "nombre_amigable_caracteristica":    "una buena batalla (espacio interior)",
         "pref_usuario_campo":                 "altura_mayor_190",
         "pref_usuario_texto_si":              "eres una persona alta"
-    },
-    "indice_altura_interior": {
-        "nombre_amigable_caracteristica":    "un buen índice de altura interior",
-        "pref_usuario_campo":                 "altura_mayor_190",
-        "pref_usuario_texto_si":              "eres una persona alta"
-    },
-    "rating_fiabilidad_durabilidad": {
-        "nombre_amigable_caracteristica":    "alta fiabilidad y durabilidad",
-        "pref_usuario_campo":                 "rating_fiabilidad_durabilidad",
-        "pref_usuario_texto_si":              "la fiabilidad y durabilidad son muy importantes para ti"
-    },
-    "rating_seguridad": {
-        "nombre_amigable_caracteristica":    "un alto nivel de seguridad",
-        "pref_usuario_campo":                 "rating_seguridad",
-        "pref_usuario_texto_si":              "la seguridad es clave para ti"
     },
     "rating_comodidad": {
         "nombre_amigable_caracteristica":    "un gran confort",
@@ -182,11 +127,6 @@ MAPA_PESOS_A_INFO_EXPLICACION = {
         "pref_usuario_campo":                 "problema_dimension_garage",
         "pref_usuario_texto_si":              "la altura es un problema en tu garaje"
     },
-    "deportividad_style_score": {
-        "nombre_amigable_caracteristica":    "un carácter deportivo",
-        "pref_usuario_campo":                 "estilo_conduccion",
-        "pref_usuario_texto_si":              "prefieres un estilo de conducción deportivo"
-    },
     "fav_menor_rel_peso_potencia_score": {
         "nombre_amigable_caracteristica":    "una buena relación peso/potencia",
         "pref_usuario_campo":                 "estilo_conduccion",
@@ -209,32 +149,6 @@ MAPA_PESOS_A_INFO_EXPLICACION = {
     },
     # Si en el futuro agregas más keys en pesos_normalizados, añádelas aquí con la misma estructura.
 }
-
-# Mapeo de flags de penalización a descripciones amigables
-# MAPA_FLAGS_PENALIZACION_A_TEXTO = {
-#     "flag_penalizar_low_cost_comodidad": (
-#         "sus acabados son más sencillos de lo que idealmente buscas por tu alta preferencia de comodidad,"
-#     ),
-#     "flag_penalizar_antiguo_por_tecnologia": (
-#         "su tecnología no es la más reciente, lo cual es una consideración si valoras mucho este aspecto,"
-#     ),
-#     "flag_penalizar_deportividad_comodidad": (
-#         "su enfoque es más deportivo de lo que encajaría con tu máxima prioridad de confort"
-#     ),
-#     "es_municipio_zbe_con_distintivo_malo": (
-#         "su etiqueta ambiental podría tener restricciones en ZBE"
-#     )
-#     # Añade aquí tantos flags como definas en tu consulta de BQ o en la lógica.
-#     # Por ejemplo:
-#     # "alto_impacto_ambiental": "su impacto ambiental es elevado, ..."
-#     # "precio_sobre_presupuesto": "se excede del presupuesto que nos indicaste", etc.
-# }
-
-
-
-# Umbrales que usamos en BQ (para referencia aquí, idealmente importados de config.settings)
-# UMBRAL_LOW_COST_PENALIZABLE_SCALED = 0.7
-# UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED = 0.7
 
 MAPA_AJUSTES_SCORE_A_TEXTO = {
     # Penalizaciones activadas por flags de COMODIDAD
@@ -270,89 +184,244 @@ MAPA_AJUSTES_SCORE_A_TEXTO = {
         "aunque para el uso familiar con niños que necesitas, se ha tenido en cuenta el número de puertas"
 }
 
-def _calcular_contribuciones_y_factores_clave(
-    coche_dict: Dict[str, Any], 
+
+# =================================================================================
+# 1. ENUMS Y CLASES (Simulados para que el código sea ejecutable)
+# =================================================================================
+
+
+# Simulación de Enums y Clases que usarías en tu proyecto real
+class FrecuenciaUso(str): pass
+class DistanciaTrayecto(str): pass
+class FrecuenciaViajesLargos(str): pass
+class TipoUsoProfesional(str): pass
+class DimensionProblematica(str): pass
+class NivelAventura:
+    ninguna = "ninguna"
+    ocasional = "ocasional"
+    extrema = "extrema"
+class EstiloConduccion:
+    tranquilo = "tranquilo"
+    deportivo = "deportivo"
+    mixto = "mixto"
+class Transmision(str): pass
+
+class PerfilUsuario(BaseModel):
+    apasionado_motor: Optional[str] = None
+    valora_estetica: Optional[str] = None
+    prefiere_diseno_exclusivo: Optional[str] = None
+    aventura: Optional[str] = Field(default=NivelAventura.ninguna) # Usamos str para simplicidad aquí
+    altura_mayor_190: Optional[str] = None
+    rating_fiabilidad_durabilidad: Optional[int] = None
+    rating_seguridad: Optional[int] = None
+    rating_comodidad: Optional[int] = None
+    rating_impacto_ambiental: Optional[int] = None
+    rating_tecnologia_conectividad: Optional[int] = None
+    prioriza_baja_depreciacion: Optional[str] = None
+    transporta_carga_voluminosa: Optional[str] = None
+    necesita_espacio_objetos_especiales: Optional[str] = None
+    rating_costes_uso: Optional[int] = None
+    arrastra_remolque: Optional[str] = None
+    problemas_aparcar_calle: Optional[str] = None
+    espacio_sobra_garage: Optional[str] = None
+    problema_dimension_garage: Optional[List[str]] = None
+    estilo_conduccion: Optional[str] = Field(default=EstiloConduccion.mixto)
+    # Añade aquí cualquier otro campo de PerfilUsuario que necesites
+
+
+# =================================================================================
+# 2. MAPA REFACTORIZADO Y MEJORADO
+# =================================================================================
+
+UMBRAL_RATING_IMPORTANTE = 7
+
+# MEJORA CLAVE: Ahora el mapa contiene una función `condicion_preferencia`
+# que permite una lógica de validación mucho más específica y potente.
+MAPA_CARACTERISTICAS_A_INFO = {
+    "estetica": {
+        "nombre_amigable": "un diseño atractivo",
+        "campo_perfil": "valora_estetica",
+        "condicion_preferencia": lambda v: is_yes(v),
+        "texto_razon": "porque valoras la estética"
+    },
+    "premium": {
+        "nombre_amigable": "un carácter premium",
+        "campo_perfil": "apasionado_motor",
+        "condicion_preferencia": lambda v: is_yes(v),
+        "texto_razon": "para conectar con tu pasión por el motor"
+    },
+    "singular": {
+        "nombre_amigable": "un toque de singularidad",
+        "campo_perfil": "prefiere_diseno_exclusivo",
+        "condicion_preferencia": lambda v: is_yes(v),
+        "texto_razon": "porque prefieres un diseño que destaque"
+    },
+    "altura_libre_suelo": {
+        "nombre_amigable": "una excelente altura libre al suelo",
+        "campo_perfil": "aventura",
+        "condicion_preferencia": lambda v: v in [NivelAventura.ocasional, NivelAventura.extrema],
+        "texto_razon": "para tus escapadas de aventura"
+    },
+    "traccion": {
+        "nombre_amigable": "un sistema de tracción total eficaz",
+        "campo_perfil": "aventura",
+        "condicion_preferencia": lambda v: v in [NivelAventura.ocasional, NivelAventura.extrema],
+        "texto_razon": "para darte seguridad en cualquier terreno"
+    },
+    "reductoras": {
+        "nombre_amigable": "capacidades off-road superiores (reductoras)",
+        "campo_perfil": "aventura",
+        "condicion_preferencia": lambda v: v == NivelAventura.extrema,
+        "texto_razon": "para afrontar las rutas más extremas"
+    },
+    "indice_altura_interior": {
+        "nombre_amigable": "un interior espacioso y cómodo",
+        "campo_perfil": "altura_mayor_190",
+        "condicion_preferencia": lambda v: is_yes(v),
+        "texto_razon": "especialmente importante por tu altura"
+    },
+    "rating_fiabilidad_durabilidad": {
+        "nombre_amigable": "una fiabilidad y durabilidad demostradas",
+        "campo_perfil": "rating_fiabilidad_durabilidad",
+        "condicion_preferencia": lambda v: v is not None and v >= UMBRAL_RATING_IMPORTANTE,
+        "texto_razon": "porque la fiabilidad es una de tus máximas prioridades"
+    },
+    "rating_seguridad": {
+        "nombre_amigable": "un nivel de seguridad sobresaliente",
+        "campo_perfil": "rating_seguridad",
+        "condicion_preferencia": lambda v: v is not None and v >= UMBRAL_RATING_IMPORTANTE,
+        "texto_razon": "porque la seguridad es clave para ti y los tuyos"
+    },
+    "deportividad_style_score": {
+        "nombre_amigable": "un comportamiento ágil y deportivo",
+        "campo_perfil": "estilo_conduccion",
+        "condicion_preferencia": lambda v: v == EstiloConduccion.deportivo,
+        "texto_razon": "para que disfrutes de una conducción más dinámica"
+    },
+    # --- Añadir aquí el resto de tus características siguiendo esta estructura ---
+}
+
+
+# =================================================================================
+# 3. FUNCIONES REFACTORIZADAS
+# =================================================================================
+
+UMBRAL_PESO_MINIMO = 0.005
+UMBRAL_FEATURE_DESTACADA = 0.4
+
+def _get_clave_feature_scaled(clave_peso: str) -> str:
+    """Convierte una clave de peso a su correspondiente clave de feature escalada. (Sin cambios)"""
+    # ... (la función que ya tenías)
+    if clave_peso.startswith("rating_"): return clave_peso.replace("rating_", "") + "_scaled"
+    if clave_peso.startswith("fav_menor_"): return clave_peso.replace("fav_menor_", "menor_") + "_scaled"
+    if clave_peso.startswith("fav_bajo_"): return clave_peso.replace("fav_", "") + "_scaled"
+    if clave_peso == "deportividad_style_score": return "deportividad_style_scaled"
+    if clave_peso == "potencia_maxima_style_score": return "potencia_maxima_style_scaled"
+    if clave_peso == "par_motor_style_score": return "par_scaled"
+    if clave_peso == "ancho_general_score": return "ancho_scaled"
+    if clave_peso.endswith("_score"): return clave_peso.replace("_score", "") + "_scaled"
+    return clave_peso + "_scaled"
+
+
+def _calcular_contribuciones_y_factores_clave_refactorizada(
+    coche_dict: Dict[str, Any],
     pesos_normalizados: Dict[str, float],
     preferencias_usuario: PerfilUsuario,
     n_top_positivos: int = 2
-) -> Dict[str, Any]:
+) -> List[Dict[str, Any]]:
     """
-    Calcula la contribución de cada factor al score y selecciona los más relevantes.
+    Calcula los puntos fuertes de un coche para un usuario, usando el nuevo mapa.
     """
     contribuciones_positivas = []
-    
+
     for clave_peso, peso_norm in pesos_normalizados.items():
-        if not (0.005 < peso_norm < 1.0): # Ignorar pesos muy pequeños o el peso total si es 1.0
+        if not (UMBRAL_PESO_MINIMO < peso_norm < 1.0):
             continue
 
-        # Construir el nombre de la columna _scaled correspondiente
-        clave_feature_scaled = ""
-        if clave_peso.startswith("rating_"): clave_feature_scaled = clave_peso.replace("rating_", "") + "_scaled"
-        elif clave_peso.endswith("_score"): clave_feature_scaled = clave_peso.replace("_score", "") + "_scaled"
-        elif clave_peso.startswith("fav_menor_"): clave_feature_scaled = clave_peso.replace("fav_menor_", "menor_") + "_scaled"
-        elif clave_peso.startswith("fav_bajo_"): clave_feature_scaled = clave_peso.replace("fav_", "") + "_scaled"
-        elif clave_peso == "deportividad_style_score": clave_feature_scaled = "deportividad_style_scaled"
-        elif clave_peso == "potencia_maxima_style_score": clave_feature_scaled = "potencia_maxima_style_scaled"
-        elif clave_peso == "par_motor_style_score": clave_feature_scaled = "par_scaled" 
-        elif clave_peso == "ancho_general_score": clave_feature_scaled = "ancho_scaled"
-        else: clave_feature_scaled = clave_peso + "_scaled"
-            
+        # 1. Comprobar si la característica existe en nuestro nuevo mapa y en el coche
+        if clave_peso not in MAPA_CARACTERISTICAS_A_INFO:
+            continue
+
+        info_mapa = MAPA_CARACTERISTICAS_A_INFO[clave_peso]
+        clave_feature_scaled = _get_clave_feature_scaled(clave_peso)
         valor_escalado_coche = coche_dict.get(clave_feature_scaled)
 
-        if valor_escalado_coche is not None and valor_escalado_coche > 0.4: # Característica destacada en el coche
-            contribucion_al_score = valor_escalado_coche * peso_norm
-            
-            if clave_peso in MAPA_PESOS_A_INFO_EXPLICACION:
-                info_mapa = MAPA_PESOS_A_INFO_EXPLICACION[clave_peso]
-                pref_valor_usuario = getattr(preferencias_usuario, info_mapa["pref_usuario_campo"], None)
-                
-                condicion_pref_cumplida = False
-                pref_texto_final = info_mapa["pref_usuario_texto_si"]
+        if valor_escalado_coche is None or valor_escalado_coche <= UMBRAL_FEATURE_DESTACADA:
+            continue
 
-                if isinstance(pref_valor_usuario, (int, float)): 
-                    if pref_valor_usuario >= 7: # Umbral para considerar el rating del usuario como "importante"
-                        condicion_pref_cumplida = True
-                        pref_texto_final = pref_texto_final.replace("{valor}", str(pref_valor_usuario))
-                elif isinstance(pref_valor_usuario, bool): 
-                    condicion_pref_cumplida = pref_valor_usuario is True
-                elif isinstance(pref_valor_usuario, str) and is_yes(pref_valor_usuario): 
-                    condicion_pref_cumplida = True
-                elif isinstance(pref_valor_usuario, list) and pref_valor_usuario: 
-                    condicion_pref_cumplida = True 
-                    # Para listas, el pref_texto_si podría necesitar formateo especial
-                    # Por ej: "el {dimensión} es un problema en tu garaje" donde dimensión es el item de la lista.
-                    # Esto requeriría más lógica aquí o en el mapa.
-                elif pref_valor_usuario is not None and not isinstance(pref_valor_usuario, (int, float, bool, str, list)): # Enum
-                    condicion_pref_cumplida = True 
-                    if hasattr(pref_valor_usuario, 'value'):
-                         pref_texto_final = pref_texto_final.replace("{valor}", str(pref_valor_usuario.value))
+        # 2. Usar la función lambda del mapa para validar la preferencia del usuario
+        valor_pref_usuario = getattr(preferencias_usuario, info_mapa["campo_perfil"], None)
+        
+        if not info_mapa["condicion_preferencia"](valor_pref_usuario):
+            continue
 
+        # 3. Si todo coincide, se añade la contribución
+        contribucion_al_score = valor_escalado_coche * peso_norm
+        contribuciones_positivas.append({
+            "caracteristica_coche": info_mapa["nombre_amigable"],
+            "razon_usuario": info_mapa["texto_razon"],
+            "contrib_score_abs": contribucion_al_score
+        })
 
-                if condicion_pref_cumplida:
-                    contribuciones_positivas.append({
-                        "caracteristica_coche": info_mapa["nombre_amigable_caracteristica"],
-                        "razon_usuario": pref_texto_final,
-                        "contrib_score_abs": contribucion_al_score # Para ordenar
-                    })
-    
     contribuciones_positivas.sort(key=lambda x: x["contrib_score_abs"], reverse=True)
-    
-    # Identificar penalizaciones relevantes (simplificado)
-    # Los flags ya vienen en coche_dict si los seleccionaste en BQ, o los puedes tomar del estado.
-    # Por ahora, asumimos que los flags relevantes se pasan a través de `filtros` en la llamada principal.
-    # Esta función se llama desde buscar_coches_finales_node que tiene acceso a los flags.
-    # Mejor pasar los flags relevantes a esta función de explicación.
-    
-    return {
-        "puntos_fuertes": contribuciones_positivas[:n_top_positivos],
-        "penalizaciones": [] # Placeholder, lo llenaremos en el siguiente paso
-    }
-    
-    
+    return contribuciones_positivas[:n_top_positivos]
 
-def generar_explicacion_coche_con_llm(
-    coche_dict_completo: Dict[str, Any], 
-    preferencias_usuario: PerfilUsuario, # Recibe el objeto Pydantic
+
+def _extraer_prioridades_clave(perfil: PerfilUsuario, limite: int = 2) -> List[str]:
+    """
+    Inspecciona el perfil del usuario y extrae una lista legible de sus prioridades más importantes.
+    """
+    prioridades_detectadas = []
+    mapa_prioridades = {
+        "rating_seguridad": "la alta seguridad",
+        "rating_fiabilidad_durabilidad": "la máxima fiabilidad",
+        "rating_comodidad": "el confort en viaje",
+        "rating_tecnologia_conectividad": "la tecnología y conectividad",
+        "rating_costes_uso": "un bajo coste de uso y mantenimiento",
+        "rating_impacto_ambiental": "el respeto por el medioambiente",
+        "aventura": {
+            NivelAventura.extrema: "la aventura más extrema",
+            NivelAventura.ocasional: "las escapadas de aventura"
+        },
+        "estilo_conduccion": {
+            EstiloConduccion.deportivo: "la conducción deportiva"
+        },
+        "apasionado_motor": "la pasión por el motor",
+        "prefiere_diseno_exclusivo": "un diseño exclusivo"
+    }
+
+    # Procesar ratings primero por ser los más explícitos
+    ratings = sorted(
+        [(k, getattr(perfil, k)) for k in mapa_prioridades if k.startswith("rating_") and getattr(perfil, k) is not None],
+        key=lambda item: item[1],
+        reverse=True
+    )
+    for campo, valor in ratings:
+        if len(prioridades_detectadas) < limite and valor >= 8:
+            prioridades_detectadas.append(mapa_prioridades[campo])
+    
+    # Si no hemos llenado con ratings, buscar en otras preferencias clave
+    campos_adicionales = ["aventura", "estilo_conduccion", "apasionado_motor", "prefiere_diseno_exclusivo"]
+    for campo in campos_adicionales:
+        if len(prioridades_detectadas) >= limite: break
+        valor_perfil = getattr(perfil, campo, None)
+        if not valor_perfil: continue
+
+        if isinstance(mapa_prioridades[campo], dict): # Para enums como Aventura
+            if valor_perfil in mapa_prioridades[campo]:
+                prioridades_detectadas.append(mapa_prioridades[campo][valor_perfil])
+        elif is_yes(valor_perfil): # Para sí/no
+            prioridades_detectadas.append(mapa_prioridades[campo])
+
+    return prioridades_detectadas[:limite]
+
+
+UMBRAL_LOW_COST_PENALIZABLE_SCALED = 0.6
+UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED = 0.6
+
+def generar_explicacion_coche_mejorada(
+    coche_dict_completo: Dict[str, Any],
+    preferencias_usuario: PerfilUsuario,
     pesos_normalizados: Dict[str, float],
     flag_penalizar_lc_comod: bool,
     flag_penalizar_dep_comod: bool,
@@ -362,114 +431,94 @@ def generar_explicacion_coche_con_llm(
     flag_penalizar_puertas: bool,
 ) -> str:
     """
-    Genera una explicación de por qué un coche es recomendado, usando un LLM.
+    Función orquestadora final que usa los componentes refactorizados.
     """
-    logging.info(f"INFO (Explicacion LLM) ► Generando explicación para coche: {coche_dict_completo.get('nombre')}")
+    nombre_coche = coche_dict_completo.get("nombre", "Este vehículo")
 
-    factores_clave_dict = _calcular_contribuciones_y_factores_clave(
-        coche_dict_completo, pesos_normalizados, preferencias_usuario, n_top_positivos=3
+    # 1. Extraer prioridades clave directamente del perfil del usuario.
+    prioridades_list = _extraer_prioridades_clave(preferencias_usuario, limite=2)
+    prioridades_str = " y ".join(prioridades_list)
+
+    # 2. Calcular los puntos fuertes usando la lógica refactorizada.
+    puntos_fuertes_list = _calcular_contribuciones_y_factores_clave_refactorizada(
+        coche_dict_completo, pesos_normalizados, preferencias_usuario, n_top_positivos=2
     )
 
-    #puntos_fuertes_para_prompt_list = []
-    # --- CONSTRUIR LISTA DE PENALIZACIONES/BONUS RELEVANTES APLICADOS ---
-    ajustes_score_textos = []
+    # 3. Formatear los puntos fuertes para el prompt.
+    puntos_fuertes_formateados = []
+    for punto in puntos_fuertes_list:
+        # Ejemplo de formato para el prompt: "Su [característica] es ideal [razón]"
+        puntos_fuertes_formateados.append(f"Su **{punto['caracteristica_coche']}** es ideal {punto['razon_usuario']}.")
+
+    # 4. CONSTRUIR LAS CONSIDERACIONES ADICIONALES (LÓGICA DE FLAGS IMPLEMENTADA)
+    consideraciones_finales = []
     
-    # 1. Penalizaciones por Comodidad
+    # --- Lógica de Conducción y Confort ---
     if flag_penalizar_lc_comod and coche_dict_completo.get("acceso_low_cost_scaled", 0) >= UMBRAL_LOW_COST_PENALIZABLE_SCALED:
-        ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_low_cost_por_comodidad_aplicada"])
-    if flag_penalizar_dep_comod and coche_dict_completo.get("deportividad_bq_scaled", 0) >= UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED: # Asume que tienes 'deportividad_bq_scaled'
-        ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_deportividad_por_comodidad_aplicada"])
+        consideraciones_finales.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_low_cost_por_comodidad_aplicada"])
+    if flag_penalizar_dep_comod and coche_dict_completo.get("deportividad_bq_scaled", 0) >= UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED:
+        consideraciones_finales.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_deportividad_por_comodidad_aplicada"])
+
+    # --- Lógica Ambiental (con prioridad para ZBE para evitar redundancia) ---
+    distintivo = str(coche_dict_completo.get("distintivo_ambiental", "")).upper()
+    es_ocasion = coche_dict_completo.get("ocasion") is True
     
-    # 2. Penalizaciones por Antigüedad (si tecnología es alta)
+    if flag_es_zbe:
+        if distintivo in ('CERO', '0', 'ECO', 'C'):
+            consideraciones_finales.append(MAPA_AJUSTES_SCORE_A_TEXTO["bonus_zbe_distintivo_favorable_aplicado"])
+        elif distintivo in ('B', 'NA'):
+            consideraciones_finales.append(MAPA_AJUSTES_SCORE_A_TEXTO["penalty_zbe_distintivo_desfavorable_aplicado"])
+    elif flag_aplicar_dist_gen:
+        if distintivo in ('CERO', '0', 'ECO', 'C'):
+            consideraciones_finales.append(MAPA_AJUSTES_SCORE_A_TEXTO["bonus_distintivo_general_favorable_aplicado"])
+    
+    # El bonus por ser de ocasión se puede añadir si es relevante para el perfil ecológico
+    if flag_aplicar_dist_gen and es_ocasion:
+        consideraciones_finales.append(MAPA_AJUSTES_SCORE_A_TEXTO["bonus_ocasion_por_impacto_ambiental_aplicado"])
+        
+    # --- Lógica de Antigüedad y Tecnología ---
     anos_vehiculo = coche_dict_completo.get("anos_vehiculo")
     if flag_penalizar_ant_tec and anos_vehiculo is not None:
         if anos_vehiculo > 10:
-            ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_antiguedad_mas_10_anos_aplicada"])
+            consideraciones_finales.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_antiguedad_mas_10_anos_aplicada"])
         elif anos_vehiculo > 7:
-            ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_antiguedad_7_a_10_anos_aplicada"])
-        elif anos_vehiculo > 5:
-            ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_antiguedad_5_a_7_anos_aplicada"])
+            consideraciones_finales.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_antiguedad_5_a_7_anos_aplicada"])
 
-    # 3. Lógica Distintivo Ambiental (General y Ocasión)
-    distintivo = str(coche_dict_completo.get("distintivo_ambiental", "")).upper() # Asegurar que sea string y mayúsculas
-    es_ocasion = coche_dict_completo.get("ocasion") is True
-
-    if flag_aplicar_dist_gen: # Activado por alto rating de impacto ambiental
-        if distintivo in ('CERO', '0', 'ECO', 'C'):
-            ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["bonus_distintivo_general_favorable_aplicado"])
-        elif distintivo in ('B', 'NA'):
-            ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["penalty_distintivo_general_desfavorable_aplicado"])
+    # --- Lógica Práctica (Puertas) ---
+    # Asume que la necesidad de penalizar puertas ya se ha determinado por el perfil del usuario (ej: tiene hijos)
+    if flag_penalizar_puertas and coche_dict_completo.get("puertas", 5) <= 3:
+        consideraciones_finales.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_puertas_bajas_aplicada"])
         
-        if es_ocasion:
-            ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["bonus_ocasion_por_impacto_ambiental_aplicado"])
-
-    # 4. Lógica Distintivo Ambiental por ZBE (tiene prioridad o se añade)
-    if flag_es_zbe:
-        if distintivo in ('CERO', '0', 'ECO', 'C'):
-            # Podríamos tener un texto diferente si queremos evitar redundancia con el bonus general
-            # o asumir que el prompt del LLM lo manejará.
-            # Por ahora, si es ZBE y favorable, el prompt puede enfatizar esto.
-            # La función MAPA_AJUSTES_SCORE_A_TEXTO ya tiene textos específicos para ZBE.
-            ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["bonus_zbe_distintivo_favorable_aplicado"])
-        elif distintivo in ('B', 'NA'):
-            ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["penalty_zbe_distintivo_desfavorable_aplicado"])
-            
-    # 5. Penalización por Puertas Bajas
-    # Necesitamos saber si la penalización de puertas se aplicó.
-    # `buscar_coches_bq` calcula `puertas_penalty`. Si este valor es negativo, se aplicó.
-    # Necesitaríamos que `buscar_coches_bq` devuelva `puertas_penalty` con el coche.
-    # O, más simple, si el flag `penalizar_puertas` está activo Y el coche tiene pocas puertas:
-    if flag_penalizar_puertas and coche_dict_completo.get("puertas", 5) <= 3: # Asumiendo que BQ devuelve 'puertas'
-        ajustes_score_textos.append(MAPA_AJUSTES_SCORE_A_TEXTO["penaliza_puertas_bajas_aplicada"])
-    # --- FIN CONSTRUCCIÓN DE PENALIZACIONES/BONUS ---
-
-
-    # Formatear preferencias relevantes del usuario para el prompt
-    prefs_resumidas_para_prompt_list = []
-    # Ejemplo: Tomar los N ratings más altos o las N preferencias "sí" más importantes
-    # Esta parte necesita ser más robusta para seleccionar las preferencias más relevantes para el coche específico.
-    # Por ahora, una lista simple basada en ratings altos:
-    if preferencias_usuario.rating_seguridad and preferencias_usuario.rating_seguridad >= 7:
-        prefs_resumidas_para_prompt_list.append(f"alta seguridad (calificada con {preferencias_usuario.rating_seguridad}/10)")
-    if preferencias_usuario.rating_comodidad and preferencias_usuario.rating_comodidad >= 7:
-        prefs_resumidas_para_prompt_list.append(f"gran comodidad (calificada con {preferencias_usuario.rating_comodidad}/10)")
-    if preferencias_usuario.rating_tecnologia_conectividad and preferencias_usuario.rating_tecnologia_conectividad >= 7:
-        prefs_resumidas_para_prompt_list.append(f"buena tecnología (calificada con {preferencias_usuario.rating_tecnologia_conectividad}/10)")
-    if not prefs_resumidas_para_prompt_list:
-        prefs_resumidas_para_prompt_list.append("tus criterios generales")
-
-
-    # Construir el contexto para el LLM
+    consideraciones_str = "\n- ".join(consideraciones_finales) if consideraciones_finales else "Sin consideraciones destacables."
+    # 5. Ensamblar el contexto para el LLM.
+    puntos_fuertes_str = "\n- ".join(puntos_fuertes_formateados) if puntos_fuertes_formateados else "Se ajusta bien a tus criterios generales."
+    
     contexto_para_llm = f"""
-    Nombre del Coche: {coche_dict_completo.get("nombre", "Este vehículo")}
-    Preferencias Relevantes del Usuario: {", ".join(prefs_resumidas_para_prompt_list)}.
-    Puntos Fuertes del Coche para este Usuario:
-    {". ".join(ajustes_score_textos) if ajustes_score_textos else "Se ajusta bien en general."}
-    Consideraciones Adicionales (Ajustes al Score):
-    {". ".join(ajustes_score_textos) if ajustes_score_textos else "Ningún ajuste particular destacable."}
+    ## Prioridades Clave del Usuario
+    - {prioridades_str if prioridades_str else "Tus preferencias generales"}
+
+    ## Coche Recomendado
+    - {nombre_coche}
+
+    ## Argumentos de Venta Principales
+    - {puntos_fuertes_str}
+    
+    ## Otras Consideraciones
+    - {consideraciones_str}
     """
     
-    logging.debug(f"DEBUG (Explicacion LLM) ► Contexto para LLM:\n{contexto_para_llm}")
-
+    print("--- CONTEXTO GENERADO PARA EL LLM ---")
+    print(contexto_para_llm)
+    print("------------------------------------")
+    
+    #6. Llamada al LLM (usa tu system prompt de "copywriter experto")
     try:
-        messages_for_explanation = [
-            SystemMessage(content=system_prompt_explicacion_coche), 
-            HumanMessage(content=contexto_para_llm) 
-        ]
-        
-        response = llm_explicacion_coche.invoke(messages_for_explanation)
-        
-        explicacion_texto = response.content if hasattr(response, 'content') else str(response)
-        logging.info(f"INFO (Explicacion LLM) ► Explicación generada para {coche_dict_completo.get('nombre')}: {explicacion_texto}")
-        return explicacion_texto.strip()
+        messages = [SystemMessage(content=system_prompt_explicacion_coche_mejorado), HumanMessage(content=contexto_para_llm)]
+        response = llm_explicacion_coche.invoke(messages)
+        return response.content
     except Exception as e:
-        logging.error(f"ERROR (Explicacion LLM) ► Fallo al generar explicación para {coche_dict_completo.get('nombre')}: {e}")
-        traceback.print_exc()
-        return "Es una opción interesante que se ajusta a varias de tus preferencias clave." # Fallback
+        logging.error(f"Error en LLM: {e}")
+        return "Este coche es una excelente opción que se ajusta a tus necesidades."
 
-
-
-
-
-
-
+    # Devolvemos el contexto para la depuración
+    return contexto_para_llm
