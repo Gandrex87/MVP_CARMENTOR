@@ -148,7 +148,7 @@ Infiere los valores para los campos DENTRO de filtros_inferidos en el JSON de sa
 
 * tipo_mecanica: ¡CAMPO CRÍTICO! Este campo DEBE contener una lista de strings (valores del enum TipoMecanica) con al menos un valor si es posible inferirlo.
 - Si preferencias_usuario.solo_electricos es 'sí', la lista DEBE ser ["BEV", "REEV"]. (Puedes añadir "FCEV" si lo consideras apropiado para "solo eléctricos").
-- Si preferencias_usuario.solo_electricos es 'no':
+
 
 Considera otras preferencias como aventura, uso_profesional, y los ratings de impacto_ambiental o costes_uso.
 - Si info_clima.ZONA_GLP es true (y no es solo eléctricos), considera añadir "GLP".

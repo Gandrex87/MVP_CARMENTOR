@@ -86,7 +86,13 @@ ipython_config.py
 *rag_carroceria.py
 *rag_rader.py
 *build_faiss_index.py
+*embedings
+embedings
 
+*tests
+tests
+query_prueba.ipynb
+*query_prueba.ipynb
 
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is

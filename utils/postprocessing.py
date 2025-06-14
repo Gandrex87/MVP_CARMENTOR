@@ -97,28 +97,16 @@ def aplicar_postprocesamiento_filtros(
         if mecanicas_set != expected_electricas_enums:
             logging.debug(f"PostProc Filtros: solo_electricos='sí'. Estableciendo tipo_mecanica a BEV, REEV.")
             mecanicas_set = expected_electricas_enums
-    # 2. Regla: Default si 'solo_electricos' es 'no' y el LLM no infirió nada
-    elif isinstance(solo_electricos_val, str) and solo_electricos_val.strip().lower() == 'no':
-        if not mecanicas_set: # Si el LLM no infirió NADA y no es solo eléctricos
-            logging.debug("PostProc Filtros: solo_electricos='no' y LLM no dio mecánicas -> asignando default amplio.")
-            mecanicas_set.update([
-                TipoMecanica.GASOLINA, TipoMecanica.DIESEL, TipoMecanica.PHEVG, TipoMecanica.PHEVD,
-                TipoMecanica.HEVG, TipoMecanica.HEVD, TipoMecanica.MHEVG, TipoMecanica.MHEVD,
-                TipoMecanica.GLP, TipoMecanica.GNV
-            ])
+    # # 2. Regla: Default si 'solo_electricos' es 'no' y el LLM no infirió nada
+    # elif isinstance(solo_electricos_val, str) and solo_electricos_val.strip().lower() == 'no':
+    #     if not mecanicas_set: # Si el LLM no infirió NADA y no es solo eléctricos
+    #         logging.debug("PostProc Filtros: solo_electricos='no' y LLM no dio mecánicas -> asignando default amplio.")
+    #         mecanicas_set.update([
+    #             TipoMecanica.GASOLINA, TipoMecanica.DIESEL, TipoMecanica.PHEVG, TipoMecanica.PHEVD,
+    #             TipoMecanica.HEVG, TipoMecanica.HEVD, TipoMecanica.MHEVG, TipoMecanica.MHEVD,
+    #             TipoMecanica.GLP, TipoMecanica.GNV
+    #         ])
     # Si solo_electricos_val es None, se procede con lo que haya en mecanicas_set (del LLM o vacío).
-
-    # 3. Lógica para Punto de Carga (se aplica sobre mecanicas_set)
-    # if preferencias and is_yes(preferencias.tiene_punto_carga_propio):
-    #     # Solo añadir si el usuario NO está restringido a solo eléctricos puros (BEV/REEV)
-    #     # O si solo_electricos es None (abierto)
-    #     if not is_yes(solo_electricos_val) or solo_electricos_val is None:
-    #         logging.debug("PostProc Filtros: Usuario tiene punto de carga y no es 'solo eléctricos puros'. Asegurando BEV/PHEV/REEV.")
-    #         mecanicas_a_asegurar_con_punto_carga = {
-    #             TipoMecanica.BEV, TipoMecanica.PHEVD, 
-    #             TipoMecanica.PHEVG, TipoMecanica.REEV
-    #         }
-    #         mecanicas_set.update(mecanicas_a_asegurar_con_punto_carga)
 
     # 4. Lógica para GLP/GNV por Zona (se aplica sobre mecanicas_set)
     if info_clima and info_clima.cp_valido_encontrado: 
@@ -140,7 +128,6 @@ def aplicar_postprocesamiento_filtros(
     if info_clima and info_clima.cp_valido_encontrado and info_clima.MUNICIPIO_ZBE:
         logging.debug(f"PostProc Filtros: Municipio ZBE. Ajustando mecánicas.")
         if TipoMecanica.DIESEL in mecanicas_set:
-            # ... (tu lógica para quitar DIESEL con excepciones) ...
             pass # Placeholder
         if not is_yes(solo_electricos_val) or solo_electricos_val is None:
             mecanicas_limpias_para_zbe = {
