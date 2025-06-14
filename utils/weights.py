@@ -27,9 +27,6 @@ from config.settings import (MAX_SINGLE_RAW_WEIGHT , MIN_SINGLE_RAW_WEIGHT , AVE
 # --- Función compute_raw_weights CORREGIDA ---
 def compute_raw_weights(
     preferencias: Optional[PerfilUsuario], # <-- Cambiar Type Hint a PerfilUsuario
-    #estetica_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.estetica_min)
-    #premium_min_val: Optional[float],       # Renombrado para claridad (viene de filtros.premium_min)
-    #singular_min_val: Optional[float],      # Renombrado para claridad (viene de filtros.singular_min)
     info_pasajeros_dict: Optional[Dict[str, Any]],
     es_zona_nieblas: bool = False,
     es_zona_nieve: bool = False,
@@ -72,7 +69,7 @@ def compute_raw_weights(
     logging.debug(f"Weights: Peso crudo para 'singular' (aditivo): {raw['singular']}")
     # --- FIN NUEVA LÓGICA ---
     
-     # --- ✅ 2. AÑADIR NUEVA LÓGICA PARA "GRAN VIAJERO" ---
+     # ---  2. AÑADIR NUEVA LÓGICA PARA "GRAN VIAJERO" ---
     if km_anuales_estimados is not None and km_anuales_estimados > 60000:
         logging.info(f"DEBUG (Weights) ► Perfil 'Gran Viajero' detectado ({km_anuales_estimados} km/año). Añadiendo pesos crudos para autonomía y carga.")
         # Añadimos estos factores como si fueran preferencias más del usuario

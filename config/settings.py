@@ -24,7 +24,8 @@ if not GOOGLE_CREDENTIALS:
 
 # PENALIZACIONES Y BONIFICACIONES:
 # Ajustes Directos al Score (BONUS_..., PENALTY_... en settings.py):
-# Son valores ya escalados para impactar directamente el score_total (ej: +0.1, -0.2).
+# Estos son valores absolutos que se suman/restan al score final.
+# Escala sugerida para estos ajustes: -0.25 a +0.25 para no dominar completamente un score que tiende a 0-1.
 # Se usan solo en la query SQL de buscar_coches_bq, dentro de cláusulas CASE WHEN activadas por flags.
 # Modifican el score de forma aditiva después de la parte ponderada.
 
@@ -74,8 +75,7 @@ MIN_MAX_RANGES = {
 }
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- VALORES DE AJUSTE DIRECTO AL SCORE (BONUS/PENALIZACIONES) (`utils/bigquery_tools.py`) ---
-# Estos son valores absolutos que se suman/restan al score final.
-# Escala sugerida para estos ajustes: -0.25 a +0.25 para no dominar completamente un score que tiende a 0-1.
+
 
 #valores directos que se suman o restan al score (escala 0-1)
 # Penalización por Puertas
