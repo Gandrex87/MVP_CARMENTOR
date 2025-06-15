@@ -158,12 +158,12 @@ Considera otras preferencias como aventura, uso_profesional, y los ratings de im
 
 Si preferencias_usuario.solo_electricos es null o no se proporciona información clara para determinar el tipo de mecánica, DEBES dejar tipo_mecanica como null y usar mensaje_validacion para preguntar al respecto.
 
-2. Campos que NO Debes Inferir (DEJAR SIEMPRE COMO null):
+2. **Campos que NUNCA Debes Inferir (DEJAR SIEMPRE COMO null):** 
 
-* tipo_carroceria
 * modo_adquisicion_recomendado
 * precio_max_contado_recomendado
 * cuota_max_calculada
+* tipo_carroceria
 * plazas_min
 
 3. Campo mensaje_validacion:

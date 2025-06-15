@@ -84,51 +84,193 @@ Para que tu imagen Docker sea más pequeña y segura, crea un archivo llamado `.
 Crearemos un archivo `Dockerfile` que contiene las instrucciones para construir una imagen de contenedor de tu aplicación. Usaremos un enfoque "multi-etapa" que es una buena práctica para producción.
 
 * Crea un archivo llamado `Dockerfile` (sin extensión) en la raíz de tu proyecto.
-* Pega el siguiente contenido:
+# Guía Esencial de Comandos Docker para Desarrolladores
 
-    ```dockerfile
-    # Dockerfile
+Docker es una herramienta que te permite empaquetar tu aplicación y sus dependencias en una unidad estandarizada llamada "contenedor". Esto asegura que tu aplicación funcione de la misma manera en cualquier entorno. Aquí tienes los comandos clave que necesitas para trabajar con Docker.
 
-    # --- ETAPA 1: Builder ---
-    # Usamos una imagen completa de Python para instalar las dependencias.
-    # Esto incluye herramientas de compilación que podrían ser necesarias.
-    FROM python:3.11-slim as builder
+---
 
-    # Establecer el directorio de trabajo dentro del contenedor
-    WORKDIR /app
+### 1. Construir una Imagen (`docker build`)
 
-    # Instalar dependencias
-    # Copiamos solo el archivo de requerimientos primero para aprovechar el caché de Docker.
-    # Si requirements.txt no cambia, Docker no volverá a ejecutar este paso.
-    COPY requirements.txt .
-    RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
+Este es el primer y más importante paso. Toma las instrucciones de tu `Dockerfile` y crea una "imagen" de tu aplicación. Una imagen es como una plantilla o un plano para tus contenedores.
 
-    # --- ETAPA 2: Final ---
-    # Usamos la misma imagen base, que es ligera y optimizada.
-    FROM python:3.11-slim
+**Comando Básico:**
+```bash
+docker build -t nombre-de-tu-imagen:tag .
+```
 
-    # Establecer el directorio de trabajo
-    WORKDIR /app
+Desglose:
+```bash
+docker build: El comando para construir.
+```
 
-    # Copiar las dependencias pre-compiladas de la etapa 'builder'.
-    # Esto hace que la imagen final sea más pequeña porque no incluye las herramientas de compilación.
-    COPY --from=builder /app/wheels /wheels
-    RUN pip install --no-cache /wheels/*
+```bash
+-t o --tag: Permite "etiquetar" tu imagen con un nombre y una versión (el tag). Es una muy buena práctica usarlo siempre.
+```
 
-    # Copiar TODO el código de tu aplicación al directorio de trabajo en el contenedor.
-    # El .dockerignore se encargará de excluir los archivos y carpetas que no queremos.
-    COPY . .
+nombre-de-tu-imagen: Un nombre descriptivo, por ejemplo, carblau-agent-api.
 
-    # Indicar al contenedor que escuche en el puerto 8080.
-    # Cloud Run espera por defecto que los contenedores escuchen en este puerto.
-    EXPOSE 8080
+:tag: Una versión, como :v1, :latest, o :0.1.0. Si la omites, por defecto será :latest.
 
-    # Comando para ejecutar la aplicación cuando se inicie el contenedor.
-    # - "api.main:app": Apunta al objeto 'app' en tu archivo 'api/main.py'. ¡Ajusta la ruta si es diferente!
-    # - "--host 0.0.0.0": MUY IMPORTANTE. Hace que el servidor escuche en todas las interfaces de red dentro del contenedor.
-    # - "--port 8080": Coincide con el puerto que hemos expuesto.
-    CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
-    ```
+.: El punto al final es crucial. Le dice a Docker que el "contexto de construcción" (donde se encuentra tu Dockerfile y el código fuente) es el directorio actual.
+
+Ejemplo para tu proyecto:
+
+docker build -t carblau-agent:v1 .
+
+(Ejecuta este comando desde la carpeta raíz de tu proyecto MVP_CARMENTOR).
+
+2. Gestionar Imágenes
+Una vez construidas, puedes ver y eliminar las imágenes que tienes en tu máquina.
+
+Listar imágenes locales:
+
+```bash
+docker images
+```
+
+Esto te mostrará una tabla con todas las imágenes que has construido o descargado, su tag, su ID, cuándo se crearon y su tamaño.
+
+Eliminar una imagen:
+
+```bash
+docker rmi [ID_DE_LA_IMAGEN_O_NOMBRE:TAG]
+```
+
+Ejemplo: docker rmi carblau-agent:v1
+
+3. Ejecutar un Contenedor (docker run)
+Este comando toma una imagen y crea una instancia ejecutable de ella: un contenedor. Es el comando con más opciones útiles.
+
+Comando Básico:
+```bash
+docker run nombre-de-tu-imagen:tag
+
+Opciones más Importantes:
+
+-d o --detach: Ejecuta el contenedor en segundo plano (modo "detached"). 
+Tu terminal quedará libre. Es casi siempre lo que quieres para un servidor.
+
+-p o --publish [PUERTO_HOST]:[PUERTO_CONTENEDOR]: Publica (o "mapea") un puerto del contenedor a un puerto de tu máquina local (host). Es esencial para poder acceder a tu API desde el navegador o Postman.
+
+Ejemplo: -p 8000:8080 mapea el puerto 8080 del contenedor (donde Uvicorn está escuchando) al puerto 8000 de tu máquina. Podrás acceder a la API en http://localhost:8000.
+```
+
+--name [NOMBRE_DEL_CONTENEDOR]: Asigna un nombre fácil de recordar a tu contenedor. Si no lo haces, Docker le asignará uno aleatorio (ej: frosty_newton).
+
+Ejemplo: --name carblau-api-container
+
+-e o --env [VARIABLE]="[VALOR]": Pasa una variable de entorno al contenedor. Muy útil para no usar un archivo .env en producción.
+
+Ejemplo: -e DB_USER="mi_usuario"
+
+--env-file ./mi.env: Carga variables de entorno desde un archivo.
+
+--rm: Elimina automáticamente el contenedor cuando se detiene. Muy útil para pruebas rápidas, para no dejar contenedores parados ocupando espacio.
+
+Ejemplo Completo para tu API:
+
+docker run -d -p 8000:8080 --name carblau-api-container --env-file ./.env carblau-agent:v1
+
+Este comando:
+
+Crea un contenedor a partir de la imagen carblau-agent:v1.
+
+Lo ejecuta en segundo plano (-d).
+
+Mapea el puerto 8080 del contenedor al puerto 8000 de tu máquina (-p 8000:8080).
+
+Le da el nombre carblau-api-container (--name).
+
+Carga las variables de entorno de tu archivo .env (--env-file).
+
+4. Gestionar Contenedores en Ejecución
+Listar contenedores en ejecución:
+
+```bash
+docker ps
+```
+
+Listar TODOS los contenedores (en ejecución y parados):
+```bash
+docker ps -a
+```
+
+Detener un contenedor en ejecución:
+
+```bash
+docker stop [ID_DEL_CONTENEDOR_O_NOMBRE]
+```
+Ejemplo: docker stop carblau-api-container
+
+Iniciar un contenedor parado:
+
+```bash
+docker start [ID_DEL_CONTENEDOR_O_NOMBRE]
+```
+
+Eliminar un contenedor parado:
+
+```bash
+docker rm [ID_DEL_CONTENEDOR_O_NOMBRE]
+```
+5. Ver Logs de un Contenedor
+Para ver la salida de tu aplicación (los print y logging de tu FastAPI), que ahora están dentro del contenedor.
+
+```bash
+docker logs [ID_DEL_CONTENEDOR_O_NOMBRE]
+```
+
+Opción útil:
+```bash
+-f o --follow: Sigue los logs en tiempo real, como un tail -f. Muy útil para depurar.
+```
+
+```bash
+docker logs -f carblau-api-container
+```
+(Usa Ctrl+C para salir del modo de seguimiento).
+
+6. Interactuar con un Contenedor en Ejecución
+A veces necesitas "entrar" en el contenedor para ver qué está pasando, listar archivos, etc.
+
+```bash
+docker exec -it [ID_DEL_CONTENEDOR_O_NOMBRE] /bin/bash
+```
+
+Desglose:
+```bash
+docker exec: Ejecuta un comando en un contenedor en ejecución.
+
+-it: Abreviatura de -i (interactivo, mantiene STDIN abierto) y -t (asigna una pseudo-TTY). Juntos te dan una terminal interactiva.
+```
+
+/bin/bash: El comando a ejecutar (en este caso, iniciar un shell Bash). Si la imagen base no tiene bash, puedes probar con /bin/sh.
+
+Una vez dentro, tendrás una línea de comandos dentro del contenedor. Puedes usar comandos como ls -la, cat archivo.py, etc. Escribe exit para salir.
+
+7. Interacción con un Registro de Contenedores (como Artifact Registry)
+Estos comandos son los que usarías para subir tu imagen a la nube.
+
+Iniciar sesión en el registro:
+
+# Para Artifact Registry (como vimos en la guía de despliegue)
+gcloud auth configure-docker europe-west1-docker.pkg.dev 
+# Para Docker Hub (el registro público)
+docker login
+
+Subir una imagen (Push): Primero debes "taguear" tu imagen con el nombre completo del repositorio.
+
+# 1. Taguear la imagen local (si la construiste con un nombre simple)
+docker tag carblau-agent:v1 europe-west1-docker.pkg.dev/[PROYECTO]/[REPO]/carblau-agent:v1
+
+# 2. Subir la imagen
+docker push europe-west1-docker.pkg.dev/[PROYECTO]/[REPO]/carblau-agent:v1
+
+Descargar una imagen (Pull):
+
+docker pull ubuntu:latest # Descarga la imagen 'ubuntu' desde Docker Hub
+
 
 ---
 
@@ -217,3 +359,53 @@ Ahora viene la parte emocionante.
 * Configurar un pipeline de CI/CD para automatizar los despliegues.
 
 Este proceso puede parecer largo, pero es muy robusto. ¡Tómate tu tiempo con cada paso!
+
+## Creacion de la imagen paso a paso
+
+```bash
+docker build -t carblau-agent:v1 .
+```
+
+Valido la creacion de la imagen
+
+```bash
+docker images
+```
+
+Pongo a prueba el contenedor
+
+```bash
+docker run -d -p 8000:8080 --name carblau-api-container --env-file ./.env carblau-agent:v1
+```
+
+Desglosemos este comando:
+
+``` bash
+-d: Ejecuta el contenedor en segundo plano (detached).
+
+-p 8000:8080: Publica los puertos. Mapea el puerto 8000 de tu máquina (host) al puerto 8080 del contenedor. Tu Dockerfile expone el 8080, así que ahora podrás acceder a tu API en http://localhost:8000.
+
+--name carblau-api-container: Le da un nombre fácil de recordar a tu contenedor.
+
+--env-file ./.env: Crucial. Carga todas las variables de tu archivo .env dentro del contenedor. Así es como la API dentro del contenedor obtiene las credenciales de la base de datos y la API de OpenAI.
+
+carblau-agent:v1: El nombre de la imagen a usar.
+```
+
+Nota: Realizo cambios en el `.env` ya que cuando un contenedor Docker se ejecuta en tu máquina, no puede acceder a localhost o `127.0.0.1` para encontrar el proxy. En su lugar, debes usar un DNS especial que Docker proporciona: `host.docker.internal`
+
+
+docker build -t carblau-agent:v1 .
+
+docker build --no-cache -t carblau-agent:v1 .
+
+
+docker run -d -p 8000:8080 --name carblau-api-container --env-file ./.env carblau-agent:v1
+
+docker logs carblau-api-container / docker logs -f carblau-api-container
+
+docker stop carblau-api-container
+
+docker rm carblau-api-container
+
+Este ciclo de `build` -> `run` -> `tes` -> `logs` -> `stop/rm` es el flujo de trabajo estándar de Docker y te dará una confianza muy alta en que lo que estás subiendo a Cloud Run va a funcionar.
