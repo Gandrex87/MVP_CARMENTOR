@@ -394,18 +394,36 @@ carblau-agent:v1: El nombre de la imagen a usar.
 
 Nota: Realizo cambios en el `.env` ya que cuando un contenedor Docker se ejecuta en tu máquina, no puede acceder a localhost o `127.0.0.1` para encontrar el proxy. En su lugar, debes usar un DNS especial que Docker proporciona: `host.docker.internal`
 
-
+```bash
 docker build -t carblau-agent:v1 .
+```
 
+```bash
 docker build --no-cache -t carblau-agent:v1 .
+```
 
-
+```bash
 docker run -d -p 8000:8080 --name carblau-api-container --env-file ./.env carblau-agent:v1
+```
 
+```bash
 docker logs carblau-api-container / docker logs -f carblau-api-container
+```
 
+```bash
 docker stop carblau-api-container
+```
 
+```bash
 docker rm carblau-api-container
+```
 
 Este ciclo de `build` -> `run` -> `tes` -> `logs` -> `stop/rm` es el flujo de trabajo estándar de Docker y te dará una confianza muy alta en que lo que estás subiendo a Cloud Run va a funcionar.
+
+
+gcloud secrets versions access latest --secret=DB_PASSWORD
+
+ gcloud iam service-accounts list
+
+PENDIENTE:
+ Volver a reconstruir la imagen, subirla a artifact registry e intentar deploy.

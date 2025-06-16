@@ -40,7 +40,7 @@ pydantic
 pydantic-settings
 sqlalchemy # Dependencia útil para savers SQL
 db_dtypes
-tabulates
+tabulate==0.9.0
 
 #--- Dependencias de OpenAI (si usas langchain-openai) ---
 openai

@@ -93,8 +93,6 @@ Calcula el score_total como una suma ponderada: score_total = (caracteristica1_s
 Se añaden dinámicamente las condiciones de filtro duro basadas en el diccionario filtros de entrada:
 COALESCE(estetica, 0) >= @estetica_min (si estetica_min se decide mantener como filtro). Similar para premium y singular.
 plazas >= @plazas_min.
-tipo_mecanica IN UNNEST(@tipos_mecanica).
-tipo_carroceria IN UNNEST(@tipos_carroceria).
 cambio_automatico = TRUE/FALSE (si se especifica).
 Condición económica: COALESCE(precio_compra_contado, ...) <= @precio_maximo O la fórmula de cuota ... <= @cuota_maxima.
 5. Construción del SQL - ORDER BY y LIMIT:

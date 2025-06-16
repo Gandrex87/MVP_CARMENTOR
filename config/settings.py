@@ -3,9 +3,12 @@ from dotenv import load_dotenv
 import logging
 logging.basicConfig(level=logging.INFO)
 
+# Carga las variables desde un archivo .env si existe (ideal para desarrollo local)
 load_dotenv()
 
-GOOGLE_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+# --- Carga de todas tus variables de entorno ---
+# Este método es seguro para ambos entornos. En Cloud Run, las tomará de los secretos que configuraste.
+GOOGLE_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") # Esta solo existirá localmente
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 LANGCHAIN_TRACING = os.getenv("LANGSMITH_TRACING")
 LANGCHAIN_ENDPOINT = os.getenv("LANGSMITH_ENDPOINT")
@@ -13,8 +16,29 @@ LANGCHAIN_API_KEY = os.getenv("LANGSMITH_API_KEY")
 LANGCHAIN_PROJECT = os.getenv("LANGSMITH_PROJECT")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if not GOOGLE_CREDENTIALS:
-    raise ValueError("No se encontró GOOGLE_APPLICATION_CREDENTIALS. Asegúrate de configurar tus credenciales de Google Cloud.")
+
+# --- Lógica de Autenticación Adaptativa (ESTA ES LA CORRECCIÓN) ---
+
+# 1. Detectamos si estamos en un entorno de producción de Google Cloud (como Cloud Run)
+#    buscando la variable de entorno 'K_SERVICE', que Google añade automáticamente.
+IS_IN_PRODUCTION = 'K_SERVICE' in os.environ
+
+# 2. Solo validamos las credenciales de archivo si NO estamos en producción.
+if not IS_IN_PRODUCTION:
+    # Estamos en un entorno local (tu Mac)
+    print("Entorno local detectado. Verificando GOOGLE_APPLICATION_CREDENTIALS del archivo .env...")
+    if not GOOGLE_CREDENTIALS:
+        raise ValueError(
+            "Ejecución local: No se encontró GOOGLE_APPLICATION_CREDENTIALS en el entorno. "
+            "Asegúrate de que tu archivo .env lo defina correctamente."
+        )
+else:
+    # Estamos en Cloud Run
+    print("Entorno de Cloud Run detectado. Se usarán las credenciales automáticas de la cuenta de servicio.")
+    # No hacemos nada aquí. Las librerías de Google usarán la cuenta de servicio adjunta automáticamente.
+    # La variable GOOGLE_CREDENTIALS será 'None' y eso está bien en este entorno.
+    pass
+
 
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # PESOS CRUDOS:
