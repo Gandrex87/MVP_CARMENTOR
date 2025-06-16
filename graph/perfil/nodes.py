@@ -1606,8 +1606,9 @@ def calcular_km_anuales_postprocessing_node(state: EstadoAnalisisPerfil) -> Dict
     return {"km_anuales_estimados": km_totales}
 
 
-
-def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
+from langchain_core.runnables import RunnableConfig
+#def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
+def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConfig) -> dict:
     """
     Usa los filtros y pesos finales, busca en BQ, y presenta un mensaje combinado
     con el resumen de criterios y los resultados de los coches.
@@ -1616,9 +1617,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     logging.debug(f"DEBUG (Buscar BQ Init) ► Estado completo recibido: {state}") 
     k_coches = 10 
     historial = state.get("messages", [])
-    # --- OBTENER TABLA RESUMEN DEL ESTADO ---
     tabla_resumen_criterios_md = state.get("tabla_resumen_criterios", "No se pudo generar el resumen de criterios.")
-    # --- FIN OBTENER TABLA ---
     preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario
     filtros_finales_obj = state.get("filtros_inferidos") 
     pesos_finales = state.get("pesos")
@@ -1648,11 +1647,16 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
     flag_logica_diesel_ciudad= state.get("flag_logica_diesel_ciudad")
     km_anuales_val = state.get("km_anuales_estimados")
     
-  
-    thread_id = "unknown_thread"
-    if state.get("config") and isinstance(state["config"], dict) and \
-       state["config"].get("configurable") and isinstance(state["config"]["configurable"], dict):
-        thread_id = state["config"]["configurable"].get("thread_id", "unknown_thread")
+    # 2. Obtén el thread_id directamente del objeto 'config'
+    # Esta es la forma correcta y segura de accederlo.
+    configurable_config = config.get("configurable", {})
+    thread_id = configurable_config.get("thread_id", "unknown_thread_in_node") # Fallback por si acaso
+
+    logging.info(f"INFO (Buscar BQ) ► Ejecutando búsqueda para thread_id: {thread_id}")
+    # thread_id = "unknown_thread"
+    # if state.get("config") and isinstance(state["config"], dict) and \
+    #    state["config"].get("configurable") and isinstance(state["config"]["configurable"], dict):
+    #     thread_id = state["config"]["configurable"].get("thread_id", "unknown_thread")
     
     coches_encontrados_raw = [] 
     coches_encontrados = []
@@ -1759,32 +1763,32 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
                 # tabla_coches_md = df_coches_display[columnas_deseadas_tabla].to_markdown(index=False)
                 # mensaje_coches += "\n" + tabla_coches_md + "\n"
                 
-                mensaje_coches += "\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles?"
-                # try:
-                #     df_coches = pd.DataFrame(coches_encontrados)
-                #     columnas_deseadas = [ # Define tus columnas deseadas
-                #         'nombre', 'marca', 'precio_compra_contado', 'score_total',
-                #         'tipo_carroceria', 'tipo_mecanica', 'traccion', 'reductoras' 
-                #         # ... añade más columnas si las necesitas en la tabla de coches ...
-                #     ]
-                #     columnas_a_mostrar = [col for col in columnas_deseadas if col in df_coches.columns]
+                mensaje_coches += "\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles?\n"
+                try:
+                    df_coches = pd.DataFrame(coches_encontrados)
+                    columnas_deseadas = [ # Define tus columnas deseadas
+                        'nombre', 'marca', 'precio_compra_contado', 'score_total',
+                        'tipo_carroceria', 'tipo_mecanica', 'traccion', 'reductoras' 
+                        # ... añade más columnas si las necesitas en la tabla de coches ...
+                    ]
+                    columnas_a_mostrar = [col for col in columnas_deseadas if col in df_coches.columns]
                     
-                #     if columnas_a_mostrar:
-                #         if 'precio_compra_contado' in df_coches.columns:
-                #             df_coches['precio_compra_contado'] = df_coches['precio_compra_contado'].apply(lambda x: f"{x:,.0f}€".replace(",",".") if isinstance(x, (int, float)) else "N/A")
-                #         if 'score_total' in df_coches.columns:
-                #              df_coches['score_total'] = df_coches['score_total'].apply(lambda x: f"{x:.3f}" if isinstance(x, float) else x)
-                #         tabla_coches_md = df_coches[columnas_a_mostrar].to_markdown(index=False)
-                #         mensaje_coches += tabla_coches_md
-                #     else:
-                #         mensaje_coches += "No se pudieron formatear los detalles de los coches."
-                # except Exception as e_format_coches:
-                #     logging.error(f"ERROR (Buscar BQ) ► Falló el formateo de la tabla de coches: {e_format_coches}")
-                #     mensaje_coches += "Hubo un problema al mostrar los detalles. Aquí una lista simple:\n"
-                #     for i, coche in enumerate(coches_encontrados):
-                #         nombre = coche.get('nombre', 'N/D'); precio = coche.get('precio_compra_contado')
-                #         precio_str = f"{precio:,.0f}€".replace(",",".") if isinstance(precio, (int, float)) else "N/A"
-                #         mensaje_coches += f"{i+1}. {nombre} - {precio_str}\n"
+                    if columnas_a_mostrar:
+                        if 'precio_compra_contado' in df_coches.columns:
+                            df_coches['precio_compra_contado'] = df_coches['precio_compra_contado'].apply(lambda x: f"{x:,.0f}€".replace(",",".") if isinstance(x, (int, float)) else "N/A")
+                        if 'score_total' in df_coches.columns:
+                             df_coches['score_total'] = df_coches['score_total'].apply(lambda x: f"{x:.3f}" if isinstance(x, float) else x)
+                        tabla_coches_md = df_coches[columnas_a_mostrar].to_markdown(index=False)
+                        mensaje_coches += tabla_coches_md
+                    else:
+                        mensaje_coches += "No se pudieron formatear los detalles de los coches."
+                except Exception as e_format_coches:
+                    logging.error(f"ERROR (Buscar BQ) ► Falló el formateo de la tabla de coches: {e_format_coches}")
+                    mensaje_coches += "Hubo un problema al mostrar los detalles. Aquí una lista simple:\n"
+                    for i, coche in enumerate(coches_encontrados):
+                        nombre = coche.get('nombre', 'N/D'); precio = coche.get('precio_compra_contado')
+                        precio_str = f"{precio:,.0f}€".replace(",",".") if isinstance(precio, (int, float)) else "N/A"
+                        mensaje_coches += f"{i+1}. {nombre} - {precio_str}\n"
                 # mensaje_coches += "\n\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles o hacemos otra búsqueda?"
                 
                 

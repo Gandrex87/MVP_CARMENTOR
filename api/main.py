@@ -50,17 +50,15 @@ app = FastAPI(
 )
 
 # --- Evento de Startup ---
-
-# --- Evento de Startup ---
 @app.on_event("startup")
 async def startup_event():
     global car_mentor_graph, _checkpointer_context_manager, _persistent_checkpointer_instance
     logger.info("Ejecutando evento de startup de FastAPI para CarBlau Agent...")
 
-    # 1. Cargar configuración de la base de datos
+     # 1. Cargar configuración de la base de datos
     db_user = os.environ.get("DB_USER")
     db_password = os.environ.get("DB_PASSWORD")
-    db_host = os.environ.get("DB_HOST")
+    db_host = os.environ.get("DB_HOST")  # En Cloud Run será: /cloudsql/instance-connection-name
     db_port = os.environ.get("DB_PORT", "5432")
     db_name = os.environ.get("DB_NAME")
 
@@ -68,8 +66,20 @@ async def startup_event():
         logger.error("CRÍTICO: Faltan variables de BBDD. El agente NO funcionará.")
         raise RuntimeError("Configuración de base de datos incompleta.")
 
-    conn_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-    logger.info(f"Cadena de conexión PostgreSQL: postgresql://{db_user}:******@{db_host}:{db_port}/{db_name}")
+    conn_string = ""
+    # Detectar si estamos en el entorno de Cloud Run con un socket de Cloud SQL
+    if db_host and db_host.startswith("/cloudsql/"):
+        logger.info(f"Detectado socket de Cloud SQL en: {db_host}")
+        # Para psycopg, la conexión a un socket Unix se especifica usando el parámetro 'host'.
+        # El formato es una cadena de pares clave=valor (DSN), no una URL.
+        conn_string = f"dbname='{db_name}' user='{db_user}' password='{db_password}' host='{db_host}'"
+        logger.info(f"Cadena de conexión generada para Cloud SQL (formato DSN): dbname='{db_name}' user='{db_user}' password='******' host='{db_host}'")
+    else:
+        # Mantener la lógica original para conexiones locales/TCP (desarrollo)
+        logger.info(f"Usando conexión TCP estándar a {db_host}:{db_port}")
+        conn_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        logger.info(f"Cadena de conexión PostgreSQL (formato URL): {conn_string.replace(db_password, '******')}")
+
 
     try:
         # 2. Asegurar que las tablas del checkpointer existan

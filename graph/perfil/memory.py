@@ -12,14 +12,13 @@ def get_memory():
     return MemorySaver()
 #======================================================================
 
-
+# Activar, descomentar las lineas abajo en caso de hacer API y con memoria en SQLCLOUD:
 # from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver 
 
 # logger = logging.getLogger(__name__)
 
 
-
-# # Variable global para almacenar la instancia del checkpointer inicializada
+# Variable global para almacenar la instancia del checkpointer inicializada
 # _checkpointer_instance: Optional[AsyncPostgresSaver] = None
 # _db_conn_str: Optional[str] = None # Para construir la instancia si es necesario
 
@@ -30,7 +29,7 @@ def get_memory():
 #     """
 #     logger.info(f"AsyncPostgresSaver: Verificando/creando tablas para la BBDD...")
 #     try:
-#         # Usar async with para el setup, como en la documentación
+#         Usar async with para el setup, como en la documentación
 #         async with AsyncPostgresSaver.from_conn_string(conn_string) as checkpointer_for_setup:
 #             await checkpointer_for_setup.setup()
 #         logger.info("AsyncPostgresSaver: Tablas del checkpointer verificadas/creadas exitosamente.")
@@ -53,7 +52,7 @@ def get_memory():
 #     """
 #     global _checkpointer_instance
 #     if _checkpointer_instance is None:
-#         # Esto no debería ocurrir si la inicialización en startup fue exitosa.
+#         Esto no debería ocurrir si la inicialización en startup fue exitosa.
 #         logger.error("ERROR CRÍTICO: get_memory() llamado pero _checkpointer_instance es None.")
 #         raise RuntimeError(
 #             "AsyncPostgresSaver no ha sido inicializado. "

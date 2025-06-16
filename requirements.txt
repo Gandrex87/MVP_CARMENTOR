@@ -1,54 +1,92 @@
-# Cloud and Google Services
-google-cloud-bigquery
-google-auth
-google-cloud-aiplatform
-db-dtypes
-pandas
+#--- Framework Web ---
+fastapi
+uvicorn
 
-# LangChain Ecosystem
-
-trustcall
-openai==1.69.0
-
+#--- Ecosistema LangChain ---
 langchain==0.3.25
 langchain-community==0.3.20
 langchain-core==0.3.63
-langchain-google-vertexai==2.0.24
-langchain-openai==0.3.18
 langchain-text-splitters==0.3.8
 langgraph==0.2.76
-langgraph-checkpoint==2.0.23
 langgraph-prebuilt==0.1.7
 langgraph-sdk==0.1.60
 langsmith==0.3.19
 
 
-# Data Handling
-python-dotenv==1.1.0
-pandas==2.2.3
-tabulate
-Pillow
-matplotlib
-tavily-python
-ipython
+#--- Integraciones Específicas de LLM ---
+langchain-openai==0.3.18
+langchain-google-vertexai==2.0.24
 
-fastapi==0.115.12
-Flask==3.1.0
-Flask-SocketIO==5.5.1
-pytest==8.3.5
-pdfplumber==0.11.6
-uvicorn==0.34.3
-
-
-requests==2.32.3
-requests-toolbelt==1.0.0
-
-psycopg==3.2.9
-psycopg-pool==3.2.6
-psycopg2-binary>=2.9
-asyncpg>=0.27
-sqlalchemy>=1.4
+#--- Ecosistema LangGraph (Checkpoints) ---
 langgraph-checkpoint==2.0.23
 langgraph-checkpoint-postgres==2.0.21
 
+#--- Driver de PostgreSQL (SOLO UNO) ---
+psycopg[binary] 
 
+
+#--- Google Cloud & BigQuery ---
+google-cloud-aiplatform
+google-cloud-bigquery==3.31.0
+google-cloud-bigquery-storage==2.30.0
+
+
+#--- Manejo de Datos y Utilidades ---
+pandas
+numpy
+faiss-cpu
+python-dotenv
+pydantic
+pydantic-settings
+sqlalchemy # Dependencia útil para savers SQL
+db_dtypes
+tabulate==0.9.0
+
+#--- Dependencias de OpenAI (si usas langchain-openai) ---
+openai
+tiktoken
+
+
+# # Cloud and Google Services
+# google-api-core==2.24.2
+# google-auth==2.38.0
+# google-cloud-aiplatform==1.95.1
+# google-cloud-core==2.4.3
+# google-cloud-resource-manager==1.14.2
+# google-cloud-storage==2.19.0
+# google-cloud-trace==1.16.1
+# db-dtypes
+# psycopg[binary]
+
+
+# # LangChain Ecosystem
+
+# trustcall
+# openai==1.69.0
+# mypy-extensions==1.0.0
+# nest-asyncio==1.6.0
+# numexpr==2.10.2
+# openai==1.69.0
+
+# # Data Handling
+# python-dotenv==1.1.0
+# pandas==2.2.3
+# ipython
+# faiss-cpu==1.10.0
+# fastapi==0.115.12
+# Flask==3.1.0
+# Flask-SocketIO==5.5.1
+# uvicorn==0.34.3
+# python-dateutil==2.9.0.post0
+# python-engineio==4.11.2
+# python-socketio==5.12.1
+# pydantic==2.11.1
+# pydantic-settings==2.8.1
+# pydantic_core==2.33.0
+# requests==2.32.3
+# requests-toolbelt==1.0.0
+# psycopg==3.2.9
+# psycopg-pool==3.2.6
+# psycopg2-binary>=2.9
+# asyncpg>=0.27
+# sqlalchemy>=1.4
