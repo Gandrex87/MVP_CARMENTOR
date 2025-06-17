@@ -84,13 +84,13 @@ Para que tu imagen Docker sea más pequeña y segura, crea un archivo llamado `.
 Crearemos un archivo `Dockerfile` que contiene las instrucciones para construir una imagen de contenedor de tu aplicación. Usaremos un enfoque "multi-etapa" que es una buena práctica para producción.
 
 * Crea un archivo llamado `Dockerfile` (sin extensión) en la raíz de tu proyecto.
-# Guía Esencial de Comandos Docker para Desarrolladores
+#### Guía Esencial de Comandos Docker para Desarrolladores
 
 Docker es una herramienta que te permite empaquetar tu aplicación y sus dependencias en una unidad estandarizada llamada "contenedor". Esto asegura que tu aplicación funcione de la misma manera en cualquier entorno. Aquí tienes los comandos clave que necesitas para trabajar con Docker.
 
 ---
 
-### 1. Construir una Imagen (`docker build`)
+#### 1. Construir una Imagen (`docker build`)
 
 Este es el primer y más importante paso. Toma las instrucciones de tu `Dockerfile` y crea una "imagen" de tu aplicación. Una imagen es como una plantilla o un plano para tus contenedores.
 
@@ -108,15 +108,17 @@ docker build: El comando para construir.
 -t o --tag: Permite "etiquetar" tu imagen con un nombre y una versión (el tag). Es una muy buena práctica usarlo siempre.
 ```
 
-nombre-de-tu-imagen: Un nombre descriptivo, por ejemplo, carblau-agent-api.
+nombre-de-tu-imagen: Un nombre descriptivo, por ejemplo, `carblau-agent-api`.
 
-:tag: Una versión, como :v1, :latest, o :0.1.0. Si la omites, por defecto será :latest.
+`:tag:` Una versión, como `:v1`, :`latest`, o :0.1.0. Si la omites, por defecto será :`latest`.
 
-.: El punto al final es crucial. Le dice a Docker que el "contexto de construcción" (donde se encuentra tu Dockerfile y el código fuente) es el directorio actual.
+`.`: El punto al final es crucial. Le dice a Docker que el "contexto de construcción" (donde se encuentra tu Dockerfile y el código fuente) es el directorio actual.
 
 Ejemplo para tu proyecto:
 
+```bash
 docker build -t carblau-agent:v1 .
+```
 
 (Ejecuta este comando desde la carpeta raíz de tu proyecto MVP_CARMENTOR).
 
@@ -158,11 +160,11 @@ Ejemplo: -p 8000:8080 mapea el puerto 8080 del contenedor (donde Uvicorn está e
 
 --name [NOMBRE_DEL_CONTENEDOR]: Asigna un nombre fácil de recordar a tu contenedor. Si no lo haces, Docker le asignará uno aleatorio (ej: frosty_newton).
 
-Ejemplo: --name carblau-api-container
+Ejemplo: `--name carblau-api-container`
 
--e o --env [VARIABLE]="[VALOR]": Pasa una variable de entorno al contenedor. Muy útil para no usar un archivo .env en producción.
+-e o --env [VARIABLE]="[VALOR]": Pasa una variable de entorno al contenedor. Muy útil para no usar un archivo `.env` en producción.
 
-Ejemplo: -e DB_USER="mi_usuario"
+Ejemplo:` -e DB_USER="mi_usuario"`
 
 --env-file ./mi.env: Carga variables de entorno desde un archivo.
 
@@ -170,7 +172,9 @@ Ejemplo: -e DB_USER="mi_usuario"
 
 Ejemplo Completo para tu API:
 
+```
 docker run -d -p 8000:8080 --name carblau-api-container --env-file ./.env carblau-agent:v1
+```
 
 Este comando:
 
@@ -254,24 +258,32 @@ Estos comandos son los que usarías para subir tu imagen a la nube.
 
 Iniciar sesión en el registro:
 
-# Para Artifact Registry (como vimos en la guía de despliegue)
+## Para Artifact Registry (como vimos en la guía de despliegue)
+
+```bash
 gcloud auth configure-docker europe-west1-docker.pkg.dev 
-# Para Docker Hub (el registro público)
+```
+
+## Para Docker Hub (el registro público)
 docker login
 
 Subir una imagen (Push): Primero debes "taguear" tu imagen con el nombre completo del repositorio.
 
-# 1. Taguear la imagen local (si la construiste con un nombre simple)
-docker tag carblau-agent:v1 europe-west1-docker.pkg.dev/[PROYECTO]/[REPO]/carblau-agent:v1
+## 1. Taguear la imagen local (si la construiste con un nombre simple)
 
-# 2. Subir la imagen
+```bash
+docker tag carblau-agent:v1 europe-west1-docker.pkg.dev/[PROYECTO]/[REPO]/carblau-agent:v1
+```
+
+## 2. Subir la imagen
+
+```bash
 docker push europe-west1-docker.pkg.dev/[PROYECTO]/[REPO]/carblau-agent:v1
+```
 
 Descargar una imagen (Pull):
 
 docker pull ubuntu:latest # Descarga la imagen 'ubuntu' desde Docker Hub
-
-
 ---
 
 ### **Fase 3: Configurar Google Cloud Platform**
@@ -307,7 +319,9 @@ Ahora viene la parte emocionante.
     (Reemplaza `europe-west1` si usaste otra región).
 
 2.  **Construir la Imagen Docker:** Desde la raíz de tu proyecto, ejecuta:
-    ```bash
+
+
+ ```bash
     docker build -t europe-west1-docker.pkg.dev/[TU_ID_DE_PROYECTO]/[NOMBRE_DEL_REPOSITORIO]/carblau-agent:v1 .
     ```
     * Reemplaza `[TU_ID_DE_PROYECTO]` y `[NOMBRE_DEL_REPOSITORIO]`.
@@ -418,12 +432,58 @@ docker stop carblau-api-container
 docker rm carblau-api-container
 ```
 
-Este ciclo de `build` -> `run` -> `tes` -> `logs` -> `stop/rm` es el flujo de trabajo estándar de Docker y te dará una confianza muy alta en que lo que estás subiendo a Cloud Run va a funcionar.
+Este ciclo de `build` -> `run` -> `test` -> `logs` -> `stop/rm` es el flujo de trabajo estándar de Docker y dará confianza alta en lo que voy a subir a Cloud Run funciona.
 
-
+``` bash
 gcloud secrets versions access latest --secret=DB_PASSWORD
+```
 
+``` bash
  gcloud iam service-accounts list
+```
 
-PENDIENTE:
- Volver a reconstruir la imagen, subirla a artifact registry e intentar deploy.
+#### Construir la imagen con arquitectura linux/amd64:
+Docker  construye la imagen no para la arquitectura de tu Mac, sino para la arquitectura de Cloud Run (linux/amd64). La herramienta moderna para esto es docker buildx.
+
+Paso 1: Reconstruir Y Subir la Imagen para la Arquitectura Correcta
+Reemplazar el comando docker build y docker push con un solo comando docker buildx que hace ambas cosas y especifica la plataforma correcta.
+
+Este es el único comando que necesitas ejecutar ahora. Reemplaza [TU_ID_DE_PROYECTO] y asegúrate de estar en el directorio MVP_CARMENTOR.
+
+``` bash
+ docker buildx build --platform linux/amd64 \
+  -t europe-west1-docker.pkg.dev/[TU_ID_DE_PROYECTO]/carblau-repo/carblau-agent-api:v1 \
+  --push .
+  ``` 
+
+docker buildx build --platform linux/amd64 \
+  -t europe-west1-docker.pkg.dev/thecarmentor-mvp2/carblau-repo/carblau-agent-api:v1 \
+  --push .
+
+Crear/validar que el repositorio en artifact registry este creado
+
+Valido la creacion:
+
+``` bash
+  gcloud artifacts repositories list --location=europe-west1
+```
+
+#### ¿Qué es Cloud Build y por qué deberías usarlo?
+
+Piensa en Cloud Build como un robot en la nube que trabaja para ti. En lugar de ejecutar los comandos docker buildx y gcloud run deploy en tu propio ordenador, le das un archivo de instrucciones (`cloudbuild.yaml`) y Cloud Build ejecuta esos pasos por ti en los servidores de Google.
+
+Ventajas Principales:
+
+Rapidez y Consistencia: En lugar de recordar y ejecutar varios comandos, solo ejecutas uno. El proceso es siempre el mismo, reduciendo errores humanos.
+No Depende de tu Máquina: La construcción de la imagen Docker ocurre en los servidores de Google (que usan arquitectura amd64). Esto significa que ya no necesitas usar docker buildx. El problema de la arquitectura desaparece para siempre.
+CI/CD (Integración Continua / Despliegue Continuo): Este es el primer paso hacia una pipeline de `CI/CD` profesional. En el futuro, podrías configurar Cloud Build para que se ejecute automáticamente cada vez que haces un push a una rama específica en `GitHub`.
+
+**Tu Flujo de Trabajo Automatizado**
+El proceso para actualizar la aplicación es tan simple como:
+
+Hacer cambios en tu código (Python, etc.).
+Ejecutar:
+
+``` bash
+gcloud builds submit --config cloudbuild.yaml .
+```

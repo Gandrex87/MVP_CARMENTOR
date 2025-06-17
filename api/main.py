@@ -2,11 +2,14 @@
 from fastapi import FastAPI, HTTPException, Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-import uuid 
+import uuid
+from http import HTTPStatus
+import time
 import logging
 import os 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from fastapi.middleware.cors import CORSMiddleware
 
 
 # Cargar variables de entorno ANTES de cualquier import que las use
@@ -49,11 +52,21 @@ app = FastAPI(
     version="0.1.0"
 )
 
+# --- AÑADIR MIDDLEWARE DE CORS ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Para producción, considera limitarlo a tu dominio de frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # --- Evento de Startup ---
 @app.on_event("startup")
 async def startup_event():
     global car_mentor_graph, _checkpointer_context_manager, _persistent_checkpointer_instance
     logger.info("Ejecutando evento de startup de FastAPI para CarBlau Agent...")
+    start_time = time.time()
+    logger.info(f"[TIMING] STARTUP: Evento de startup iniciado en t={time.time() - start_time:.2f}s")
 
      # 1. Cargar configuración de la base de datos
     db_user = os.environ.get("DB_USER")
@@ -61,7 +74,8 @@ async def startup_event():
     db_host = os.environ.get("DB_HOST")  # En Cloud Run será: /cloudsql/instance-connection-name
     db_port = os.environ.get("DB_PORT", "5432")
     db_name = os.environ.get("DB_NAME")
-
+    logger.info(f"[TIMING] STARTUP: Variables de BBDD cargadas en t={time.time() - start_time:.2f}s")
+    
     if not all([db_user, db_password, db_host, db_name]):
         logger.error("CRÍTICO: Faltan variables de BBDD. El agente NO funcionará.")
         raise RuntimeError("Configuración de base de datos incompleta.")
@@ -79,26 +93,33 @@ async def startup_event():
         logger.info(f"Usando conexión TCP estándar a {db_host}:{db_port}")
         conn_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
         logger.info(f"Cadena de conexión PostgreSQL (formato URL): {conn_string.replace(db_password, '******')}")
-
+    
+    logger.info(f"[TIMING] STARTUP: Cadena de conexión construida en t={time.time() - start_time:.2f}s")
 
     try:
         # 2. Asegurar que las tablas del checkpointer existan
         logger.info("Verificando/creando tablas para el checkpointer...")
+        logger.info(f"[TIMING] STARTUP: Llamando a ensure_tables_exist... en t={time.time() - start_time:.2f}s")
         await ensure_tables_exist(conn_string)
         logger.info("Tablas del checkpointer verificadas/creadas (vía ensure_tables_exist).")
+        logger.info(f"[TIMING] STARTUP: ensure_tables_exist completado en t={time.time() - start_time:.2f}s")
         
         # 3. Crear el GESTOR DE CONTEXTO para AsyncPostgresSaver
         _checkpointer_context_manager = AsyncPostgresSaver.from_conn_string(conn_string)
         logger.info("Gestor de contexto AsyncPostgresSaver creado.")
+        logger.info(f"[TIMING] STARTUP: Gestor de contexto AsyncPostgresSaver creado en t={time.time() - start_time:.2f}s")
 
         # 4. "Entrar" en el contexto para obtener la INSTANCIA REAL del saver
         #    Esto también abrirá la conexión a la base de datos.
         _persistent_checkpointer_instance = await _checkpointer_context_manager.__aenter__()
         logger.info("Instancia real de AsyncPostgresSaver obtenida (conexión a BD abierta).")
+        logger.info(f"[TIMING] STARTUP: Instancia de AsyncPostgresSaver obtenida en t={time.time() - start_time:.2f}s")
+
 
         # 5. Establecer la instancia REAL globalmente
         set_checkpointer_instance(_persistent_checkpointer_instance)
         logger.info("Instancia persistente de AsyncPostgresSaver configurada globalmente.")
+        logger.info(f"[TIMING] STARTUP: Instancia configurada globalmente en t={time.time() - start_time:.2f}s")
 
         # 6. Construir y compilar el grafo
         logger.info("Compilando el grafo del agente CarBlau...")
@@ -111,6 +132,18 @@ async def startup_event():
     except Exception as e:
         logger.error(f"FALLO CRÍTICO en startup: {e}", exc_info=True)
         raise RuntimeError(f"No se pudo inicializar el agente: {e}")
+    logger.info(f"[TIMING] STARTUP: ¡EVENTO DE STARTUP COMPLETADO EXITOSAMENTE en t={time.time() - start_time:.2f}s!")
+
+# --- AÑADIR EVENTO DE SHUTDOWN ---
+@app.on_event("shutdown")
+async def shutdown_event():
+    global _checkpointer_context_manager
+    logger.info("Ejecutando evento de shutdown de FastAPI...")
+    if _checkpointer_context_manager:
+        # Llama al método de salida del contexto para cerrar la conexión
+        await _checkpointer_context_manager.__aexit__(None, None, None)
+        logger.info("Conexión del checkpointer de la base de datos cerrada correctamente.")
+    logger.info("Shutdown completo.")
 
 # --- Endpoints (sin cambios en su lógica interna, solo dependen de que car_mentor_graph esté listo) ---
 @app.get("/", tags=["root"])
@@ -154,7 +187,8 @@ async def send_message(
 ): # ... (como antes)
     if not car_mentor_graph:
         logger.error(f"Intento de mensaje a {thread_id}, pero grafo no disponible.")
-        raise HTTPException(status_code=503, detail="El servicio del agente no está disponible.")
+        #raise HTTPException(status_code=503, detail="El servicio del agente no está disponible.")
+        raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail="El servicio del agente no está disponible")
     if not message_request.content.strip():
         raise HTTPException(status_code=400, detail="El contenido del mensaje no puede estar vacío.")
     config = {"configurable": {"thread_id": thread_id}}
