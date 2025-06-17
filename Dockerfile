@@ -38,4 +38,5 @@ EXPOSE 8080
 # - "api.main:app": Apunta al objeto 'app' en tu archivo 'api/main.py'. ¡Ajusta la ruta si es diferente!
 # - "--host 0.0.0.0": MUY IMPORTANTE. Hace que el servidor escuche en todas las interfaces de red dentro del contenedor.
 # - "--port 8080": Coincide con el puerto que hemos expuesto.
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+#CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}
