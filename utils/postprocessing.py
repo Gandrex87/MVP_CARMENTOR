@@ -10,16 +10,6 @@ from graph.perfil.state import PerfilUsuario, FiltrosInferidos,InfoClimaUsuario 
 from .conversion import is_yes
 import logging
 
-
-
-# --- Helper interno para simplificar comprobaciones ---
-def _es_nulo_o_vacio(valor) -> bool:
-    if valor is None:
-        return True
-    if isinstance(valor, (list, str)) and not valor: # Lista vacía o string vacío
-        return True
-    return False
-
 # --- NUEVA Función de Post-procesamiento para PerfilUsuario ---
 
 def aplicar_postprocesamiento_perfil(

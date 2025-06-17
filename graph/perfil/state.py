@@ -208,13 +208,15 @@ class EstadoAnalisisPerfil(TypedDict):
     penalizar_bev_reev_aventura_ocasional: Optional[bool]
     penalizar_phev_aventura_ocasional: Optional[bool]
     penalizar_electrificados_aventura_extrema: Optional[bool] # Un solo flag para BEV, REEV, PHEV en aventura extrema
-    # --- NUEVOS FLAGS PARA LÓGICA DE CARROCERÍA ---
     favorecer_carroceria_montana: Optional[bool]
     favorecer_carroceria_comercial: Optional[bool]
     favorecer_carroceria_pasajeros_pro: Optional[bool]
     desfavorecer_carroceria_no_aventura: Optional[bool]
     favorecer_suv_aventura_ocasional: Optional[bool]
     favorecer_pickup_todoterreno_aventura_extrema:Optional[bool]
+    penalizar_awd_ninguna_aventura: Optional[bool]  # <-- ✅ 
+    favorecer_awd_aventura_ocasional: Optional[bool] # <-- ✅ 
+    favorecer_awd_aventura_extrema: Optional[bool]   # <-- ✅ 
     aplicar_logica_objetos_especiales: Optional[bool]
     favorecer_carroceria_confort: Optional[bool] 
     flag_logica_uso_ocasional: Optional[bool]
@@ -222,6 +224,9 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_penalizar_phev_uso_intensivo: Optional[bool]
     flag_favorecer_electrificados_por_punto_carga: Optional[bool]
     flag_logica_diesel_ciudad: Optional[str]
+    flag_bonus_awd_nieve: Optional[bool]  # <-- ✅ 
+    flag_bonus_awd_montana: Optional[bool] # <-- ✅ 
+    flag_logica_reductoras_aventura: Optional[str]
     km_anuales_estimados: Optional[int]
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
 

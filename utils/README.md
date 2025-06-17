@@ -272,7 +272,7 @@ Es fundamental tener clara la diferencia entre los **pesos** (que se normalizan 
 | **Cálculo**         | Ratings → pesos crudos → normalización (sum = 1.0).        | Valores fijos (+/-) aplicados si cumple la condición.                     |
 | **Efecto en Score** | Multiplicativo con la característica escalada.             | Aditivo directo (todo o nada).                                            |
 | **Sensibilidad**    | Sensible a cuánto mejor es un coche en la característica.  | Sensible a si cumple o no la condición.                                   |
-| **Ejemplos**        | "Quiero mucha seguridad" → `seguridad_scaled * alto_peso`. | "Estoy en ZBE" → +0.25 o -0.50 según distintivo.                          |
+| **Ejemplos**        | "Quiero mucha seguridad" → `seguridad_scaled * alto_peso`. | "Estoy en ZBE" → +0.25 o -0.25 según distintivo.                          |
 
 ---
 
