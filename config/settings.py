@@ -100,6 +100,14 @@ MIN_MAX_RANGES = {
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- VALORES DE AJUSTE DIRECTO AL SCORE (BONUS/PENALIZACIONES) (`utils/bigquery_tools.py`) ---
 
+# --- LÓGICA PARA TRACCIÓN BASADA EN AVENTURA ---
+PENALTY_AWD_NINGUNA_AVENTURA = -0.10
+BONUS_AWD_AVENTURA_OCASIONAL = 0.10
+BONUS_AWD_AVENTURA_EXTREMA = 0.20
+
+# --- LÓGICA PARA REDUCTORAS BASADA EN AVENTURA ---
+BONUS_REDUCTORAS_AVENTURA_OCASIONAL = 0.10 # 
+BONUS_REDUCTORAS_AVENTURA_EXTREMA = 0.20   # 
 
 #valores directos que se suman o restan al score (escala 0-1)
 # Penalización por Puertas
@@ -184,6 +192,15 @@ BONUS_PUNTO_CARGA_PROPIO = 0.10
 # Bonus/Penalty favorecer por conducir en ciudad
 PENALTY_DIESEL_CIUDAD = -0.15
 BONUS_DIESEL_CIUDAD_OCASIONAL = 0.15
+
+# --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
+# Ajustes de pesos crudos aditivos por clima
+BONUS_AWD_ZONA_NIEVE = 0.10
+BONUS_AWD_ZONA_MONTA = 0.05
+
+
+
+
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- UMBRALES PARA ACTIVAR FLAGS EN PYTHON (`graph/perfil/nodes.py` - `finalizar_y_presentar_node`) ---
 
@@ -204,25 +221,32 @@ UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA = 8
 # Límite máximo para cualquier peso crudo individual antes de normalizar
 MAX_SINGLE_RAW_WEIGHT = 10.0 # Definir el tope máximo para un peso crudo individual
 MIN_SINGLE_RAW_WEIGHT = 0.0 # Definir el tope minimo
-
+PESO_CRUDO_BASE = 1.0
 
 #Valores Pesos basado en 'priorizar_ancho' (priorizar_ancho de pasajeros Z>=2)
 PESO_CRUDO_BASE_ANCHO_GRAL = 1.0
 PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL = 4.0
 PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
 
+# --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
 # Ajustes de pesos crudos aditivos por clima
 AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
-AJUSTE_CRUDO_TRACCION_POR_NIEVE = 5.0 # Cuánto sumar al peso crudo de tracción si hay nieve
-AJUSTE_CRUDO_TRACCION_POR_MONTA = 2.0 # Cuánto sumar al peso crudo de tracción si es clima de montaña
 
 # Aventura Pesos Crudos
-AVENTURA_RAW_WEIGHTS = {
-  "ninguna":   {"altura_libre_suelo":  0.0,   "traccion":  0.0 ,  "reductoras":  0.0},
-  "ocasional": {"altura_libre_suelo":  7.0,   "traccion":  4.0,  "reductoras":  1.0},
-  "extrema":   {"altura_libre_suelo":  9.0,   "traccion": 10.0,  "reductoras":  10.0}}
+# AVENTURA_RAW_WEIGHTS = {
+#   "ninguna":   {"altura_libre_suelo":  1.0}, #"traccion":  1.0 ,
+#   "ocasional": {"altura_libre_suelo":  7.0}, # "traccion":  4.0, 
+#   "extrema":   {"altura_libre_suelo":  9.0 }} #"traccion": 10.0, 
 
-# Valores de Pesos basados en altura_mayor_190 en Wights.py
+# Mapeo directo del nivel de aventura al peso crudo deseado.
+altura_map = {
+        "ninguna": 1.0,
+        "ocasional": 4.0,
+        "extrema": 10.0
+    }
+
+
+# Valores de Pesos basados en altura_mayor_190 en Weights.py
 PESO_CRUDO_BASE_BATALLA_ALTURA_MAYOR_190 = 1.0
 PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190 = 5.0
 PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190 = 8.0

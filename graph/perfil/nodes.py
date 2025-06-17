@@ -1224,14 +1224,11 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     """
     print("--- Ejecutando Nodo: calcular_flags_dinamicos_node ---")
     logging.debug("--- Ejecutando Nodo: calcular_flags_dinamicos_node ---")
-    
     preferencias_obj = state.get("preferencias_usuario")
     info_clima_obj = state.get("info_clima_usuario")
     penalizar_puertas_bajas_actual = state.get("penalizar_puertas_bajas", False) # # Los flags 'penalizar_puertas_bajas' y 'priorizar_ancho' vienen de aplicar_filtros_pasajeros_node ya deberían estar en el estado si esa lógica se ejecutó.
-    #priorizar_ancho_actual = state.get("priorizar_ancho", False)
     info_pasajeros_obj = state.get("info_pasajeros") # <-- Obtener info de pasajeros
     print(f"DEBUG contenido de los objetos:  preferencias_obj: {preferencias_obj} - pasajeros {info_pasajeros_obj} - clima {info_clima_obj}") # Debug para ver qué contiene el objeto
-    # Inicializar flags para seleccion NivelAventura False por defecto
     flag_pen_bev_reev_avent_ocas = False
     flag_pen_phev_avent_ocas = False
     flag_pen_electrif_avent_extr = False # Para BEV, REEV, PHEV en aventura extrema
@@ -1254,6 +1251,12 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     flag_penalizar_phev_uso_intensivo = False
     flag_favorecer_electrificados_por_punto_carga = False
     flag_logica_diesel_ciudad = False
+    penalizar_awd_ninguna_aventura = False
+    favorecer_awd_aventura_ocasional = False
+    favorecer_awd_aventura_extrema = False
+    flag_bonus_awd_nieve = False
+    flag_bonus_awd_montana = False
+    flag_logica_reductoras_aventura = False
      
     # Verificar que preferencias_obj exista para acceder a sus atributos
     if not preferencias_obj:
@@ -1282,14 +1285,28 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "flag_favorecer_bev_uso_definido": flag_favorecer_bev_uso_definido, 
             "flag_penalizar_phev_uso_intensivo": flag_penalizar_phev_uso_intensivo, #
             "flag_favorecer_electrificados_por_punto_carga" : flag_favorecer_electrificados_por_punto_carga,
-            "flag_logica_diesel_ciudad" : flag_logica_diesel_ciudad , 
+            "flag_logica_diesel_ciudad" : flag_logica_diesel_ciudad,
+            "penalizar_awd_ninguna_aventura" : penalizar_awd_ninguna_aventura,
+            "favorecer_awd_aventura_ocasional" : favorecer_awd_aventura_ocasional,
+            "favorecer_awd_aventura_extrema" : favorecer_awd_aventura_extrema,
+            "flag_bonus_awd_nieve" : flag_bonus_awd_nieve,
+            "flag_bonus_awd_montana" : flag_bonus_awd_montana,
+            "flag_logica_reductoras_aventura" : flag_logica_reductoras_aventura
         }
     # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
     # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
     if info_clima_obj and hasattr(info_clima_obj, 'ZONA_CLIMA_MONTA') and info_clima_obj.ZONA_CLIMA_MONTA is True:
         flag_fav_car_montana = True
         logging.info(f"DEBUG (CalcFlags) ► ZONA_CLIMA_MONTA=True. Activando flag para favorecer carrocería de montaña.")
-
+    # --- FLAGS DE TRACCIÓN Y CLIMA ---
+    if info_clima_obj: # Solo si existe el objeto de info climática
+        if getattr(info_clima_obj, 'ZONA_NIEVE', False):
+            flag_bonus_awd_nieve = True
+            logging.info("DEBUG (CalcFlags) ► Zona de nieve detectada. Activando bonus para AWD.")
+        if getattr(info_clima_obj, 'ZONA_CLIMA_MONTA', False):
+            flag_bonus_awd_montana = True
+            logging.info("DEBUG (CalcFlags) ► Zona de montaña detectada. Activando bonus para AWD.")    
+    
     # Regla 2 y 3: Uso profesional con/sin pasajeros
     if is_yes(preferencias_obj.uso_profesional):
         if info_pasajeros_obj and info_pasajeros_obj.suele_llevar_acompanantes is False:
@@ -1419,10 +1436,29 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             logger.debug("DEBUG (CalcFlags) ► Nivel de aventura es None. No se activan penalizaciones de mecánica por aventura.")
     else:
         logging.warning("WARN (CalcFlags) ► El objeto 'preferencias_usuario' no tiene el atributo 'aventura'.")
-    # --- FIN DEBUGGING AVENTURA ---
-    logging.debug(f"DEBUG (CalcFlags) ► Flags calculados: lowcost_comodidad={flag_penalizar_lc_comod}, deportividad_comodidad={flag_penalizar_dep_comod}, antiguo_por_tecnolog={flag_penalizar_ant_tec}, distint_ambiental={flag_aplicar_dist_amb}, zbe={flag_es_zbe}, penali_bev_reev_aventura_ocasional= {flag_pen_bev_reev_avent_ocas}")
-    # Devolver solo los flags que este nodo es responsable de calcular/actualizar
-    # y los que ya existían para asegurar que se propaguen.
+
+    # --- LÓGICA ACTUALIZADA PARA FLAGS DE TRACCIÓN Y AVENTURA ---
+    aventura_val = preferencias_obj.aventura
+    if aventura_val == NivelAventura.ninguna.value:
+        penalizar_awd_ninguna_aventura = True
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ninguna'. Activando Flag penalización para tracción.")
+    elif aventura_val == NivelAventura.ocasional.value:
+        favorecer_awd_aventura_ocasional = True
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ocasional'. Activando Flag bonus para tracción.")
+    elif aventura_val == NivelAventura.extrema.value:
+        favorecer_awd_aventura_extrema = True
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'extrema'. Activando Flag bonus para tracción.")
+    # ---  LÓGICA PARA FLAG DE REDUCTORAS Y AVENTURA ---
+    aventura_val = preferencias_obj.aventura
+    if aventura_val == NivelAventura.ocasional.value:
+        flag_logica_reductoras_aventura = "FAVORECER_OCASIONAL"
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ocasional'. Activando bonus moderado para Reductoras.")
+    elif aventura_val == NivelAventura.extrema.value:
+        flag_logica_reductoras_aventura = "FAVORECER_EXTREMA"
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'extrema'. Activando bonus alto para Reductoras.")
+    
+    logging.debug(f"DEBUG (CalcFlags) ► Flags calculados: lowcost_comodidad={flag_penalizar_lc_comod}, deportividad_comodidad={flag_penalizar_dep_comod}, antiguo_por_tecnolog={flag_penalizar_ant_tec}, distint_ambiental={flag_aplicar_dist_amb}, zbe={flag_es_zbe}, penali_bev_reev_aventura_ocasional= {flag_pen_bev_reev_avent_ocas}...")
+
     return {
         "penalizar_puertas_bajas": penalizar_puertas_bajas_actual, # Propagar
        # "priorizar_ancho": priorizar_ancho_actual, # Propagar
@@ -1439,6 +1475,9 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "desfavorecer_carroceria_no_aventura": flag_desfav_car_no_aventura,
         "favorecer_suv_aventura_ocasional": flag_fav_suv_aventura_ocasional,
         "favorecer_pickup_todoterreno_aventura_extrema": flag_fav_pickup_todoterreno_aventura_extrema,
+        "penalizar_awd_ninguna_aventura": penalizar_awd_ninguna_aventura,
+        "favorecer_awd_aventura_ocasional": favorecer_awd_aventura_ocasional,
+        "favorecer_awd_aventura_extrema": favorecer_awd_aventura_extrema,
         "aplicar_logica_objetos_especiales": flag_aplicar_logica_objetos_especiales,
         "favorecer_carroceria_confort": flag_fav_carroceria_confort,
         "flag_favorecer_bev_uso_definido": flag_favorecer_bev_uso_definido,
@@ -1446,6 +1485,9 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_penalizar_phev_uso_intensivo": flag_penalizar_phev_uso_intensivo,
         "flag_favorecer_electrificados_por_punto_carga": flag_favorecer_electrificados_por_punto_carga,
         "flag_logica_diesel_ciudad": flag_logica_diesel_ciudad,
+        "flag_bonus_awd_nieve": flag_bonus_awd_nieve,
+        "flag_bonus_awd_montana": flag_bonus_awd_montana,
+        "flag_logica_reductoras_aventura": flag_logica_reductoras_aventura,
         "es_municipio_zbe": flag_es_zbe
     }
     
@@ -1484,10 +1526,6 @@ def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
     try:
         prefs_dict_para_weights = preferencias_obj.model_dump(mode='json', exclude_none=False)
         info_pasajeros_dict_para_weights = info_pasajeros_obj.model_dump(mode='json', exclude_none=False) if info_pasajeros_obj else None
-        
-        # estetica_min_val = filtros_obj.estetica_min
-        # premium_min_val = filtros_obj.premium_min
-        # singular_min_val = filtros_obj.singular_min
 
         logging.debug(f"DEBUG (CalcPesos) ► Entradas para compute_raw_weights:\n"
                       f"  Preferencias: {prefs_dict_para_weights.get('apasionado_motor')}, {prefs_dict_para_weights.get('aventura')}, etc.\n"
@@ -1496,13 +1534,10 @@ def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
 
         raw_weights = compute_raw_weights(
             preferencias=prefs_dict_para_weights, # Usar el dict que ya tenías
-            # estetica_min_val=estetica_min_val,
-            # premium_min_val=premium_min_val,
-            # singular_min_val=singular_min_val,
             info_pasajeros_dict=info_pasajeros_dict_para_weights,
             es_zona_nieblas=es_nieblas_val,
-            es_zona_nieve=es_nieve_val,
-            es_zona_clima_monta=es_monta_val,
+            # es_zona_nieve=es_nieve_val,
+            # es_zona_clima_monta=es_monta_val,
             km_anuales_estimados=km_anuales_val
         )
         pesos_calculados_normalizados = normalize_weights(raw_weights)
@@ -1645,6 +1680,12 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     flag_penalizar_phev_uso_intensivo = state.get("flag_penalizar_phev_uso_intensivo")
     flag_favorecer_electrificados_por_punto_carga = state.get("flag_favorecer_electrificados_por_punto_carga")
     flag_logica_diesel_ciudad= state.get("flag_logica_diesel_ciudad")
+    penalizar_awd_ninguna_val = state.get("penalizar_awd_ninguna_aventura", False)
+    favorecer_awd_ocasional_val = state.get("favorecer_awd_aventura_ocasional", False)
+    favorecer_awd_extrema_val = state.get("favorecer_awd_aventura_extrema", False)
+    flag_bonus_nieve_val = state.get("flag_bonus_awd_nieve", False)
+    flag_bonus_montana_val = state.get("flag_bonus_awd_montana", False)
+    flag_reductoras_aventura_val = state.get("flag_logica_reductoras_aventura")
     km_anuales_val = state.get("km_anuales_estimados")
     
     # 2. Obtén el thread_id directamente del objeto 'config'
@@ -1701,8 +1742,13 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         filtros_para_bq['flag_penalizar_phev_uso_intensivo'] = flag_penalizar_phev_uso_intensivo
         filtros_para_bq['flag_favorecer_electrificados_por_punto_carga'] = flag_favorecer_electrificados_por_punto_carga
         filtros_para_bq['flag_logica_diesel_ciudad'] = flag_logica_diesel_ciudad
+        filtros_para_bq['penalizar_awd_ninguna_aventura'] = penalizar_awd_ninguna_val
+        filtros_para_bq['favorecer_awd_aventura_ocasional'] = favorecer_awd_ocasional_val
+        filtros_para_bq['favorecer_awd_aventura_extrema'] = favorecer_awd_extrema_val
+        filtros_para_bq['flag_bonus_nieve_val'] = flag_bonus_nieve_val
+        filtros_para_bq['flag_bonus_montana_val'] = flag_bonus_montana_val
+        filtros_para_bq['flag_logica_reductoras_aventura'] = flag_reductoras_aventura_val
         filtros_para_bq['km_anuales_estimados'] = km_anuales_val
-        
         logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
         logging.debug(f"DEBUG (Buscar BQ) ► Filtros para BQ: {filtros_para_bq}") 
         logging.debug(f"DEBUG (Buscar BQ) ► Pesos para BQ: {pesos_finales}") 
@@ -1911,6 +1957,10 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         'flag_penalizar_phev_uso_intensivo': flag_penalizar_phev_uso_intensivo,
         'flag_favorecer_electrificados_por_punto_carga': flag_favorecer_electrificados_por_punto_carga,
         'flag_logica_diesel_ciudad': flag_logica_diesel_ciudad ,
+        'penalizar_awd_ninguna_aventura' : penalizar_awd_ninguna_val,
+        'favorecer_awd_aventura_ocasional' : favorecer_awd_ocasional_val,
+        'favorecer_awd_aventura_extrema' : favorecer_awd_extrema_val,
+        'flag_logica_reductoras_aventura' :flag_reductoras_aventura_val,
         "pregunta_pendiente": None, # Este nodo es final para el turno
     }
 
