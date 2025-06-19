@@ -9,7 +9,7 @@ from .state import (EstadoAnalisisPerfil,
                     InfoClimaUsuario, ResultadoCP, NivelAventura , FrecuenciaUso, DistanciaTrayecto, FrecuenciaViajesLargos
 )
 from config.llm import llm_solo_perfil, llm_solo_filtros, llm_economia, llm_pasajeros, llm_cp_extractor
-from prompts.loader import system_prompt_perfil, system_prompt_filtros_template, prompt_economia_structured_sys_msg, system_prompt_pasajeros, system_prompt_cp
+from prompts.loader import system_prompt_perfil, prompt_economia_structured_sys_msg, system_prompt_pasajeros, system_prompt_cp
 from utils.postprocessing import aplicar_postprocesamiento_perfil, aplicar_postprocesamiento_filtros
 from utils.validation import check_perfil_usuario_completeness , check_filtros_completos, check_economia_completa, check_pasajeros_completo
 from utils.formatters import formatear_preferencias_en_tabla
@@ -207,9 +207,6 @@ def buscar_info_clima_node(state: EstadoAnalisisPerfil) -> dict:
 
 # --- FIN NUEVOS NODOS PARA ETAPA DE CÓDIGO POSTAL ---
 
-
-
-
 # --- Etapa 1: Recopilación de Preferencias del Usuario ---
 
 def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
@@ -228,9 +225,6 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     # Si el último mensaje es de la IA, no llamar al LLM de nuevo.
     if historial and isinstance(historial[-1], AIMessage):
         logging.debug("DEBUG (Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
-        # Devolver solo las claves que podrían haber cambiado o que son relevantes para el siguiente paso.
-        # En este caso, si no hay pregunta pendiente, no hay mucho que actualizar.
-        # Si el flujo depende de pregunta_pendiente, asegurarse de propagarla o limpiarla.
         return {"pregunta_pendiente": state.get("pregunta_pendiente")}
 
     logging.debug("DEBUG (Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
@@ -248,7 +242,6 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
 
         preferencias_del_llm = response.preferencias_usuario # Objeto PerfilUsuario del LLM
         mensaje_para_pregunta_pendiente = response.contenido_mensaje # Mensaje del LLM
-        # tipo_msg_llm = response.tipo_mensaje # Se podría usar para logging o lógica más fina
 
         # Aplicar post-procesamiento a las preferencias obtenidas del LLM
         # Es importante que aplicar_postprocesamiento_perfil maneje un input None si preferencias_del_llm es None
@@ -312,8 +305,6 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
         # En ese caso, el nodo preguntar_preferencias_node usará su fallback.
         logging.debug(f"DEBUG (Perfil) ► No hay mensaje específico para pregunta_pendiente, se limpiará o usará fallback.")
         mensaje_para_pregunta_pendiente = None
-
-
     logging.debug(f"DEBUG (Perfil) ► Estado preferencias_usuario a actualizar: {preferencias_para_actualizar_estado.model_dump_json(indent=2) if hasattr(preferencias_para_actualizar_estado, 'model_dump_json') else None}")
     logging.debug(f"DEBUG (Perfil) ► Guardando mensaje para pregunta_pendiente: {mensaje_para_pregunta_pendiente}")
         
@@ -342,7 +333,6 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     # La lógica de enrutamiento (volver a preguntar o avanzar a filtros) 
     # se definirá en la arista condicional que salga de este nodo.
     return {**state} 
-
 
 def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     """Genera una pregunta específica basada en el primer campo obligatorio que falta."""
@@ -486,80 +476,6 @@ def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
 
 
 # --- NUEVA ETAPA: PASAJEROS ---
-
-# def recopilar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Procesa entrada humana, llama a llm_pasajeros, actualiza info_pasajeros,
-#     y guarda el contenido del mensaje devuelto en 'pregunta_pendiente'.
-#     Es el nodo principal del bucle de pasajeros.
-#     """
-#     print("--- Ejecutando Nodo: recopilar_info_pasajeros_node ---")
-#     historial = state.get("messages", [])
-#     pasajeros_actuales = state.get("info_pasajeros") # Puede ser None o InfoPasajeros
-
-#     # Guarda AIMessage (igual que en perfil)
-#     if historial and isinstance(historial[-1], AIMessage):
-#         print("DEBUG (Pasajeros) ► Último mensaje es AIMessage, omitiendo llamada a llm_pasajeros.")
-#         return {**state, "pregunta_pendiente": None} 
-
-#     print("DEBUG (Pasajeros) ► Último mensaje es HumanMessage o inicio de etapa, llamando a llm_pasajeros...")
-    
-#     pasajeros_actualizados = pasajeros_actuales # Usar como fallback
-#     contenido_msg_llm = None
-
-#     try:
-#         # Llama al LLM específico de pasajeros
-#         response: ResultadoPasajeros = llm_pasajeros.invoke(
-#             [system_prompt_pasajeros, *historial],
-#             config={"configurable": {"tags": ["llm_pasajeros"]}} 
-#         )
-#         print(f"DEBUG (Pasajeros) ► Respuesta llm_pasajeros: {response}")
-
-#         pasajeros_nuevos = response.info_pasajeros 
-#         tipo_msg_llm = response.tipo_mensaje 
-#         contenido_msg_llm = response.contenido_mensaje
-        
-#         print(f"DEBUG (Pasajeros) ► Tipo='{tipo_msg_llm}', Contenido='{contenido_msg_llm}'")
-#         print(f"DEBUG (Pasajeros) ► Info Pasajeros LLM: {pasajeros_nuevos}")
-
-#         # Actualizar el estado 'info_pasajeros' (fusión simple)
-#         if pasajeros_actuales and pasajeros_nuevos:
-#             try:
-#                 update_data = pasajeros_nuevos.model_dump(exclude_unset=True, exclude_none=True)
-#                 if update_data:
-#                     pasajeros_actualizados = pasajeros_actuales.model_copy(update=update_data)
-#                 # else: No hacer nada si no hay datos nuevos
-#             except Exception as e_merge:
-#                 print(f"ERROR (Pasajeros) ► Fallo al fusionar info_pasajeros: {e_merge}")
-#                 pasajeros_actualizados = pasajeros_actuales # Mantener anterior
-#         elif pasajeros_nuevos:
-#              pasajeros_actualizados = pasajeros_nuevos # Usar el nuevo si no había antes
-#         # Si ambos son None o pasajeros_nuevos es None, pasajeros_actualizados mantiene su valor inicial
-
-#     except ValidationError as e_val:
-#         print(f"ERROR (Pasajeros) ► Error de Validación Pydantic en llm_pasajeros: {e_val}")
-#         contenido_msg_llm = f"Hubo un problema al entender la información sobre pasajeros: {e_val}. ¿Podrías repetirlo?"
-#     except Exception as e:
-#         print(f"ERROR (Pasajeros) ► Fallo general al invocar llm_pasajeros: {e}")
-#         traceback.print_exc()
-#         contenido_msg_llm = "Lo siento, tuve un problema técnico procesando la información de pasajeros."
-
-#     print(f"DEBUG (Pasajeros) ► Estado info_pasajeros actualizado: {pasajeros_actualizados}")
-    
-#     # Guardar la pregunta/confirmación pendiente
-#     pregunta_para_siguiente_nodo = None
-#     if contenido_msg_llm and contenido_msg_llm.strip():
-#         pregunta_para_siguiente_nodo = contenido_msg_llm.strip()
-#         print(f"DEBUG (Pasajeros) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
-#     else:
-#         print(f"DEBUG (Pasajeros) ► No hay mensaje pendiente.")
-        
-#     return {
-#         **state,
-#         "info_pasajeros": pasajeros_actualizados, # Guardar info actualizada
-#         "pregunta_pendiente": pregunta_para_siguiente_nodo 
-#     }
-
 
 def recopilar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
     """
@@ -807,7 +723,6 @@ def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
 
     # Valores por defecto para los flags
     penalizar_p = False 
-
     
     # Valores para X y Z (default 0)
     X = 0
@@ -883,112 +798,152 @@ def preguntar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
      return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
 
 
+# def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Llama al LLM para inferir filtros técnicos iniciales, luego aplica
+#     post-procesamiento usando preferencias e información climática.
+#     Actualiza 'filtros_inferidos' y 'pregunta_pendiente' en el estado.
+#     """
+#     print("--- Ejecutando Nodo: inferir_filtros_node ---")
+#     historial = state.get("messages", [])
+#     preferencias_obj = state.get("preferencias_usuario")
+#     info_clima_obj = state.get("info_clima_usuario")
+
+#     # Verificar pre-condiciones
+#     if not preferencias_obj:
+#         print("ERROR (Filtros) ► Nodo 'inferir_filtros_node' ejecutado pero 'preferencias_usuario' no existe. No se puede inferir.")
+#         return {
+#             "filtros_inferidos": FiltrosInferidos(), # Devolver un objeto vacío
+#             "pregunta_pendiente": "No pude procesar los filtros porque falta información del perfil."
+#         }
+
+#     print("DEBUG (Filtros) ► Preferencias de usuario e info_clima disponibles. Procediendo...")
+
+#     # 1. Preparar el prompt para llm_solo_filtros
+#     #    Incluimos preferencias y, si existe, info_clima en el contexto.
+#     prompt_contexto_str = ""
+#     try:
+#         prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
+#         prompt_contexto_str = f"<preferencias_usuario>{json.dumps(prefs_dict, indent=2)}</preferencias_usuario>\n"
+#         if info_clima_obj:
+#             clima_dict = info_clima_obj.model_dump(mode='json', exclude_none=False)
+#             prompt_contexto_str += f"<info_clima>{json.dumps(clima_dict, indent=2)}</info_clima>\n"
+        
+#         prompt_filtros_formateado = system_prompt_filtros_template.format(
+#             contexto_preferencias=prompt_contexto_str
+#         )
+#         # print(f"DEBUG (Filtros) ► Prompt para llm_solo_filtros (parcial): {prompt_filtros_formateado[:700]}...") 
+#     except Exception as e_prompt:
+#         print(f"ERROR (Filtros) ► Fallo al formatear el prompt de filtros: {e_prompt}")
+#         return {
+#             "filtros_inferidos": FiltrosInferidos(),
+#             "pregunta_pendiente": f"Error interno preparando la consulta de filtros: {e_prompt}"
+#         }
+
+#     # 2. Llamar al LLM para inferir filtros iniciales
+#     filtros_inferidos_por_llm: Optional[FiltrosInferidos] = None
+#     mensaje_llm = "Lo siento, tuve un problema técnico al determinar los filtros." # Default
+
+#     try:
+#         response: ResultadoSoloFiltros = llm_solo_filtros.invoke(
+#             [prompt_filtros_formateado, *historial], 
+#             config={"configurable": {"tags": ["llm_solo_filtros"]}}
+#         )
+#         print(f"DEBUG (Filtros) ► Respuesta llm_solo_filtros: {response}")
+#         filtros_inferidos_por_llm = response.filtros_inferidos # Este es un objeto FiltrosInferidos
+#         mensaje_llm = response.mensaje_validacion
+        
+#     except ValidationError as e_val:
+#         print(f"ERROR (Filtros) ► Error de Validación Pydantic en llm_solo_filtros: {e_val}")
+#         mensaje_llm = f"Hubo un problema al procesar los filtros técnicos (formato inválido): {e_val}. ¿Podrías aclarar?"
+#         filtros_inferidos_por_llm = FiltrosInferidos() # Usar uno vacío para post-procesamiento
+#     except Exception as e:
+#         print(f"ERROR (Filtros) ► Fallo al invocar llm_solo_filtros: {e}")
+#         traceback.print_exc()
+#         filtros_inferidos_por_llm = FiltrosInferidos() # Usar uno vacío
+
+#     # 3. Aplicar post-procesamiento
+#     # Asegurar que filtros_inferidos_por_llm sea un objeto, no None, para pasarlo
+#     if filtros_inferidos_por_llm is None:
+#         filtros_inferidos_por_llm = FiltrosInferidos()
+    
+#     print(f"DEBUG (Filtros) ► Filtros ANTES de post-procesamiento: {filtros_inferidos_por_llm}")
+#     filtros_finales_postprocesados: Optional[FiltrosInferidos] = None
+#     try:
+#         filtros_finales_postprocesados = aplicar_postprocesamiento_filtros(
+#             filtros=filtros_inferidos_por_llm,
+#             preferencias=preferencias_obj,
+#             info_clima=info_clima_obj 
+#         )
+#         print(f"DEBUG (Filtros) ► Filtros TRAS post-procesamiento: {filtros_finales_postprocesados}")
+#     except Exception as e_post:
+#         print(f"ERROR (Filtros) ► Fallo en postprocesamiento de filtros: {e_post}")
+#         traceback.print_exc()
+#         # Si el post-procesamiento falla, usamos los filtros del LLM (o uno vacío si LLM falló)
+#         filtros_finales_postprocesados = filtros_inferidos_por_llm 
+#         mensaje_llm = f"Hubo un problema aplicando reglas a los filtros: {e_post}"
+        
+#     # 4. Preparar el estado a devolver
+#     # Si después de todo, filtros_finales_postprocesados es None, inicializar a uno vacío.
+#     estado_filtros_a_guardar = filtros_finales_postprocesados if filtros_finales_postprocesados is not None else FiltrosInferidos()
+    
+#     print(f"DEBUG (Filtros) ► Estado filtros_inferidos a guardar: {estado_filtros_a_guardar}")
+
+#     pregunta_para_siguiente_nodo = None
+#     if mensaje_llm and mensaje_llm.strip():
+#         pregunta_para_siguiente_nodo = mensaje_llm.strip()
+#         # print(f"DEBUG (Filtros) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
+#     else:
+#         print(f"DEBUG (Filtros) ► No hay mensaje de validación/pregunta pendiente del LLM de filtros.")
+        
+#     return {
+#         "filtros_inferidos": estado_filtros_a_guardar,
+#         "pregunta_pendiente": pregunta_para_siguiente_nodo
+#     }
+
+
 def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Llama al LLM para inferir filtros técnicos iniciales, luego aplica
-    post-procesamiento usando preferencias e información climática.
-    Actualiza 'filtros_inferidos' y 'pregunta_pendiente' en el estado.
+    Construye y refina los filtros de búsqueda de forma determinista
+    llamando a la función de post-procesamiento. No utiliza LLM.
     """
-    print("--- Ejecutando Nodo: inferir_filtros_node ---")
-    historial = state.get("messages", [])
+    print("--- Ejecutando Nodo: inferir_filtros_node/construir_filtros_node ---")
+    
     preferencias_obj = state.get("preferencias_usuario")
     info_clima_obj = state.get("info_clima_usuario")
-    # No necesitamos filtros_actuales del estado aquí, ya que este nodo
-    # es el responsable de generar/inferir los filtros iniciales.
 
     # Verificar pre-condiciones
     if not preferencias_obj:
-        print("ERROR (Filtros) ► Nodo 'inferir_filtros_node' ejecutado pero 'preferencias_usuario' no existe. No se puede inferir.")
-        return {
-            "filtros_inferidos": FiltrosInferidos(), # Devolver un objeto vacío
-            "pregunta_pendiente": "No pude procesar los filtros porque falta información del perfil."
-        }
+        print("ERROR (Filtros) ► Nodo ejecutado pero 'preferencias_usuario' no existe. No se pueden construir filtros.")
+        # Devolvemos un objeto vacío para no romper el flujo
+        return {"filtros_inferidos": FiltrosInferidos()}
 
-    print("DEBUG (Filtros) ► Preferencias de usuario e info_clima disponibles. Procediendo...")
+    print("DEBUG (Filtros) ► Preferencias e info_clima disponibles. Construyendo filtros...")
 
-    # 1. Preparar el prompt para llm_solo_filtros
-    #    Incluimos preferencias y, si existe, info_clima en el contexto.
-    prompt_contexto_str = ""
+    filtros_finales = None
     try:
-        prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
-        prompt_contexto_str = f"<preferencias_usuario>{json.dumps(prefs_dict, indent=2)}</preferencias_usuario>\n"
-        if info_clima_obj:
-            clima_dict = info_clima_obj.model_dump(mode='json', exclude_none=False)
-            prompt_contexto_str += f"<info_clima>{json.dumps(clima_dict, indent=2)}</info_clima>\n"
+        # 1. Creamos un objeto FiltrosInferidos vacío para empezar.
+        #    Ya no dependemos de una inferencia inicial del LLM.
+        filtros_iniciales = FiltrosInferidos()
         
-        prompt_filtros_formateado = system_prompt_filtros_template.format(
-            contexto_preferencias=prompt_contexto_str
-        )
-        # print(f"DEBUG (Filtros) ► Prompt para llm_solo_filtros (parcial): {prompt_filtros_formateado[:700]}...") 
-    except Exception as e_prompt:
-        print(f"ERROR (Filtros) ► Fallo al formatear el prompt de filtros: {e_prompt}")
-        return {
-            "filtros_inferidos": FiltrosInferidos(),
-            "pregunta_pendiente": f"Error interno preparando la consulta de filtros: {e_prompt}"
-        }
-
-    # 2. Llamar al LLM para inferir filtros iniciales
-    filtros_inferidos_por_llm: Optional[FiltrosInferidos] = None
-    mensaje_llm = "Lo siento, tuve un problema técnico al determinar los filtros." # Default
-
-    try:
-        response: ResultadoSoloFiltros = llm_solo_filtros.invoke(
-            [prompt_filtros_formateado, *historial], 
-            config={"configurable": {"tags": ["llm_solo_filtros"]}}
-        )
-        print(f"DEBUG (Filtros) ► Respuesta llm_solo_filtros: {response}")
-        filtros_inferidos_por_llm = response.filtros_inferidos # Este es un objeto FiltrosInferidos
-        mensaje_llm = response.mensaje_validacion
-        
-    except ValidationError as e_val:
-        print(f"ERROR (Filtros) ► Error de Validación Pydantic en llm_solo_filtros: {e_val}")
-        mensaje_llm = f"Hubo un problema al procesar los filtros técnicos (formato inválido): {e_val}. ¿Podrías aclarar?"
-        filtros_inferidos_por_llm = FiltrosInferidos() # Usar uno vacío para post-procesamiento
-    except Exception as e:
-        print(f"ERROR (Filtros) ► Fallo al invocar llm_solo_filtros: {e}")
-        traceback.print_exc()
-        filtros_inferidos_por_llm = FiltrosInferidos() # Usar uno vacío
-
-    # 3. Aplicar post-procesamiento
-    # Asegurar que filtros_inferidos_por_llm sea un objeto, no None, para pasarlo
-    if filtros_inferidos_por_llm is None:
-        filtros_inferidos_por_llm = FiltrosInferidos()
-    
-    print(f"DEBUG (Filtros) ► Filtros ANTES de post-procesamiento: {filtros_inferidos_por_llm}")
-    filtros_finales_postprocesados: Optional[FiltrosInferidos] = None
-    try:
-        filtros_finales_postprocesados = aplicar_postprocesamiento_filtros(
-            filtros=filtros_inferidos_por_llm,
+        # 2. El único trabajo del nodo es llamar a esta función determinista.
+        filtros_finales = aplicar_postprocesamiento_filtros(
+            filtros=filtros_iniciales,
             preferencias=preferencias_obj,
             info_clima=info_clima_obj 
         )
-        print(f"DEBUG (Filtros) ► Filtros TRAS post-procesamiento: {filtros_finales_postprocesados}")
+        print(f"DEBUG (Filtros) ► Filtros finales construidos: {filtros_finales}")
+
     except Exception as e_post:
-        print(f"ERROR (Filtros) ► Fallo en postprocesamiento de filtros: {e_post}")
+        print(f"ERROR (Filtros) ► Fallo construyendo los filtros: {e_post}")
         traceback.print_exc()
-        # Si el post-procesamiento falla, usamos los filtros del LLM (o uno vacío si LLM falló)
-        filtros_finales_postprocesados = filtros_inferidos_por_llm 
-        mensaje_llm = f"Hubo un problema aplicando reglas a los filtros: {e_post}"
-
-
-    # 4. Preparar el estado a devolver
-    # Si después de todo, filtros_finales_postprocesados es None, inicializar a uno vacío.
-    estado_filtros_a_guardar = filtros_finales_postprocesados if filtros_finales_postprocesados is not None else FiltrosInferidos()
-    
-    print(f"DEBUG (Filtros) ► Estado filtros_inferidos a guardar: {estado_filtros_a_guardar}")
-
-    pregunta_para_siguiente_nodo = None
-    if mensaje_llm and mensaje_llm.strip():
-        pregunta_para_siguiente_nodo = mensaje_llm.strip()
-        # print(f"DEBUG (Filtros) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
-    else:
-        print(f"DEBUG (Filtros) ► No hay mensaje de validación/pregunta pendiente del LLM de filtros.")
+        # En caso de un error inesperado, devolvemos filtros vacíos para seguridad.
+        filtros_finales = FiltrosInferidos()
         
+    # 3. Devolvemos el estado actualizado. Ya no necesitamos 'pregunta_pendiente'.
     return {
-        "filtros_inferidos": estado_filtros_a_guardar,
-        "pregunta_pendiente": pregunta_para_siguiente_nodo
+        "filtros_inferidos": filtros_finales
     }
-
 
 def validar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     """
@@ -1005,9 +960,6 @@ def validar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     else:
         print("DEBUG (Filtros) ► Validación: FiltrosInferidos considerados INCOMPLETOS.")
         
-    # Este nodo solo valida. No modifica el estado. 
-    # La condición del grafo que siga a este nodo decidirá si volver a inferir/preguntar
-    # o si avanzar a la etapa de economía.
     return {**state}
 # --- Fin Etapa 2 ---
 
@@ -1257,6 +1209,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     flag_bonus_awd_nieve = False
     flag_bonus_awd_montana = False
     flag_logica_reductoras_aventura = False
+    flag_bonus_awd_clima_adverso = False
      
     # Verificar que preferencias_obj exista para acceder a sus atributos
     if not preferencias_obj:
@@ -1291,7 +1244,8 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "favorecer_awd_aventura_extrema" : favorecer_awd_aventura_extrema,
             "flag_bonus_awd_nieve" : flag_bonus_awd_nieve,
             "flag_bonus_awd_montana" : flag_bonus_awd_montana,
-            "flag_logica_reductoras_aventura" : flag_logica_reductoras_aventura
+            "flag_logica_reductoras_aventura" : flag_logica_reductoras_aventura,
+            "flag_bonus_awd_clima_adverso" : flag_bonus_awd_clima_adverso
         }
     # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
     # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
@@ -1302,10 +1256,10 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     if info_clima_obj: # Solo si existe el objeto de info climática
         if getattr(info_clima_obj, 'ZONA_NIEVE', False):
             flag_bonus_awd_nieve = True
-            logging.info("DEBUG (CalcFlags) ► Zona de nieve detectada. Activando bonus para AWD.")
+            logging.info("DEBUG (CalcFlags) ► Zona de nieve detectada. Activando bonus para ALL.")
         if getattr(info_clima_obj, 'ZONA_CLIMA_MONTA', False):
             flag_bonus_awd_montana = True
-            logging.info("DEBUG (CalcFlags) ► Zona de montaña detectada. Activando bonus para AWD.")    
+            logging.info("DEBUG (CalcFlags) ► Zona de montaña detectada. Activando bonus para ALL.")    
     
     # Regla 2 y 3: Uso profesional con/sin pasajeros
     if is_yes(preferencias_obj.uso_profesional):
@@ -1320,7 +1274,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     if (hasattr(preferencias_obj, 'aventura') and preferencias_obj.aventura == NivelAventura.ninguna and
         (not info_clima_obj or not getattr(info_clima_obj, 'ZONA_CLIMA_MONTA', False))):
         flag_desfav_car_no_aventura = True
-        logging.info(f"DEBUG (CalcFlags) ► Aventura 'ninguna' y no es clima de montaña. Activando flag para desfavorecer PICKUP/TODOTERRENO.")
+        logging.info(f"DEBUG (CalcFlags) ► Aventura 'Ninguna' y no es clima de montaña. Activando flag para desfavorecer PICKUP/TODOTERRENO.")
     
     
     # Regla 5 y 6: Aventura
@@ -1332,6 +1286,59 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         elif aventura_val == NivelAventura.extrema:
             flag_fav_pickup_todoterreno_aventura_extrema = True
             logging.info(f"DEBUG (CalcFlags) ► Aventura EXTREMA. Activando flag para favorecer PICKUP/TODOTERRENO.")
+            
+      # ---  AVENTURA ---
+    if hasattr(preferencias_obj, 'aventura'):
+        aventura_val = preferencias_obj.aventura
+        print(f"DEBUG (CalcFlags) ► Valor de preferencias_obj.aventura: {aventura_val} (Tipo: {type(aventura_val)})")
+        logger.debug(f"DEBUG (CalcFlags) ► Valor de preferencias_obj.aventura: {aventura_val} (Tipo: {type(aventura_val)})")
+        logger.debug(f"DEBUG (CalcFlags) ► Comparando con NivelAventura.OCASIONAL (Valor: {NivelAventura.ocasional}, Tipo: {type(NivelAventura.ocasional)})")
+        logger.debug(f"DEBUG (CalcFlags) ► Comparando con NivelAventura.EXTREMA (Valor: {NivelAventura.extrema}, Tipo: {type(NivelAventura.extrema)})")
+
+        if aventura_val is not None:
+            if aventura_val == NivelAventura.ocasional:
+                flag_pen_bev_reev_avent_ocas = True
+                flag_pen_phev_avent_ocas = True
+                logger.debug(f"INFO (CalcFlags) ► Aventura OCASIONAL. Activando penalizaciones para BEV/REEV y PHEV.") # Cambiado a INFO
+            elif aventura_val == NivelAventura.extrema:
+                flag_pen_electrif_avent_extr = True 
+                logger.debug(f"INFO (CalcFlags) ► Aventura EXTREMA. Activando penalización para todos los electrificados.") # Cambiado a INFO
+            else:
+                logger.debug(f"DEBUG (CalcFlags) ► Nivel de aventura es '{aventura_val}', no OCASIONAL ni EXTREMA. No se activan penalizaciones específicas de aventura/mecánica.")
+        else:
+            logger.debug("DEBUG (CalcFlags) ► Nivel de aventura es None. No se activan penalizaciones de mecánica por aventura.")
+    else:
+        logging.warning("WARN (CalcFlags) ► El objeto 'preferencias_usuario' no tiene el atributo 'aventura'.")
+
+     # --- LÓGICA REVISADA PARA FLAGS DE TRACCIÓN, AVENTURA Y CLIMA ---
+    aventura_val = preferencias_obj.aventura
+    vive_en_clima_adverso = False
+    if info_clima_obj:
+        vive_en_clima_adverso = getattr(info_clima_obj, 'ZONA_NIEVE', False) or getattr(info_clima_obj, 'ZONA_CLIMA_MONTA', False)
+
+    if aventura_val == NivelAventura.ninguna.value:
+        if vive_en_clima_adverso:
+            # EXCEPCIÓN: El clima anula la preferencia. Se activa el bonus por clima.
+            flag_bonus_awd_clima_adverso = True
+            logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ninguna' pero clima adverso(montaña - Nieve). Activando BONUS favorecer traccion ALL.")
+        else:
+            # Caso normal: Sin aventura y sin clima adverso. Se activa la penalización.
+            penalizar_awd_ninguna_aventura = True
+            logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ninguna'. Activando PENALIZACIÓN para ALL.")
+    elif aventura_val == NivelAventura.ocasional.value:
+        favorecer_awd_aventura_ocasional = True
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ocasional'. Activando bonus para ALL.")
+    elif aventura_val == NivelAventura.extrema.value:
+        favorecer_awd_aventura_extrema = True
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'extrema'. Activando bonus para ALL.")
+    
+    
+    # ---  LÓGICA PARA FLAG DE REDUCTORAS Y AVENTURA ---
+    aventura_val = preferencias_obj.aventura
+    if aventura_val == NivelAventura.extrema.value:
+        flag_logica_reductoras_aventura = "FAVORECER_EXTREMA"
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'extrema'. Activando bonus alto para Reductoras.")
+        # --- FIN LÓGICA ---
             
     # Regla 7: Objetos Especiales
     if is_yes(preferencias_obj.necesita_espacio_objetos_especiales) :
@@ -1393,7 +1400,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     # --- LÓGICA PARA PENALIZAR PHEV EN TRAYECTOS LARGOS Y FRECUENTES ---
     es_uso_diario_frecuente = preferencias_obj.frecuencia_uso in [FrecuenciaUso.DIARIO.value, FrecuenciaUso.FRECUENTEMENTE.value]
     es_trayecto_muy_largo = preferencias_obj.distancia_trayecto == DistanciaTrayecto.MAS_150_KM.value
-    
+    #Falta revisar condiciones en el documento
     if es_uso_diario_frecuente and es_trayecto_muy_largo:
         flag_penalizar_phev_uso_intensivo = True
         logging.info("DEBUG (CalcFlags) ► Patrón de uso intensivo y largo detectado. Activando penalización para PHEVs.")
@@ -1403,9 +1410,9 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         flag_favorecer_electrificados_por_punto_carga = True
         logging.info("DEBUG (CalcFlags) ► Usuario tiene punto de carga propio. Activando bonus para BEV/PHEV/REEV.")
    
-   # --- LÓGICA PARA FLAG DIÉSEL - RECORRE CAMINOS CIUDAD ---
+   # --- LÓGICA PARA FLAG DIÉSEL - RECORRE CAMINOS CIUDAD - circula principalmente ciudad ---
     if is_yes(preferencias_obj.circula_principalmente_ciudad):
-        if preferencias_obj.frecuencia_uso == FrecuenciaUso.OCASIONALMENTE.value:
+        if preferencias_obj.frecuencia_uso == FrecuenciaUso.OCASIONALMENTE.value and FrecuenciaViajesLargos.OCASIONALMENTE:
             # Caso excepcional: uso ocasional en ciudad, no se penaliza, se bonifica
             flag_logica_diesel_ciudad = "BONIFICAR"
             logging.info("DEBUG (CalcFlags) ► Conductor urbano ocasional. Activando pequeño bonus para diésel.")
@@ -1413,49 +1420,6 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             # Caso general: conductor urbano, se penaliza diésel
             flag_logica_diesel_ciudad = "PENALIZAR"
             logging.info("DEBUG (CalcFlags) ► Conductor urbano frecuente. Activando penalización para diésel.")
-    
-   # --- DEBUGGING AVENTURA ---
-    if hasattr(preferencias_obj, 'aventura'):
-        aventura_val = preferencias_obj.aventura
-        print(f"DEBUG (CalcFlags) ► Valor de preferencias_obj.aventura: {aventura_val} (Tipo: {type(aventura_val)})")
-        logger.debug(f"DEBUG (CalcFlags) ► Valor de preferencias_obj.aventura: {aventura_val} (Tipo: {type(aventura_val)})")
-        logger.debug(f"DEBUG (CalcFlags) ► Comparando con NivelAventura.OCASIONAL (Valor: {NivelAventura.ocasional}, Tipo: {type(NivelAventura.ocasional)})")
-        logger.debug(f"DEBUG (CalcFlags) ► Comparando con NivelAventura.EXTREMA (Valor: {NivelAventura.extrema}, Tipo: {type(NivelAventura.extrema)})")
-
-        if aventura_val is not None:
-            if aventura_val == NivelAventura.ocasional:
-                flag_pen_bev_reev_avent_ocas = True
-                flag_pen_phev_avent_ocas = True
-                logger.debug(f"INFO (CalcFlags) ► Aventura OCASIONAL. Activando penalizaciones para BEV/REEV y PHEV.") # Cambiado a INFO
-            elif aventura_val == NivelAventura.extrema:
-                flag_pen_electrif_avent_extr = True 
-                logger.debug(f"INFO (CalcFlags) ► Aventura EXTREMA. Activando penalización para todos los electrificados.") # Cambiado a INFO
-            else:
-                logger.debug(f"DEBUG (CalcFlags) ► Nivel de aventura es '{aventura_val}', no OCASIONAL ni EXTREMA. No se activan penalizaciones específicas de aventura/mecánica.")
-        else:
-            logger.debug("DEBUG (CalcFlags) ► Nivel de aventura es None. No se activan penalizaciones de mecánica por aventura.")
-    else:
-        logging.warning("WARN (CalcFlags) ► El objeto 'preferencias_usuario' no tiene el atributo 'aventura'.")
-
-    # --- LÓGICA ACTUALIZADA PARA FLAGS DE TRACCIÓN Y AVENTURA ---
-    aventura_val = preferencias_obj.aventura
-    if aventura_val == NivelAventura.ninguna.value:
-        penalizar_awd_ninguna_aventura = True
-        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ninguna'. Activando Flag penalización para tracción.")
-    elif aventura_val == NivelAventura.ocasional.value:
-        favorecer_awd_aventura_ocasional = True
-        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ocasional'. Activando Flag bonus para tracción.")
-    elif aventura_val == NivelAventura.extrema.value:
-        favorecer_awd_aventura_extrema = True
-        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'extrema'. Activando Flag bonus para tracción.")
-    # ---  LÓGICA PARA FLAG DE REDUCTORAS Y AVENTURA ---
-    aventura_val = preferencias_obj.aventura
-    if aventura_val == NivelAventura.ocasional.value:
-        flag_logica_reductoras_aventura = "FAVORECER_OCASIONAL"
-        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ocasional'. Activando bonus moderado para Reductoras.")
-    elif aventura_val == NivelAventura.extrema.value:
-        flag_logica_reductoras_aventura = "FAVORECER_EXTREMA"
-        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'extrema'. Activando bonus alto para Reductoras.")
     
     logging.debug(f"DEBUG (CalcFlags) ► Flags calculados: lowcost_comodidad={flag_penalizar_lc_comod}, deportividad_comodidad={flag_penalizar_dep_comod}, antiguo_por_tecnolog={flag_penalizar_ant_tec}, distint_ambiental={flag_aplicar_dist_amb}, zbe={flag_es_zbe}, penali_bev_reev_aventura_ocasional= {flag_pen_bev_reev_avent_ocas}...")
 
@@ -1488,7 +1452,8 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_bonus_awd_nieve": flag_bonus_awd_nieve,
         "flag_bonus_awd_montana": flag_bonus_awd_montana,
         "flag_logica_reductoras_aventura": flag_logica_reductoras_aventura,
-        "es_municipio_zbe": flag_es_zbe
+        "flag_bonus_awd_clima_adverso" : flag_bonus_awd_clima_adverso,
+        "es_municipio_zbe": flag_es_zbe,       
     }
     
 def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
@@ -1686,7 +1651,9 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     flag_bonus_nieve_val = state.get("flag_bonus_awd_nieve", False)
     flag_bonus_montana_val = state.get("flag_bonus_awd_montana", False)
     flag_reductoras_aventura_val = state.get("flag_logica_reductoras_aventura")
+    flag_bonus_awd_clima_adverso = state.get("flag_bonus_awd_clima_adverso")
     km_anuales_val = state.get("km_anuales_estimados")
+
     
     # 2. Obtén el thread_id directamente del objeto 'config'
     # Esta es la forma correcta y segura de accederlo.
@@ -1748,7 +1715,9 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         filtros_para_bq['flag_bonus_nieve_val'] = flag_bonus_nieve_val
         filtros_para_bq['flag_bonus_montana_val'] = flag_bonus_montana_val
         filtros_para_bq['flag_logica_reductoras_aventura'] = flag_reductoras_aventura_val
+        filtros_para_bq['flag_bonus_awd_clima_adverso'] = flag_bonus_awd_clima_adverso
         filtros_para_bq['km_anuales_estimados'] = km_anuales_val
+        
         logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
         logging.debug(f"DEBUG (Buscar BQ) ► Filtros para BQ: {filtros_para_bq}") 
         logging.debug(f"DEBUG (Buscar BQ) ► Pesos para BQ: {pesos_finales}") 
@@ -1961,6 +1930,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         'favorecer_awd_aventura_ocasional' : favorecer_awd_ocasional_val,
         'favorecer_awd_aventura_extrema' : favorecer_awd_extrema_val,
         'flag_logica_reductoras_aventura' :flag_reductoras_aventura_val,
+        'flag_bonus_awd_clima_adverso' : flag_bonus_awd_clima_adverso,
         "pregunta_pendiente": None, # Este nodo es final para el turno
     }
 

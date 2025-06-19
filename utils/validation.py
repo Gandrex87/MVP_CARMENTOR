@@ -15,8 +15,8 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         return False
     campos_obligatorios = [
         "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "frecuencia_uso", "distancia_trayecto", "circula_principalmente_ciudad" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100",
-        "transporta_carga_voluminosa", "arrastra_remolque","aventura", "estilo_conduccion", "tiene_garage", "tiene_punto_carga_propio", "solo_electricos",  "prioriza_baja_depreciacion","transmision_preferida","rating_fiabilidad_durabilidad", 
-        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_tecnologia_conectividad", "rating_costes_uso"
+        "transporta_carga_voluminosa", "arrastra_remolque","aventura", "estilo_conduccion", "tiene_garage", "tiene_punto_carga_propio", "solo_electricos", "transmision_preferida", "prioriza_baja_depreciacion","rating_fiabilidad_durabilidad", 
+        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_costes_uso", "rating_tecnologia_conectividad", 
     ] # por ahora no va 
     for campo in campos_obligatorios:
         valor = getattr(prefs, campo, None)
@@ -29,12 +29,12 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         # Si el trayecto es corto/medio, la pregunta sobre viajes largos es obligatoria
         if prefs.realiza_viajes_largos is None:
             print("DEBUG (Validation Perfil) ► 'distancia_trayecto' es corta/media, pero 'realiza_viajes_largos' es None. Perfil INCOMPLETO.")
-            return False
-        
+            return False  
         # Si la respuesta es 'sí', la frecuencia es obligatoria
         if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
             print("DEBUG (Validation Perfil) ► 'realiza_viajes_largos' es 'sí', pero 'frecuencia_viajes_largos' es None. Perfil INCOMPLETO.")
             return False  
+    
     # 1. tipo_uso_profesional
     if is_yes(prefs.uso_profesional): 
         if prefs.tipo_uso_profesional is None: # El tipo es Enum, Pydantic maneja valores inválidos

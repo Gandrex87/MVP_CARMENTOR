@@ -53,6 +53,10 @@ else:
 # Se usan solo en la query SQL de buscar_coches_bq, dentro de cláusulas CASE WHEN activadas por flags.
 # Modifican el score de forma aditiva después de la parte ponderada.
 
+
+
+
+
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- RANGOS MIN-MAX PARA ESCALADO EN BIGQUERY (`utils/bigquery_tools.py`) ---
 # Mapeo de nombres de campo de rating a texto amigable para el usuario para node Etapa 1
@@ -102,6 +106,8 @@ MIN_MAX_RANGES = {
 
 # --- LÓGICA PARA TRACCIÓN BASADA EN AVENTURA ---
 PENALTY_AWD_NINGUNA_AVENTURA = -0.10
+BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO = 0.10
+
 BONUS_AWD_AVENTURA_OCASIONAL = 0.10
 BONUS_AWD_AVENTURA_EXTREMA = 0.20
 
@@ -135,8 +141,11 @@ PENALTY_DISTINTIVO_NA_B = -0.081 #Falta separar la nota NA para aplicar diferenc
 BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 0.081 
 
 # Lógica Distintivo Ambiental (Específica ZBE - activada si CP está en ZBE)
-BONUS_ZBE_DISTINTIVO_FAVORABLE = 0.081 # # (CERO, 0, ECO, C)
-PENALTY_ZBE_DISTINTIVO_DESFAVORABLE = -0.081 #  (B, NA)
+BONUS_ZBE_DISTINTIVO_FAVORABLE_C = 0.081 
+BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO = 0.10
+
+PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA =  -0.20
+PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B =  -0.081
 
 
 # Regla 1: Si flag_favorecer_carroceria_montana es TRUE, los coches con tipo_carroceria 'SUV' o 'TODOTERRENO' reciben un bonus.
@@ -191,7 +200,7 @@ BONUS_PUNTO_CARGA_PROPIO = 0.10
 
 # Bonus/Penalty favorecer por conducir en ciudad
 PENALTY_DIESEL_CIUDAD = -0.15
-BONUS_DIESEL_CIUDAD_OCASIONAL = 0.15
+BONUS_DIESEL_CIUDAD_OCASIONAL = 0.20
 
 # --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
 # Ajustes de pesos crudos aditivos por clima
@@ -232,11 +241,11 @@ PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
 # Ajustes de pesos crudos aditivos por clima
 AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
 
-# Aventura Pesos Crudos
-# AVENTURA_RAW_WEIGHTS = {
-#   "ninguna":   {"altura_libre_suelo":  1.0}, #"traccion":  1.0 ,
-#   "ocasional": {"altura_libre_suelo":  7.0}, # "traccion":  4.0, 
-#   "extrema":   {"altura_libre_suelo":  9.0 }} #"traccion": 10.0, 
+
+
+
+
+
 
 # Mapeo directo del nivel de aventura al peso crudo deseado.
 altura_map = {
@@ -260,7 +269,8 @@ PESO_CRUDO_FAV_DEVALUACION = 10.0
 PESO_CRUDO_BASE_MALETERO= 1.0
 PESO_CRUDO_FAV_MALETERO_MIN = 8.0
 PESO_CRUDO_FAV_MALETERO_MAX = 6.0
-PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES = 5.0
+PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_ANCHO = 5.0 
+PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_LARGO = 7.0
 
 
 # Valores de peso crudo a sumar si se cumplen umbrales de ratings en weights.py
@@ -289,7 +299,7 @@ PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO = 6.0
 PESO_CRUDO_FAV_MENOR_SUPERFICIE = 3.0 # fav_menor_superficie_planta
 PESO_CRUDO_FAV_MENOR_DIAMETRO_GIRO = 5.0 #fav_menor_diametro_giro
 PESO_CRUDO_FAV_MENOR_DIMENSION_GARAJE = 8.0 # Para largo, ancho, alto problemáticos
-PESO_CRUDO_BASE_BAJO_DIMENSIONES_GARAJE = 0.5 # Peso si no es una preocupación explícita
+PESO_CRUDO_BASE_BAJO_DIMENSIONES_GARAJE = 1.0 # Peso si no es una preocupación explícita
 
 # Pesos crudos para Estilo de Conducción
 # Si estilo es DEPORTIVO
@@ -298,7 +308,7 @@ RAW_PESO_MENOR_REL_PESO_POTENCIA_ALTO = 10.0
 RAW_PESO_POTENCIA_MAXIMA_ALTO = 5.0
 RAW_PESO_PAR_MOTOR_DEPORTIVO_ALTO = 4.0
 RAW_PESO_MENOR_ACELERACION_ALTO = 6.0
-# Si estilo es MIXTO
+# Si estilo es MIXTO ()
 RAW_PESO_DEPORTIVIDAD_MEDIO = 2.0
 RAW_PESO_MENOR_REL_PESO_POTENCIA_MEDIO = 5.0
 RAW_PESO_POTENCIA_MAXIMA_MEDIO = 2.5

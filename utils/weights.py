@@ -11,10 +11,11 @@ from config.settings import (MAX_SINGLE_RAW_WEIGHT , MIN_SINGLE_RAW_WEIGHT , alt
                             RAW_PESO_DEPORTIVIDAD_MEDIO, RAW_PESO_MENOR_REL_PESO_POTENCIA_MEDIO, RAW_PESO_POTENCIA_MAXIMA_MEDIO, RAW_PESO_PAR_MOTOR_DEPORTIVO_MEDIO, RAW_PESO_MENOR_ACELERACION_MEDIO,
                             RAW_PESO_DEPORTIVIDAD_BAJO, RAW_PESO_MENOR_REL_PESO_POTENCIA_BAJO, RAW_PESO_POTENCIA_MAXIMA_BAJO, RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO, RAW_PESO_MENOR_ACELERACION_BAJO,
                             RAW_PESO_PAR_MOTOR_REMOLQUE, RAW_PESO_CAP_REMOLQUE_CF, RAW_PESO_CAP_REMOLQUE_SF, RAW_PESO_BASE_REMOLQUE, RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD, RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD,
-                            RAW_PESO_BASE_COSTE_USO_DIRECTO, RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO, PESO_CRUDO_BASE_MALETERO,PESO_CRUDO_FAV_MALETERO_MAX, PESO_CRUDO_FAV_MALETERO_MIN, PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES, RAW_PESO_BASE_AUT_VEHI,
+                            RAW_PESO_BASE_COSTE_USO_DIRECTO, RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO, PESO_CRUDO_BASE_MALETERO,PESO_CRUDO_FAV_MALETERO_MAX, PESO_CRUDO_FAV_MALETERO_MIN, RAW_PESO_BASE_AUT_VEHI,
                             PESO_CRUDO_BASE_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190, PESO_CRUDO_BASE_ANCHO_GRAL, PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190,PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL, PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE , PESO_CRUDO_BASE_DEVALUACION, PESO_CRUDO_FAV_DEVALUACION,
                             RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_USO_INTENSIVO, WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM,WEIGHT_AUTONOMIA_2ND_DRIVE_MUY_ALTO_KM, WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM, PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO,
                             WEIGHT_POTENCIA_AC_MUY_ALTO_KM, WEIGHT_POTENCIA_DC_MUY_ALTO_KM,PESO_CRUDO_FAV_ESTETICA , PESO_CRUDO_FAV_PREMIUM_APASIONADO_MOTOR, PESO_CRUDO_FAV_SINGULAR_APASIONADO_MOTOR,PESO_CRUDO_FAV_DIAMETRO_GIRO_CONDUC_CIUDAD, PESO_CRUDO_BASE, 
+                            PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_ANCHO ,PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_LARGO
                             )
 
 # --- Función compute_raw_weights CORREGIDA ---
@@ -71,11 +72,8 @@ def compute_raw_weights(
     # 1. Pesos de Aventura
     # Obtener el valor de aventura del perfil de usuario.
     aventura_val = preferencias.get("aventura")
-    
     # Asignar el peso usando el mapa. Si aventura_val es None o no existe,
-    # .get() devolverá el valor por defecto de 1.0 (equivalente a 'ninguna').
     raw["altura_libre_suelo"] = altura_map.get(aventura_val, 1.0)
-    
     print(f"DEBUG (Weights) ► Peso crudo para altura_libre_suelo (por aventura='{aventura_val}'): {raw['altura_libre_suelo']}")
 
     # 2. Pesos basados en altura_mayor_190
@@ -147,8 +145,8 @@ def compute_raw_weights(
 
         if is_yes(preferencias.get("necesita_espacio_objetos_especiales")):
             # Si además necesita espacio para objetos especiales, aumentamos la importancia de largo y ancho
-            raw["largo_vehiculo_score"] = PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES
-            raw["ancho"] = max(raw.get("ancho", 1.0), PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES) # Asegurar que sea al menos 5.0
+            raw["largo_vehiculo_score"] = PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_LARGO
+            raw["ancho"] = max(raw.get("ancho", 1.0), PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_ANCHO)
             print(f"DEBUG (Weights) ► necesita_espacio_objetos_especiales='sí'. Pesos crudos para largo: {raw['largo_vehiculo_score']}, ancho actualizado a: {raw['ancho']}")
     
     # --- Favorecer índice_altura y autonomia_uso_maxima si comodidad es alta ---
@@ -172,7 +170,7 @@ def compute_raw_weights(
     if rating_ia is not None and rating_ia >= UMBRAL_RATING_IMPACTO_PARA_FAV_PESO_CONSUMO:
         print(f"DEBUG (Weights) ► Impacto Ambiental alto ({rating_ia}). Activando pesos para bajo peso y bajo consumo.")
         raw["fav_bajo_peso"] += RAW_WEIGHT_ADICIONAL_FAV_BAJO_PESO_POR_IMPACTO
-        raw["fav_bajo_consumo"] += RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_IMPACTO
+        raw["fav_bajo_consumo"] += RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_IMPACTO #ESTA LLEVA OTRA NOTA DISTINTA fav_bajo_peso 
     
     # --- NUEVA LÓGICA PARA rating_costes_uso ---
     raw["rating_costes_uso"] = float(preferencias.get("rating_costes_uso") or PESO_CRUDO_BASE) # Peso directo para el concepto general
@@ -231,9 +229,9 @@ def compute_raw_weights(
     raw["fav_menor_ancho_garage"] = PESO_CRUDO_BASE_BAJO_DIMENSIONES_GARAJE 
     raw["fav_menor_alto_garage"] = PESO_CRUDO_BASE_BAJO_DIMENSIONES_GARAJE  
 
-    #"circula principalmente por ciudad / si"
+    # circula principalmente por ciudad / si"
     if is_yes(preferencias.get("circula_principalmente_ciudad")):
-        logging.info("DEBUG (Weights) ► Perfil 'Conductor Urbano- Circula por ciudad' detectado. Aumentando peso para menor diámetro de giro.")
+        logging.info("DEBUG (Weights) ► Perfil 'Conductor Urbano- Circula por ciudad' detectado. Aumentando peso para favorecer menor diámetro de giro.")
         raw['fav_menor_diametro_giro'] += PESO_CRUDO_FAV_DIAMETRO_GIRO_CONDUC_CIUDAD
     
     tiene_garage_val = preferencias.get("tiene_garage")

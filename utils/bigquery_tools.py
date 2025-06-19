@@ -21,9 +21,9 @@ import traceback
 from typing import Optional, List, Dict, Any , Tuple
 from google.cloud import bigquery
 from config.settings import ( 
-    MIN_MAX_RANGES,PENALTY_PUERTAS_BAJAS,PENALTY_LOW_COST_POR_COMODIDAD, PENALTY_DEPORTIVIDAD_POR_COMODIDAD,UMBRAL_LOW_COST_PENALIZABLE_SCALED, UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED, PENALTY_ANTIGUEDAD_MAS_10_ANOS, PENALTY_ANTIGUEDAD_7_A_10_ANOS, PENALTY_ANTIGUEDAD_5_A_7_ANOS, BONUS_DISTINTIVO_ECO_CERO_C, PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,BONUS_ZBE_DISTINTIVO_FAVORABLE,PENALTY_ZBE_DISTINTIVO_DESFAVORABLE,   PENALTY_BEV_REEV_AVENTURA_OCASIONAL,PENALTY_PHEV_AVENTURA_OCASIONAL, PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA,BONUS_CARROCERIA_MONTANA, BONUS_CARROCERIA_COMERCIAL,BONUS_CARROCERIA_PASAJEROS_PRO, PENALTY_CARROCERIA_NO_AVENTURA , BONUS_SUV_AVENTURA_OCASIONAL, BONUS_TODOTERRENO_AVENTURA_EXTREMA, BONUS_PICKUP_AVENTURA_EXTREMA, BONUS_CARROCERIA_OBJETOS_ESPECIALES, PENALTY_CARROCERIA_OBJETOS_ESPECIALES,  BONUS_CARROCERIA_CONFORT, FACTOR_CONVERSION_PRECIO_CUOTA,
+    MIN_MAX_RANGES,PENALTY_PUERTAS_BAJAS,PENALTY_LOW_COST_POR_COMODIDAD, PENALTY_DEPORTIVIDAD_POR_COMODIDAD,UMBRAL_LOW_COST_PENALIZABLE_SCALED, UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED, PENALTY_ANTIGUEDAD_MAS_10_ANOS, PENALTY_ANTIGUEDAD_7_A_10_ANOS, PENALTY_ANTIGUEDAD_5_A_7_ANOS, BONUS_DISTINTIVO_ECO_CERO_C, PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,  PENALTY_BEV_REEV_AVENTURA_OCASIONAL,PENALTY_PHEV_AVENTURA_OCASIONAL, PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA,BONUS_CARROCERIA_MONTANA, BONUS_CARROCERIA_COMERCIAL,BONUS_CARROCERIA_PASAJEROS_PRO, PENALTY_CARROCERIA_NO_AVENTURA , BONUS_SUV_AVENTURA_OCASIONAL, BONUS_TODOTERRENO_AVENTURA_EXTREMA, BONUS_PICKUP_AVENTURA_EXTREMA, BONUS_CARROCERIA_OBJETOS_ESPECIALES, PENALTY_CARROCERIA_OBJETOS_ESPECIALES,  BONUS_CARROCERIA_CONFORT, FACTOR_CONVERSION_PRECIO_CUOTA,
     BONUS_OCASION_POR_USO_OCASIONAL, PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL, BONUS_BEV_REEV_USO_DEFINIDO,PENALTY_PHEV_USO_INTENSIVO_LARGO, BONUS_MOTOR_POCO_KM, PENALTY_OCASION_POCO_KM, PENALTY_OCASION_MEDIO_KM, BONUS_MOTOR_MUCHO_KM, PENALTY_OCASION_MUCHO_KM, PENALTY_OCASION_MUY_ALTO_KM_V2 ,BONUS_BEV_MUY_ALTO_KM , BONUS_REEV_MUY_ALTO_KM , BONUS_DIESEL_HEVD_MUY_ALTO_KM, BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM, BONUS_PUNTO_CARGA_PROPIO, PENALTY_AWD_NINGUNA_AVENTURA,  BONUS_AWD_AVENTURA_OCASIONAL, BONUS_AWD_AVENTURA_EXTREMA, BONUS_AWD_ZONA_NIEVE, BONUS_AWD_ZONA_MONTA,
-    BONUS_REDUCTORAS_AVENTURA_OCASIONAL ,BONUS_REDUCTORAS_AVENTURA_EXTREMA ,
+    BONUS_REDUCTORAS_AVENTURA_EXTREMA , PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA, PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B , BONUS_ZBE_DISTINTIVO_FAVORABLE_C , BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO, BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO, PENALTY_DIESEL_CIUDAD , BONUS_DIESEL_CIUDAD_OCASIONAL,
 )
 
 
@@ -115,7 +115,9 @@ def buscar_coches_bq(
     favorecer_awd_extrema_val = bool(filtros.get("favorecer_awd_aventura_extrema", False))
     flag_bonus_nieve_val = bool(filtros.get("flag_bonus_awd_nieve", False))
     flag_bonus_montana_val = bool(filtros.get("flag_bonus_awd_montana", False))
-    flag_reductoras_aventura_val = filtros.get("flag_logica_reductoras_aventura")
+    flag_reductoras_aventura_val = bool(filtros.get("flag_logica_reductoras_aventura"))
+    flag_bonus_clima_val = bool(filtros.get("flag_bonus_awd_clima_adverso", False))
+    flag_diesel_ciudad_val = bool(filtros.get("flag_logica_diesel_ciudad")) # <-- AÑADIR (obtiene el string o None)
 
     m = MIN_MAX_RANGES
     min_est, max_est = m["estetica"]; min_prem, max_prem = m["premium"]; min_sing, max_sing = m["singular"]
@@ -147,7 +149,6 @@ def buscar_coches_bq(
         bigquery.ScalarQueryParameter("peso_rating_fiabilidad_durabilidad", "FLOAT64", pesos_completos["rating_fiabilidad_durabilidad"]),
         bigquery.ScalarQueryParameter("peso_rating_seguridad", "FLOAT64", pesos_completos["rating_seguridad"]),
         bigquery.ScalarQueryParameter("peso_rating_comodidad", "FLOAT64", pesos_completos["rating_comodidad"]),
-        # NOTA: Corregir lógica de impacto ambiental si es necesario. Por ahora se mantiene pero puede ser errónea.
         bigquery.ScalarQueryParameter("peso_rating_impacto_ambiental", "FLOAT64", pesos_completos["rating_impacto_ambiental"]),
         bigquery.ScalarQueryParameter("peso_fav_bajo_coste_uso_directo", "FLOAT64", pesos_completos["fav_bajo_coste_uso_directo"]),
         bigquery.ScalarQueryParameter("peso_fav_bajo_coste_mantenimiento_directo", "FLOAT64", pesos_completos["fav_bajo_coste_mantenimiento_directo"]),
@@ -203,6 +204,8 @@ def buscar_coches_bq(
         bigquery.ScalarQueryParameter("flag_bonus_awd_nieve", "BOOL", flag_bonus_nieve_val),
         bigquery.ScalarQueryParameter("flag_bonus_awd_montana", "BOOL", flag_bonus_montana_val),
         bigquery.ScalarQueryParameter("flag_logica_reductoras_aventura", "STRING", flag_reductoras_aventura_val),
+        bigquery.ScalarQueryParameter("flag_bonus_awd_clima_adverso", "BOOL", flag_bonus_clima_val),
+        bigquery.ScalarQueryParameter("flag_logica_diesel_ciudad", "STRING", flag_diesel_ciudad_val),
         bigquery.ScalarQueryParameter("km_anuales_estimados", "INT64", km_anuales_estimados_val),
         bigquery.ScalarQueryParameter("k", "INT64", k)
     ]
@@ -366,8 +369,14 @@ def buscar_coches_bq(
             + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND sd.deportividad_bq_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
             + (CASE WHEN @flag_penalizar_antiguo_tec = TRUE THEN CASE WHEN sd.anos_vehiculo > 10 THEN {PENALTY_ANTIGUEDAD_MAS_10_ANOS} WHEN sd.anos_vehiculo > 7  THEN {PENALTY_ANTIGUEDAD_7_A_10_ANOS} WHEN sd.anos_vehiculo > 5  THEN {PENALTY_ANTIGUEDAD_5_A_7_ANOS} ELSE 0.0 END ELSE 0.0 END)
             + (CASE WHEN @flag_aplicar_logica_distintivo = TRUE THEN CASE WHEN UPPER(sd.distintivo_ambiental) IN ('CERO', '0', 'ECO', 'C') THEN {BONUS_DISTINTIVO_ECO_CERO_C} WHEN UPPER(sd.distintivo_ambiental) IN ('B', 'NA') THEN {PENALTY_DISTINTIVO_NA_B} ELSE 0.0 END ELSE 0.0 END)
-            + (CASE WHEN @flag_aplicar_logica_distintivo = TRUE AND COALESCE(sd.ocasion, FALSE) = TRUE THEN {BONUS_OCASION_POR_IMPACTO_AMBIENTAL} ELSE 0.0 END)
-            + (CASE WHEN @flag_es_municipio_zbe = TRUE THEN CASE WHEN UPPER(sd.distintivo_ambiental) IN ('CERO', '0', 'ECO', 'C') THEN {BONUS_ZBE_DISTINTIVO_FAVORABLE} WHEN UPPER(sd.distintivo_ambiental) IN ('B', 'NA') THEN {PENALTY_ZBE_DISTINTIVO_DESFAVORABLE} ELSE 0.0 END ELSE 0.0 END)
+            + (CASE WHEN @flag_aplicar_logica_distintivo = TRUE AND COALESCE(sd.ocasion, FALSE) = TRUE THEN {BONUS_OCASION_POR_IMPACTO_AMBIENTAL} ELSE 0.0 END)  
+            + (CASE
+                WHEN @flag_es_municipio_zbe = TRUE AND UPPER(sd.distintivo_ambiental) IN ('CERO', '0', 'ECO') THEN {BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO}
+                WHEN @flag_es_municipio_zbe = TRUE AND UPPER(sd.distintivo_ambiental) IN ('C') THEN {BONUS_ZBE_DISTINTIVO_FAVORABLE_C}
+                WHEN @flag_es_municipio_zbe = TRUE AND UPPER(sd.distintivo_ambiental) IN ('NA') THEN {PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA}
+                WHEN @flag_es_municipio_zbe = TRUE AND UPPER(sd.distintivo_ambiental) IN ('B') THEN {PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B}
+                ELSE 0.0
+                END)       
             + (CASE WHEN @flag_pen_bev_reev_avent_ocas = TRUE AND sd.tipo_mecanica IN ('BEV', 'REEV') THEN {PENALTY_BEV_REEV_AVENTURA_OCASIONAL} ELSE 0.0 END)
             + (CASE WHEN @flag_pen_phev_avent_ocas = TRUE AND sd.tipo_mecanica IN ('PHEVD', 'PHEVG') THEN {PENALTY_PHEV_AVENTURA_OCASIONAL} ELSE 0.0 END)
             + (CASE WHEN @flag_pen_electrif_avent_extr = TRUE AND sd.tipo_mecanica IN ('BEV', 'REEV', 'PHEVD', 'PHEVG') THEN {PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA} ELSE 0.0 END)
@@ -405,20 +414,28 @@ def buscar_coches_bq(
                 THEN {BONUS_PUNTO_CARGA_PROPIO}
                 ELSE 0.0
               END)
-            -- BONUS/PENALTY DE TRACCIÓN ✅ --
+            # ✅ POR ESTA VERSIÓN MEJORADA Y UNIFICADA:
             + (CASE
+                -- El bonus por clima tiene la máxima prioridad
+                WHEN @flag_bonus_awd_clima_adverso = TRUE AND sd.traccion = 'ALL' THEN {BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO}
+                -- Si no, se aplican las reglas normales de aventura
                 WHEN @penalizar_awd_ninguna_aventura = TRUE AND sd.traccion = 'ALL' THEN {PENALTY_AWD_NINGUNA_AVENTURA}
                 WHEN @favorecer_awd_aventura_ocasional = TRUE AND sd.traccion = 'ALL' THEN {BONUS_AWD_AVENTURA_OCASIONAL}
                 WHEN @favorecer_awd_aventura_extrema = TRUE AND sd.traccion = 'ALL' THEN {BONUS_AWD_AVENTURA_EXTREMA}
                 ELSE 0.0
-              END)
+            END)
              -- BONUS/PENALTY DE TRACCIÓN POR CLIMA ✅ --
             + (CASE WHEN @flag_bonus_awd_nieve = TRUE AND sd.traccion = 'ALL' THEN {BONUS_AWD_ZONA_NIEVE} ELSE 0.0 END)
             + (CASE WHEN @flag_bonus_awd_montana = TRUE AND sd.traccion = 'ALL' THEN {BONUS_AWD_ZONA_MONTA} ELSE 0.0 END)
              -- BONUS DE REDUCTORAS ✅ --
             + (CASE
-                WHEN @flag_logica_reductoras_aventura = 'FAVORECER_OCASIONAL' AND COALESCE(sd.reductoras, FALSE) = TRUE THEN {BONUS_REDUCTORAS_AVENTURA_OCASIONAL}
                 WHEN @flag_logica_reductoras_aventura = 'FAVORECER_EXTREMA' AND COALESCE(sd.reductoras, FALSE) = TRUE THEN {BONUS_REDUCTORAS_AVENTURA_EXTREMA}
+                ELSE 0.0
+              END)
+            -- BONUS/PENALTY Circula_principalmente_ciudad 
+            + (CASE
+                WHEN @flag_logica_diesel_ciudad = 'PENALIZAR' AND sd.tipo_mecanica IN ('DIESEL', 'HEVD', 'MHEVD') THEN {PENALTY_DIESEL_CIUDAD}
+                WHEN @flag_logica_diesel_ciudad = 'BONIFICAR' AND sd.tipo_mecanica IN ('DIESEL', 'HEVD', 'MHEVD') THEN {BONUS_DIESEL_CIUDAD_OCASIONAL}
                 ELSE 0.0
               END)
             + (CASE
