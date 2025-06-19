@@ -364,9 +364,18 @@ def buscar_coches_bq(
             + sd.menor_tiempo_carga_min_scaled * @peso_menor_tiempo_carga_min
             + sd.potencia_maxima_carga_AC_scaled * @peso_potencia_maxima_carga_AC
             + sd.potencia_maxima_carga_DC_scaled * @peso_potencia_maxima_carga_DC
-            + sd.menor_aceleracion_scaled * @peso_fav_menor_aceleracion_score
-            + (CASE WHEN @flag_penalizar_low_cost_comodidad = TRUE AND sd.acceso_low_cost_scaled >= {UMBRAL_LOW_COST_PENALIZABLE_SCALED} THEN {PENALTY_LOW_COST_POR_COMODIDAD} ELSE 0.0 END)
-            + (CASE WHEN @flag_penalizar_deportividad_comodidad = TRUE AND sd.deportividad_bq_scaled >= {UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED} THEN {PENALTY_DEPORTIVIDAD_POR_COMODIDAD} ELSE 0.0 END)
+            + sd.menor_aceleracion_scaled * @peso_fav_menor_aceleracion_score            
+            + (CASE 
+                WHEN @flag_penalizar_low_cost_comodidad = TRUE 
+                THEN (sd.acceso_low_cost_scaled * {PENALTY_LOW_COST_POR_COMODIDAD}) 
+                ELSE 0.0 
+            END)
+            -- Este código aplica una penalización fija si la deportividad supera un umbral
+            + (CASE 
+                WHEN @flag_penalizar_deportividad_comodidad = TRUE 
+                THEN (sd.deportividad_bq_scaled * {PENALTY_DEPORTIVIDAD_POR_COMODIDAD}) 
+                ELSE 0.0 
+            END) 
             + (CASE WHEN @flag_penalizar_antiguo_tec = TRUE THEN CASE WHEN sd.anos_vehiculo > 10 THEN {PENALTY_ANTIGUEDAD_MAS_10_ANOS} WHEN sd.anos_vehiculo > 7  THEN {PENALTY_ANTIGUEDAD_7_A_10_ANOS} WHEN sd.anos_vehiculo > 5  THEN {PENALTY_ANTIGUEDAD_5_A_7_ANOS} ELSE 0.0 END ELSE 0.0 END)
             + (CASE WHEN @flag_aplicar_logica_distintivo = TRUE THEN CASE WHEN UPPER(sd.distintivo_ambiental) IN ('CERO', '0', 'ECO', 'C') THEN {BONUS_DISTINTIVO_ECO_CERO_C} WHEN UPPER(sd.distintivo_ambiental) IN ('B', 'NA') THEN {PENALTY_DISTINTIVO_NA_B} ELSE 0.0 END ELSE 0.0 END)
             + (CASE WHEN @flag_aplicar_logica_distintivo = TRUE AND COALESCE(sd.ocasion, FALSE) = TRUE THEN {BONUS_OCASION_POR_IMPACTO_AMBIENTAL} ELSE 0.0 END)  
