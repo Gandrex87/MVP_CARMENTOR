@@ -508,7 +508,7 @@ RankedData AS (
         FROM 
             BrandRankedData
         WHERE 
-            brand_rank <= 2 -- La nueva regla: solo nos quedamos con el 1º y 2º de cada marca
+            brand_rank <= 3 -- La nueva regla: solo nos quedamos con el 1º y 2º de cada marca
         ORDER BY 
             score_total DESC -- Ordenamos la lista final por la puntuación general
         LIMIT @k -- Aplicamos el límite final de resultados a mostrar

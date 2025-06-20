@@ -1,4 +1,5 @@
 # cloudbuild.yaml - Archivo de configuración para Google Cloud Build
+# gcloud builds submit --config cloudbuild.yaml .
 
 steps:
 # Paso 1: Construir la imagen de Docker

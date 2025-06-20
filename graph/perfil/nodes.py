@@ -11,7 +11,7 @@ from .state import (EstadoAnalisisPerfil,
 from config.llm import llm_solo_perfil, llm_solo_filtros, llm_economia, llm_pasajeros, llm_cp_extractor
 from prompts.loader import system_prompt_perfil, prompt_economia_structured_sys_msg, system_prompt_pasajeros, system_prompt_cp
 from utils.postprocessing import aplicar_postprocesamiento_perfil, aplicar_postprocesamiento_filtros
-from utils.validation import check_perfil_usuario_completeness , check_filtros_completos, check_economia_completa, check_pasajeros_completo
+from utils.validation import check_perfil_usuario_completeness , check_economia_completa, check_pasajeros_completo
 from utils.formatters import formatear_preferencias_en_tabla
 from utils.weights import compute_raw_weights, normalize_weights
 #from utils.rag_carroceria import get_recommended_carrocerias
@@ -341,123 +341,114 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if prefs.apasionado_motor is None: return "¿Te consideras una persona entusiasta del mundo del motor y la tecnología automotriz?"
     if prefs.valora_estetica is None: return "¿La Estética es importante para ti o crees que hay factores más importantes?"
     if prefs.coche_principal_hogar is None: return "¿El coche que estamos buscando será el vehículo principal de tu hogar?."
-    if prefs.frecuencia_uso is None:return "¿Con qué frecuencia usarás el coche?\n 💨 A diario (incluso varias veces al día)\n 🔄 Frecuentemente (varias veces por semana)\n  🕐 Ocasionalmente (pocas veces al mes)"
+    if prefs.frecuencia_uso is None: return "¿Con qué frecuencia usarás el coche?\n 💨 A diario (incluso varias veces al día)\n 🔄 Frecuentemente (varias veces por semana)\n  🕐 Ocasionalmente (pocas veces al mes)"
     if prefs.distancia_trayecto is None:  return "¿Cuál es la distancia de tu trayecto más habitual?\n 🟢 Hasta 10 km\n 🟡 10-50 km\n 🟠 51-150 km\n 🔴 Más de 150 km" 
     # Solo pregunta por viajes largos si el trayecto habitual NO es ya un viaje largo
-    if prefs.distancia_trayecto is not None and \
-       prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value and \
-       prefs.realiza_viajes_largos is None:
-        return "¿Haces recorridos de más de 150 km además de tus trayectos habituales? (Sí/No)"
-    # Si la respuesta anterior fue 'sí', pregunta por la frecuencia
+    # Lógica anidada para viajes largos
+    if (prefs.distancia_trayecto is not None and
+            prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value and
+            prefs.realiza_viajes_largos is None):
+        return "¿Haces recorridos de más de 150 km?\n ✅ Sí\n ❌ No"
+    
     if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
-        return ("¿y con qué frecuencia realizas estos viajes largos?\n 💨 Frecuentemente (Unas cuantas veces por mes)\n 🗓️ Ocasionalmente (Unas pocas veces por mes)\n 🕐 Esporádicamente (Unas pocas veces por año)")
-    if prefs.circula_principalmente_ciudad is None: return "Cuentame, ¿circulas principalmente por ciudad? (Sí/No)"
+        return ("¿Y con qué frecuencia realizas estos viajes largos?\n"
+                "💨 Frecuentemente (Unas cuantas veces por mes)\n"
+                "🗓️ Ocasionalmente (Unas pocas veces por mes)\n"
+                "🕐 Esporádicamente (Unas pocas veces por año)")
+    if prefs.circula_principalmente_ciudad is None: return "Cuentame, ¿circulas principalmente por ciudad?\n ✅ Sí\n ❌ No"
     if prefs.uso_profesional is None: return "¿El coche lo destinaras principalmente para uso personal o más para fines profesionales (trabajo)?"
     if is_yes(prefs.uso_profesional) and prefs.tipo_uso_profesional is None:
         return "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
     if prefs.prefiere_diseno_exclusivo is None: return "En cuanto al estilo del coche, ¿te inclinas más por un diseño exclusivo y llamativo, o por algo más discreto y convencional?"
     if prefs.altura_mayor_190 is None: return "Para recomendarte un vehículo con espacio adecuado, ¿tu altura supera los 1.90 metros?"
     if prefs.peso_mayor_100 is None: return "Para garantizar tu máxima comodidad, ¿tienes un peso superior a 100 kg?"
-    if prefs.transporta_carga_voluminosa is None: return "¿Acostumbras a viajar con el maletero muy cargado? (Responde 'sí' o 'no')"
+    if prefs.transporta_carga_voluminosa is None: return "¿Acostumbras a viajar con el maletero muy cargado?\n ✅ Sí\n ❌ No"
     if is_yes(prefs.transporta_carga_voluminosa) and prefs.necesita_espacio_objetos_especiales is None:
         return "¿Y ese transporte de carga incluye objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos para bebé, sillas de ruedas, instrumentos musicales, etc?"
     if prefs.arrastra_remolque is None: return "¿Vas a arrastrar remolque pesado o caravana?"
+    if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
+    if prefs.estilo_conduccion is None: return "¿Cómo describirías tu estilo de conducción habitual? Por ejemplo: tranquilo, deportivo, o una mezcla de ambos (mixto)."
      # --- NUEVA LÓGICA DE PREGUNTAS PARA GARAJE/APARCAMIENTO ---
+    # if prefs.tiene_garage is None:
+    #     return "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?"
+    # if prefs.tiene_garage is not None and not is_yes(prefs.tiene_garage): # Si respondió 'no' a tiene_garage
+    #     if prefs.problemas_aparcar_calle is None:
+    #         return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?"
+    # elif prefs.tiene_garage is not None and is_yes(prefs.tiene_garage): # Si respondió 'sí' a tiene_garage
+    #     if prefs.espacio_sobra_garage is None:
+    #         return "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
+    #     if prefs.espacio_sobra_garage is not None and not is_yes(prefs.espacio_sobra_garage): # Si respondió 'no' a espacio_sobra_garage
+    #         if prefs.problema_dimension_garage is None or not prefs.problema_dimension_garage: # Si es None o lista vacía
+    #             return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? Podría ser el largo, el ancho, o la altura del coche. (Puedes mencionar una o varias, ej: 'largo y ancho')"
     if prefs.tiene_garage is None:
-        return "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?"
-    if prefs.tiene_garage is not None and not is_yes(prefs.tiene_garage): # Si respondió 'no' a tiene_garage
-        if prefs.problemas_aparcar_calle is None:
-            return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?"
-    elif prefs.tiene_garage is not None and is_yes(prefs.tiene_garage): # Si respondió 'sí' a tiene_garage
-        if prefs.espacio_sobra_garage is None:
-            return "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
-        if prefs.espacio_sobra_garage is not None and not is_yes(prefs.espacio_sobra_garage): # Si respondió 'no' a espacio_sobra_garage
-            if prefs.problema_dimension_garage is None or not prefs.problema_dimension_garage: # Si es None o lista vacía
-                return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? Podría ser el largo, el ancho, o la altura del coche. (Puedes mencionar una o varias, ej: 'largo y ancho')"
+        return "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?\n ✅ Sí\n ❌ No"
+    else:
+        # Si ya sabemos si tiene garaje, entramos en las sub-preguntas
+        if is_yes(prefs.tiene_garage): # --- CASO SÍ TIENE GARAJE ---
+            if prefs.espacio_sobra_garage is None:
+                return "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
+            # Esta sub-pregunta solo se hace si el espacio NO sobra
+            elif not is_yes(prefs.espacio_sobra_garage) and not prefs.problema_dimension_garage:
+                return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? (largo, ancho, o alto)"
+        else: # --- CASO NO TIENE GARAJE ---
+            if prefs.problemas_aparcar_calle is None:
+                return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?"
     # --- FIN NUEVA LÓGICA DE PREGUNTAS ---
     if prefs.tiene_punto_carga_propio is None:
-        return "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual? (Responde 'sí' o 'no')"
-    # --- FIN NUEVA PREGUNTA ---
-    if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
-    if prefs.estilo_conduccion is None:return "¿Cómo describirías tu estilo de conducción habitual? Por ejemplo: tranquilo, deportivo, o una mezcla de ambos (mixto)."
+        return "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual?\n ✅ Sí\n ❌ No"
     # --- FIN NUEVAS PREGUNTAS DE CARGA ---
-    if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?"
+    if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?\n ✅ Sí\n ❌ No"
     if prefs.transmision_preferida is None: return "En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n 1) Automático\n 2) Manual\n 3) Ambos, puedo considerar ambas opciones"
-    if prefs.prioriza_baja_depreciacion is None: return "¿Es importante para ti que la depreciación del coche sea lo más baja posible? 'sí' o 'no'"
+    if prefs.prioriza_baja_depreciacion is None: return "¿Es importante para ti que la depreciación del coche sea lo más baja posible?\n ✅ Sí\n ❌ No"
      # --- NUEVAS PREGUNTAS DE RATING (0-10) ---
-    if prefs.rating_fiabilidad_durabilidad is None: return "En una escala de 0 (nada importante) a 10 (extremadamente importante), ¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche?"
-    if prefs.rating_seguridad is None:return "Pensando en la Seguridad, ¿qué puntuación le darías en importancia (0-10)?"
-    if prefs.rating_comodidad is None:return "Y en cuanto a la comodidad y confort del vehiculo que tan importante es que se maximice? (0-10)"
-    if prefs.rating_impacto_ambiental is None: return "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección (0-10)?" 
-    if prefs.rating_tecnologia_conectividad is None: return "En cuanto a la Tecnología y Conectividad del coche, ¿qué tan relevante es para ti (0-10)?"
-    if prefs.rating_costes_uso is None: return "finalmente, ¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? (0-10)?" 
+    if prefs.rating_fiabilidad_durabilidad is None: return "¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche? \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)"
+    if prefs.rating_seguridad is None:return "Pensando en la Seguridad, ¿qué puntuación le darías en importancia? \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)"
+    if prefs.rating_comodidad is None:return "Y en cuanto a la comodidad y confort del vehiculo que tan importante es que se maximice?\n 📊 0 (nada importante) ——————— 10 (extremadamente importante)"
+    if prefs.rating_impacto_ambiental is None: return "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección? \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)" 
+    if prefs.rating_costes_uso is None: return "¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)" 
+    if prefs.rating_tecnologia_conectividad is None: return "finalmente, en cuanto a la Tecnología y Conectividad del coche, \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)"
     # --- FIN NUEVAS PREGUNTAS DE RATING --- 
     return "¿Podrías darme algún detalle más sobre tus preferencias?" # Fallback muy genérico 
 
 def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Añade la pregunta de seguimiento correcta al historial.
-    Verifica si el perfil está realmente completo ANTES de añadir un mensaje 
-    de confirmación/transición. Si no lo está, asegura que se añada una pregunta real.
+    Si el perfil no está completo, SIEMPRE prioriza la pregunta generada por la lógica
+    interna para asegurar el flujo correcto de preguntas anidadas.
     """
     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
-    mensaje_pendiente = state.get("pregunta_pendiente") 
     preferencias = state.get("preferencias_usuario")
     historial_actual = state.get("messages", [])
     historial_nuevo = list(historial_actual) 
     
     mensaje_a_enviar = None 
 
-    # 1. Comprobar si el perfil está REALMENTE completo AHORA
     perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
 
+    # --- LÓGICA CORREGIDA ---
     if not perfil_esta_completo:
-        print("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO según checker.")
-        pregunta_generada_fallback = None 
-
-        # Generar la pregunta específica AHORA por si la necesitamos
+        # Si el perfil está incompleto, nuestra lógica determinista tiene el control total
+        # para asegurar que no se salten preguntas anidadas.
+        print("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. La lógica interna tiene prioridad.")
         try:
-             pregunta_generada_fallback = _obtener_siguiente_pregunta_perfil(preferencias)
-             print(f"DEBUG (Preguntar Perfil) ► Pregunta fallback generada: {pregunta_generada_fallback}")
-        except Exception as e_fallback:
-             print(f"ERROR (Preguntar Perfil) ► Error generando pregunta fallback: {e_fallback}")
-             pregunta_generada_fallback = "¿Podrías darme más detalles sobre tus preferencias?" 
-
-        # ¿Tenemos un mensaje pendiente del LLM?
-        if mensaje_pendiente and mensaje_pendiente.strip():
-            # Comprobar si el mensaje pendiente PARECE una confirmación
-            es_confirmacion = (
-                mensaje_pendiente.startswith("¡Perfecto!") or 
-                mensaje_pendiente.startswith("¡Genial!") or 
-                mensaje_pendiente.startswith("¡Estupendo!") or 
-                mensaje_pendiente.startswith("Ok,") or 
-                "¿Pasamos a" in mensaje_pendiente
-            )
-
-            if es_confirmacion:
-                # IGNORAR la confirmación errónea y USAR el fallback
-                print(f"WARN (Preguntar Perfil) ► Mensaje pendiente ('{mensaje_pendiente}') parece confirmación, pero perfil incompleto. IGNORANDO y usando fallback.")
-                mensaje_a_enviar = pregunta_generada_fallback
-            else:
-                # El mensaje pendiente parece una pregunta válida, la usamos.
-                 print(f"DEBUG (Preguntar Perfil) ► Usando mensaje pendiente (pregunta LLM): {mensaje_pendiente}")
-                 mensaje_a_enviar = mensaje_pendiente
-        else:
-            # No había mensaje pendiente válido, usamos la fallback generada.
-            print("WARN (Preguntar Perfil) ► Nodo ejecutado para preguntar, pero no había mensaje pendiente válido. Generando pregunta fallback.")
-            mensaje_a_enviar = pregunta_generada_fallback
+            mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
+            print(f"DEBUG (Preguntar Perfil) ► Pregunta correcta generada y seleccionada: {mensaje_a_enviar}")
+        except Exception as e:
+            print(f"ERROR (Preguntar Perfil) ► Error generando pregunta: {e}")
+            mensaje_a_enviar = "¿Podrías darme más detalles sobre tus preferencias?"
             
     else: # El perfil SÍ está completo
+        # Si el perfil ya está completo, podemos usar el mensaje de confirmación del LLM.
         print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
-        # Usamos el mensaje pendiente (que debería ser de confirmación)
+        mensaje_pendiente = state.get("pregunta_pendiente")
         if mensaje_pendiente and mensaje_pendiente.strip():
              print(f"DEBUG (Preguntar Perfil) ► Usando mensaje de confirmación pendiente: {mensaje_pendiente}")
              mensaje_a_enviar = mensaje_pendiente
         else:
              print("WARN (Preguntar Perfil) ► Perfil completo pero no había mensaje pendiente. Usando confirmación genérica.")
-             mensaje_a_enviar = "¡Entendido! Ya tenemos tu perfil completo." # Mensaje simple
+             mensaje_a_enviar = "¡Perfecto! He recopilado todas tus preferencias. Ahora continuaré con el siguiente paso."
 
-    # Añadir el mensaje decidido al historial
+    # Añadir el mensaje decidido al historial (esta parte no cambia)
     if mensaje_a_enviar and mensaje_a_enviar.strip():
         ai_msg = AIMessage(content=mensaje_a_enviar)
         if not historial_actual or historial_actual[-1].content != ai_msg.content:
@@ -472,6 +463,86 @@ def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
 
     # Devolver estado
     return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
+
+
+# def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Añade la pregunta de seguimiento correcta al historial.
+#     Verifica si el perfil está realmente completo ANTES de añadir un mensaje 
+#     de confirmación/transición. Si no lo está, asegura que se añada una pregunta real.
+#     """
+#     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
+#     mensaje_pendiente = state.get("pregunta_pendiente") 
+#     preferencias = state.get("preferencias_usuario")
+#     historial_actual = state.get("messages", [])
+#     historial_nuevo = list(historial_actual) 
+    
+#     mensaje_a_enviar = None 
+
+#     # 1. Comprobar si el perfil está REALMENTE completo AHORA
+#     perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
+
+#     if not perfil_esta_completo:
+#         print("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO según checker.")
+#         pregunta_generada_fallback = None 
+
+#         # Generar la pregunta específica AHORA por si la necesitamos
+#         try:
+#              pregunta_generada_fallback = _obtener_siguiente_pregunta_perfil(preferencias)
+#              print(f"DEBUG (Preguntar Perfil) ► Pregunta fallback generada: {pregunta_generada_fallback}")
+#         except Exception as e_fallback:
+#              print(f"ERROR (Preguntar Perfil) ► Error generando pregunta fallback: {e_fallback}")
+#              pregunta_generada_fallback = "¿Podrías darme más detalles sobre tus preferencias?" 
+
+#         # ¿Tenemos un mensaje pendiente del LLM?
+#         if mensaje_pendiente and mensaje_pendiente.strip():
+#             # Comprobar si el mensaje pendiente PARECE una confirmación
+#             es_confirmacion = (
+#                 mensaje_pendiente.startswith("¡Perfecto!") or 
+#                 mensaje_pendiente.startswith("¡Genial!") or 
+#                 mensaje_pendiente.startswith("¡Estupendo!") or 
+#                 mensaje_pendiente.startswith("Ok,") or 
+#                 "¿Pasamos a" in mensaje_pendiente
+#             )
+
+#             if es_confirmacion:
+#                 # IGNORAR la confirmación errónea y USAR el fallback
+#                 print(f"WARN (Preguntar Perfil) ► Mensaje pendiente ('{mensaje_pendiente}') parece confirmación, pero perfil incompleto. IGNORANDO y usando fallback.")
+#                 mensaje_a_enviar = pregunta_generada_fallback
+#             else:
+#                 # El mensaje pendiente parece una pregunta válida, la usamos.
+#                  print(f"DEBUG (Preguntar Perfil) ► Usando mensaje pendiente (pregunta LLM): {mensaje_pendiente}")
+#                  mensaje_a_enviar = mensaje_pendiente
+#         else:
+#             # No había mensaje pendiente válido, usamos la fallback generada.
+#             print("WARN (Preguntar Perfil) ► Nodo ejecutado para preguntar, pero no había mensaje pendiente válido. Generando pregunta fallback.")
+#             mensaje_a_enviar = pregunta_generada_fallback
+            
+#     else: # El perfil SÍ está completo
+#         print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
+#         # Usamos el mensaje pendiente (que debería ser de confirmación)
+#         if mensaje_pendiente and mensaje_pendiente.strip():
+#              print(f"DEBUG (Preguntar Perfil) ► Usando mensaje de confirmación pendiente: {mensaje_pendiente}")
+#              mensaje_a_enviar = mensaje_pendiente
+#         else:
+#              print("WARN (Preguntar Perfil) ► Perfil completo pero no había mensaje pendiente. Usando confirmación genérica.")
+#              mensaje_a_enviar = "¡Entendido! Ya tenemos tu perfil completo." # Mensaje simple
+
+#     # Añadir el mensaje decidido al historial
+#     if mensaje_a_enviar and mensaje_a_enviar.strip():
+#         ai_msg = AIMessage(content=mensaje_a_enviar)
+#         if not historial_actual or historial_actual[-1].content != ai_msg.content:
+#             historial_nuevo.append(ai_msg)
+#             print(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}") 
+#         else:
+#              print("DEBUG (Preguntar Perfil) ► Mensaje final duplicado, no se añade.")
+#     else:
+#          print("ERROR (Preguntar Perfil) ► No se determinó ningún mensaje a enviar.")
+#          ai_msg = AIMessage(content="No estoy seguro de qué preguntar ahora. ¿Puedes darme más detalles?")
+#          historial_nuevo.append(ai_msg)
+
+#     # Devolver estado
+#     return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
 
 
 # --- NUEVA ETAPA: PASAJEROS ---
@@ -587,11 +658,11 @@ def _obtener_siguiente_pregunta_pasajeros(info: Optional[InfoPasajeros]) -> str:
     siguiendo el nuevo flujo condicional.
     """
     if info is None: # Si no hay objeto InfoPasajeros, empezar por la primera pregunta
-        return "¿Sueles viajar con acompañantes en el coche habitualmente? (Responde 'sí' o 'no')"
+        return "¿Sueles viajar con acompañantes en el coche habitualmente? \n ✅ Sí\n ❌ No"
 
     # 1. Pregunta inicial
     if info.suele_llevar_acompanantes is None:
-        return "¿Sueles viajar con acompañantes en el coche habitualmente? (Responde 'sí' o 'no')"
+        return "¿Sueles viajar con acompañantes en el coche habitualmente? \n ✅ Sí\n ❌ No"
 
     # Si la respuesta fue 'no', no debería llegar aquí si el LLM y la validación funcionan,
     # ya que se consideraría completo. Pero por si acaso:
@@ -772,133 +843,30 @@ def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
 # --- Fin Etapa 1 ---
 
 # --- Etapa 2: Inferencia y Validación de Filtros Técnicos ---
-def preguntar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
-     """Toma la pregunta de filtros pendiente y la añade al historial."""
-     print("--- Ejecutando Nodo: preguntar_filtros_node ---")
-     pregunta = state.get("pregunta_pendiente")
-     historial_actual = state.get("messages", [])
-     historial_nuevo = historial_actual 
-     mensaje_a_enviar = None
-     if pregunta and pregunta.strip():
-         mensaje_a_enviar = pregunta
-         # Podrías añadir lógica fallback si la pregunta está vacía
-     else:
-         mensaje_a_enviar = "¿Podrías darme más detalles sobre los filtros técnicos?" # Fallback muy genérico
+# def preguntar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
+#      """Toma la pregunta de filtros pendiente y la añade al historial."""
+#      print("--- Ejecutando Nodo: preguntar_filtros_node ---")
+#      pregunta = state.get("pregunta_pendiente")
+#      historial_actual = state.get("messages", [])
+#      historial_nuevo = historial_actual 
+#      mensaje_a_enviar = None
+#      if pregunta and pregunta.strip():
+#          mensaje_a_enviar = pregunta
+#          # Podrías añadir lógica fallback si la pregunta está vacía
+#      else:
+#          mensaje_a_enviar = "¿Podrías darme más detalles sobre los filtros técnicos?" # Fallback muy genérico
 
-     # Añadir mensaje
-     if mensaje_a_enviar:
-         ai_msg = AIMessage(content=mensaje_a_enviar)
-         if not historial_actual or historial_actual[-1].content != ai_msg.content:
-             historial_nuevo = historial_actual + [ai_msg]
-             print(f"DEBUG (Preguntar Filtros) ► Mensaje final añadido: {mensaje_a_enviar}")
-         else:
-              print("DEBUG (Preguntar Filtros) ► Mensaje final duplicado.")
+#      # Añadir mensaje
+#      if mensaje_a_enviar:
+#          ai_msg = AIMessage(content=mensaje_a_enviar)
+#          if not historial_actual or historial_actual[-1].content != ai_msg.content:
+#              historial_nuevo = historial_actual + [ai_msg]
+#              print(f"DEBUG (Preguntar Filtros) ► Mensaje final añadido: {mensaje_a_enviar}")
+#          else:
+#               print("DEBUG (Preguntar Filtros) ► Mensaje final duplicado.")
 
-     return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
+#      return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
 
-
-# def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Llama al LLM para inferir filtros técnicos iniciales, luego aplica
-#     post-procesamiento usando preferencias e información climática.
-#     Actualiza 'filtros_inferidos' y 'pregunta_pendiente' en el estado.
-#     """
-#     print("--- Ejecutando Nodo: inferir_filtros_node ---")
-#     historial = state.get("messages", [])
-#     preferencias_obj = state.get("preferencias_usuario")
-#     info_clima_obj = state.get("info_clima_usuario")
-
-#     # Verificar pre-condiciones
-#     if not preferencias_obj:
-#         print("ERROR (Filtros) ► Nodo 'inferir_filtros_node' ejecutado pero 'preferencias_usuario' no existe. No se puede inferir.")
-#         return {
-#             "filtros_inferidos": FiltrosInferidos(), # Devolver un objeto vacío
-#             "pregunta_pendiente": "No pude procesar los filtros porque falta información del perfil."
-#         }
-
-#     print("DEBUG (Filtros) ► Preferencias de usuario e info_clima disponibles. Procediendo...")
-
-#     # 1. Preparar el prompt para llm_solo_filtros
-#     #    Incluimos preferencias y, si existe, info_clima en el contexto.
-#     prompt_contexto_str = ""
-#     try:
-#         prefs_dict = preferencias_obj.model_dump(mode='json', exclude_none=False)
-#         prompt_contexto_str = f"<preferencias_usuario>{json.dumps(prefs_dict, indent=2)}</preferencias_usuario>\n"
-#         if info_clima_obj:
-#             clima_dict = info_clima_obj.model_dump(mode='json', exclude_none=False)
-#             prompt_contexto_str += f"<info_clima>{json.dumps(clima_dict, indent=2)}</info_clima>\n"
-        
-#         prompt_filtros_formateado = system_prompt_filtros_template.format(
-#             contexto_preferencias=prompt_contexto_str
-#         )
-#         # print(f"DEBUG (Filtros) ► Prompt para llm_solo_filtros (parcial): {prompt_filtros_formateado[:700]}...") 
-#     except Exception as e_prompt:
-#         print(f"ERROR (Filtros) ► Fallo al formatear el prompt de filtros: {e_prompt}")
-#         return {
-#             "filtros_inferidos": FiltrosInferidos(),
-#             "pregunta_pendiente": f"Error interno preparando la consulta de filtros: {e_prompt}"
-#         }
-
-#     # 2. Llamar al LLM para inferir filtros iniciales
-#     filtros_inferidos_por_llm: Optional[FiltrosInferidos] = None
-#     mensaje_llm = "Lo siento, tuve un problema técnico al determinar los filtros." # Default
-
-#     try:
-#         response: ResultadoSoloFiltros = llm_solo_filtros.invoke(
-#             [prompt_filtros_formateado, *historial], 
-#             config={"configurable": {"tags": ["llm_solo_filtros"]}}
-#         )
-#         print(f"DEBUG (Filtros) ► Respuesta llm_solo_filtros: {response}")
-#         filtros_inferidos_por_llm = response.filtros_inferidos # Este es un objeto FiltrosInferidos
-#         mensaje_llm = response.mensaje_validacion
-        
-#     except ValidationError as e_val:
-#         print(f"ERROR (Filtros) ► Error de Validación Pydantic en llm_solo_filtros: {e_val}")
-#         mensaje_llm = f"Hubo un problema al procesar los filtros técnicos (formato inválido): {e_val}. ¿Podrías aclarar?"
-#         filtros_inferidos_por_llm = FiltrosInferidos() # Usar uno vacío para post-procesamiento
-#     except Exception as e:
-#         print(f"ERROR (Filtros) ► Fallo al invocar llm_solo_filtros: {e}")
-#         traceback.print_exc()
-#         filtros_inferidos_por_llm = FiltrosInferidos() # Usar uno vacío
-
-#     # 3. Aplicar post-procesamiento
-#     # Asegurar que filtros_inferidos_por_llm sea un objeto, no None, para pasarlo
-#     if filtros_inferidos_por_llm is None:
-#         filtros_inferidos_por_llm = FiltrosInferidos()
-    
-#     print(f"DEBUG (Filtros) ► Filtros ANTES de post-procesamiento: {filtros_inferidos_por_llm}")
-#     filtros_finales_postprocesados: Optional[FiltrosInferidos] = None
-#     try:
-#         filtros_finales_postprocesados = aplicar_postprocesamiento_filtros(
-#             filtros=filtros_inferidos_por_llm,
-#             preferencias=preferencias_obj,
-#             info_clima=info_clima_obj 
-#         )
-#         print(f"DEBUG (Filtros) ► Filtros TRAS post-procesamiento: {filtros_finales_postprocesados}")
-#     except Exception as e_post:
-#         print(f"ERROR (Filtros) ► Fallo en postprocesamiento de filtros: {e_post}")
-#         traceback.print_exc()
-#         # Si el post-procesamiento falla, usamos los filtros del LLM (o uno vacío si LLM falló)
-#         filtros_finales_postprocesados = filtros_inferidos_por_llm 
-#         mensaje_llm = f"Hubo un problema aplicando reglas a los filtros: {e_post}"
-        
-#     # 4. Preparar el estado a devolver
-#     # Si después de todo, filtros_finales_postprocesados es None, inicializar a uno vacío.
-#     estado_filtros_a_guardar = filtros_finales_postprocesados if filtros_finales_postprocesados is not None else FiltrosInferidos()
-    
-#     print(f"DEBUG (Filtros) ► Estado filtros_inferidos a guardar: {estado_filtros_a_guardar}")
-
-#     pregunta_para_siguiente_nodo = None
-#     if mensaje_llm and mensaje_llm.strip():
-#         pregunta_para_siguiente_nodo = mensaje_llm.strip()
-#         # print(f"DEBUG (Filtros) ► Guardando mensaje pendiente: {pregunta_para_siguiente_nodo}")
-#     else:
-#         print(f"DEBUG (Filtros) ► No hay mensaje de validación/pregunta pendiente del LLM de filtros.")
-        
-#     return {
-#         "filtros_inferidos": estado_filtros_a_guardar,
-#         "pregunta_pendiente": pregunta_para_siguiente_nodo
-#     }
 
 
 def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
@@ -944,22 +912,22 @@ def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
         "filtros_inferidos": filtros_finales
     }
 
-def validar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
-    """
-    Comprueba si los FiltrosInferidos en el estado están completos 
-    (según los criterios definidos en la función de utilidad `check_filtros_completos`).
-    """
-    print("--- Ejecutando Nodo: validar_filtros_node ---")
-    filtros = state.get("filtros_inferidos")
+# def validar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Comprueba si los FiltrosInferidos en el estado están completos 
+#     (según los criterios definidos en la función de utilidad `check_filtros_completos`).
+#     """
+#     print("--- Ejecutando Nodo: validar_filtros_node ---")
+#     filtros = state.get("filtros_inferidos")
     
-    # Usar una función de utilidad para verificar la completitud SOLO de los filtros
-    # ¡Asegúrate de que esta función exista en utils.validation!
-    if check_filtros_completos(filtros):
-        print("DEBUG (Filtros) ► Validación: FiltrosInferidos considerados COMPLETOS.")
-    else:
-        print("DEBUG (Filtros) ► Validación: FiltrosInferidos considerados INCOMPLETOS.")
+#     # Usar una función de utilidad para verificar la completitud SOLO de los filtros
+#     # ¡Asegúrate de que esta función exista en utils.validation!
+#     if check_filtros_completos(filtros):
+#         print("DEBUG (Filtros) ► Validación: FiltrosInferidos considerados COMPLETOS.")
+#     else:
+#         print("DEBUG (Filtros) ► Validación: FiltrosInferidos considerados INCOMPLETOS.")
         
-    return {**state}
+#     return {**state}
 # --- Fin Etapa 2 ---
 
 

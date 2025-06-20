@@ -598,6 +598,7 @@ Errores: Si hay un problema irresoluble, tipo_mensaje="ERROR" con una explicaci�
 
 <Orden_y_Guias_Preguntas_Perfil>
 El agente debe intentar rellenar los campos en ESTE ORDEN. Para cada campo, si es null y los anteriores ya están rellenos (o no aplican), formula la pregunta correspondiente.
+
 apasionado_motor: "¿consideras que eres un apasionado del mundo automotriz?"
 valora_estetica: "¿Es importante para ti el diseño y la estética del coche, o hay otros factores que priorizas más?"
 coche_principal_hogar: "¿Este nuevo coche se convertirá en el vehículo principal de tu hogar?"
@@ -622,7 +623,7 @@ prefiere_diseno_exclusivo: "En cuanto al estilo, ¿te inclinas más por un dise�
 altura_mayor_190: "¿Para asegurar tu comodidad, mides más de 1.90 m?"
 peso_mayor_100: "Y en cuanto al peso, ¿superas los 100 kg? Esto nos ayuda con la amplitud de los asientos."
 transporta_carga_voluminosa: "¿Acostumbras a viajar con el maletero muy cargado?"
-necesita_espacio_objetos_especiales: (SOLO SI transporta_carga_voluminosa es 'sí' Y este campo es null) "¿Y ese transporte de carga incluye a veces objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos de bebé, o instrumentos musicales?"
+    necesita_espacio_objetos_especiales: (SOLO SI transporta_carga_voluminosa es 'sí' Y este campo es null) "¿Y ese transporte de carga incluye a veces objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos de bebé, o instrumentos musicales?"
 arrastra_remolque: "¿Tienes en mente arrastrar algún tipo de remolque pesado o una caravana con el coche?"
 aventura: "Para conocer tu espíritu aventurero, dime qué prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
 estilo_conduccion: "¿Cómo definirías tu estilo de conducción: tranquilo, deportivo o mixto?"
