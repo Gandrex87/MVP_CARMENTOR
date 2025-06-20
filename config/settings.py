@@ -221,15 +221,15 @@ UMBRAL_RATING_COMODIDAD_RAG = 8.0 # Umbral de rating de comodidad para activar s
 UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS = 7
 UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG = 7
 UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG = 7
-#UMBRAL_LOW_COST_PENALIZABLE_SCALED = 0.5 # Penalizar si acceso_low_cost_scaled >= 
-#UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED = 0.5 # Penalizar si deportividad_scaled >= 0.5  # penalizando coches con una deportividad igual o superior al punto medio (5.5),
+
+
 UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA = 8
 
 # --------------------------------------- ## --------------------------------------- ## --------------------------------------
 # --- LÓGICA DE PESOS CRUDOS (`utils/weights.py`) ---
 # Límite máximo para cualquier peso crudo individual antes de normalizar
-MAX_SINGLE_RAW_WEIGHT = 10.0 # Definir el tope máximo para un peso crudo individual
-MIN_SINGLE_RAW_WEIGHT = 0.0 # Definir el tope minimo
+MAX_SINGLE_RAW_WEIGHT = 10.0 #
+MIN_SINGLE_RAW_WEIGHT = 0.0 #
 PESO_CRUDO_BASE = 1.0
 
 #Valores Pesos basado en 'priorizar_ancho' (priorizar_ancho de pasajeros Z>=2)
