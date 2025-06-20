@@ -105,47 +105,47 @@ MIN_MAX_RANGES = {
 # --- VALORES DE AJUSTE DIRECTO AL SCORE (BONUS/PENALIZACIONES) (`utils/bigquery_tools.py`) ---
 
 # --- LÓGICA PARA TRACCIÓN BASADA EN AVENTURA ---
-PENALTY_AWD_NINGUNA_AVENTURA = -0.10
-BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO = 0.10
+PENALTY_AWD_NINGUNA_AVENTURA = -10
+BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO = 10
 
-BONUS_AWD_AVENTURA_OCASIONAL = 0.10
-BONUS_AWD_AVENTURA_EXTREMA = 0.20
+BONUS_AWD_AVENTURA_OCASIONAL = 10
+BONUS_AWD_AVENTURA_EXTREMA = 20
 
 # --- LÓGICA PARA REDUCTORAS BASADA EN AVENTURA ---
-BONUS_REDUCTORAS_AVENTURA_OCASIONAL = 0.10 # 
-BONUS_REDUCTORAS_AVENTURA_EXTREMA = 0.20   # 
+BONUS_REDUCTORAS_AVENTURA_OCASIONAL = 10 # 
+BONUS_REDUCTORAS_AVENTURA_EXTREMA = 20   # 
 
 #valores directos que se suman o restan al score (escala 0-1)
 # Penalización por Puertas
-PENALTY_PUERTAS_BAJAS = -0.081
+PENALTY_PUERTAS_BAJAS = -8
 
 # Penalizaciones por Comodidad (si comodidad es alta, penalizar estos)
-PENALTY_LOW_COST_POR_COMODIDAD = -0.10 # Cuánto restar si es muy low-cost y se quiere confort
-PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -0.10 # Cuánto restar si es muy deportivo y se quiere confort
+PENALTY_LOW_COST_POR_COMODIDAD = -10 # Cuánto restar si es muy low-cost y se quiere confort
+PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -10 # Cuánto restar si es muy deportivo y se quiere confort
 
 # Penalización por Antigüedad (si tecnología es alta)
-PENALTY_ANTIGUEDAD_MAS_10_ANOS = -0.20
-PENALTY_ANTIGUEDAD_7_A_10_ANOS = -0.15
-PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -0.081
+PENALTY_ANTIGUEDAD_MAS_10_ANOS = -20
+PENALTY_ANTIGUEDAD_7_A_10_ANOS = -15
+PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -8
 
 #valores directos que se suman o restan al score (escala 0-1)
-PENALTY_BEV_REEV_AVENTURA_OCASIONAL = -0.10
-PENALTY_PHEV_AVENTURA_OCASIONAL = -0.05
-PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA =  -0.25 
+PENALTY_BEV_REEV_AVENTURA_OCASIONAL = -10
+PENALTY_PHEV_AVENTURA_OCASIONAL = -5
+PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA =  -25
 
 # Lógica Distintivo Ambiental (General - activada por alto rating de impacto ambiental - WHEN @flag_aplicar_logica_distintivo = TRUE THEN)
-BONUS_DISTINTIVO_ECO_CERO_C = 0.049 
-PENALTY_DISTINTIVO_NA_B = -0.081 #Falta separar la nota NA para aplicar diferenciar calificacion.
+BONUS_DISTINTIVO_ECO_CERO_C = 5
+PENALTY_DISTINTIVO_NA_B = -8 #Falta separar la nota NA para aplicar diferenciar calificacion.
 
 #WHEN @flag_aplicar_logica_distintivo = TRUE AND COALESCE(sd.ocasion, FALSE) = TRUE THEN
-BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 0.081 
+BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 8 
 
 # Lógica Distintivo Ambiental (Específica ZBE - activada si CP está en ZBE)
-BONUS_ZBE_DISTINTIVO_FAVORABLE_C = 0.081 
-BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO = 0.10
+BONUS_ZBE_DISTINTIVO_FAVORABLE_C = 8 
+BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO = 10
 
-PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA =  -0.20
-PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B =  -0.081
+PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA =  -20
+PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B =  -8
 
 
 # Regla 1: Si flag_favorecer_carroceria_montana es TRUE, los coches con tipo_carroceria 'SUV' o 'TODOTERRENO' reciben un bonus.
@@ -156,58 +156,58 @@ PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B =  -0.081
 # Regla 6: si flag_fav_pickup_todoterreno_aventura_extrema es TRUE, coches 'PICKUP' favorece
 # Regla 7: si flag_aplicar_logica_objetos_especiales = TRUE, favorecer ('MONOVOLUMEN', 'FURGONETA', 'FAMILIAR', 'SUV'), penalty ('3VOL', 'COUPE', 'DESCAPOTABLE')
 # Regla 8: si flag_fav_carroceria_confort = TRUE, favorece ('3VOL', '2VOL', 'SUV', 'FAMILIAR', 'MONOVOLUMEN')
-BONUS_CARROCERIA_MONTANA = 0.05
-BONUS_CARROCERIA_COMERCIAL = 0.20
-BONUS_CARROCERIA_PASAJEROS_PRO = 0.20
-PENALTY_CARROCERIA_NO_AVENTURA = -0.15
-BONUS_SUV_AVENTURA_OCASIONAL = 0.20
-BONUS_TODOTERRENO_AVENTURA_EXTREMA = 0.10 
-BONUS_PICKUP_AVENTURA_EXTREMA = 0.05
-BONUS_CARROCERIA_OBJETOS_ESPECIALES = 0.10
-PENALTY_CARROCERIA_OBJETOS_ESPECIALES = -0.20
-BONUS_CARROCERIA_CONFORT = 0.081
+BONUS_CARROCERIA_MONTANA = 5
+BONUS_CARROCERIA_COMERCIAL = 20
+BONUS_CARROCERIA_PASAJEROS_PRO = 20
+PENALTY_CARROCERIA_NO_AVENTURA = -15
+BONUS_SUV_AVENTURA_OCASIONAL = 20
+BONUS_TODOTERRENO_AVENTURA_EXTREMA = 10 
+BONUS_PICKUP_AVENTURA_EXTREMA = 5
+BONUS_CARROCERIA_OBJETOS_ESPECIALES = 10
+PENALTY_CARROCERIA_OBJETOS_ESPECIALES = -20
+BONUS_CARROCERIA_CONFORT = 8
 
 # Lógica para FrecuenciaUso.OCASIONALMENTE
-BONUS_OCASION_POR_USO_OCASIONAL = 0.081  # Puntos extra si el coche es de OCASION y el uso es ocasional
-PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL = -0.10  # Puntos que se restan a BEV/PHEV/REEV si el uso es ocasional
-BONUS_BEV_REEV_USO_DEFINIDO = 0.10 # Bonus para BEV/REEV si el perfil de uso es el ideal para un eléctrico puro
-PENALTY_PHEV_USO_INTENSIVO_LARGO = -0.15 # Penalización para PHEVs si el uso es diario/frecuente en trayectos muy largos
+BONUS_OCASION_POR_USO_OCASIONAL = 8  # Puntos extra si el coche es de OCASION y el uso es ocasional
+PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL = -10  # Puntos que se restan a BEV/PHEV/REEV si el uso es ocasional
+BONUS_BEV_REEV_USO_DEFINIDO = 10 # Bonus para BEV/REEV si el perfil de uso es el ideal para un eléctrico puro
+PENALTY_PHEV_USO_INTENSIVO_LARGO = -15 # Penalización para PHEVs si el uso es diario/frecuente en trayectos muy largos
 
 # --- BONUS/PENALIZACIONES BASADOS EN KM ANUALES ESTIMADOS ---
 # Rango Bajo (< 10.000 km/año)
-BONUS_MOTOR_POCO_KM = 0.10 
-PENALTY_OCASION_POCO_KM = -0.05  
+BONUS_MOTOR_POCO_KM = 10
+PENALTY_OCASION_POCO_KM = -5 
 
 # Rango Medio (10.000 - 30.000 km/año)
-PENALTY_OCASION_MEDIO_KM = -0.10
+PENALTY_OCASION_MEDIO_KM = -10
 
 # Rango Alto (30.000 - 60.000 km/año)
-BONUS_MOTOR_MUCHO_KM = 0.10 
-PENALTY_OCASION_MUCHO_KM = -0.10
+BONUS_MOTOR_MUCHO_KM = 10
+PENALTY_OCASION_MUCHO_KM = -10
 
 # --- LÓGICA PARA USO MUY ALTO (> 60.000 km/año) ---
 # Bonus por tipo de motor
-BONUS_BEV_MUY_ALTO_KM = 0.05
-BONUS_REEV_MUY_ALTO_KM = 0.081
-BONUS_DIESEL_HEVD_MUY_ALTO_KM = 0.10
-BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM = 0.03
+BONUS_BEV_MUY_ALTO_KM = 5
+BONUS_REEV_MUY_ALTO_KM = 8
+BONUS_DIESEL_HEVD_MUY_ALTO_KM = 10
+BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM = 3
 
 # Penalización para coches de ocasión
-PENALTY_OCASION_MUY_ALTO_KM_V2 = -0.20 # Le pongo V2 para no confundir con la otra constante
+PENALTY_OCASION_MUY_ALTO_KM_V2 = -20 # Le pongo V2 para no confundir con la otra constante
 
 # Bonus para coches que pueden aprovechar un punto de carga propio
-BONUS_PUNTO_CARGA_PROPIO = 0.10
+BONUS_PUNTO_CARGA_PROPIO = 10
 
 # Bonus/Penalty favorecer por conducir en ciudad
-PENALTY_DIESEL_CIUDAD = -0.15
-BONUS_DIESEL_CIUDAD_OCASIONAL = 0.20
+PENALTY_DIESEL_CIUDAD = -15
+BONUS_DIESEL_CIUDAD_OCASIONAL = 20
 
 # --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
 # Ajustes de pesos crudos aditivos por clima
-BONUS_AWD_ZONA_NIEVE = 0.10
-BONUS_AWD_ZONA_MONTA = 0.05
+BONUS_AWD_ZONA_NIEVE = 10
+BONUS_AWD_ZONA_MONTA = 5
 
-
+PENALTY_OCASION_KILOMETRAJE_EXTREMO = -25
 
 
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
@@ -367,3 +367,8 @@ MAPA_REALIZA_VIAJES_LARGOS_KM = {
     "no": 0
 }
 
+# --- FACTOR DE ESCALA PARA EL SCORING ---
+# Define el peso máximo que tendrán las preferencias normalizadas del usuario en el sistema de puntos.
+# Con 100, un coche que sea un 85% perfecto para el usuario (score normalizado 0.85)
+# obtendrá 85 puntos base.
+FACTOR_ESCALA_BASE = 100.0

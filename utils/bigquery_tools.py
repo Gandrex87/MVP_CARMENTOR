@@ -1,31 +1,13 @@
 # En utils/bigquery_search.py
-
-# El sistema considera que dos coches son "el mismo" si coinciden exactamente en estas cuatro características:
-#Agrupación de coches "iguales" (PARTITION BY):
-# nombre (la marca, ej: "Seat")
-# modelo (el modelo, ej: "León")
-# tipo_mecanica (el motor, ej: "GAS")
-# cambio_automatico (si es automático o manual)
-
-# Elección del "mejor" de cada grupo (ORDER BY):
-# Una vez que agrupa todos los coches que son iguales según la regla anterior, los ordena para decidir cuál te va a mostrar. El criterio para elegir al "ganador" es:
-
-# Primero: El que tenga la puntuación (score_total) más alta.
-# Segundo (si hay empate): De entre los que tienen la misma puntuación, elige el que tenga el precio (precio_compra_contado) más bajo.
-
-# El filtro final (WHERE rn = 1):
-# A cada coche dentro de su grupo se le asigna un número de fila (rn de row number). Al ganador se le asigna el 1. La consulta final solo se queda con los coches que tienen rn = 1, descartando todos los demás duplicados.
-
 import logging
 import traceback
 from typing import Optional, List, Dict, Any , Tuple
 from google.cloud import bigquery
 from config.settings import ( 
-    MIN_MAX_RANGES,PENALTY_PUERTAS_BAJAS,PENALTY_LOW_COST_POR_COMODIDAD, PENALTY_DEPORTIVIDAD_POR_COMODIDAD,UMBRAL_LOW_COST_PENALIZABLE_SCALED, UMBRAL_DEPORTIVIDAD_PENALIZABLE_SCALED, PENALTY_ANTIGUEDAD_MAS_10_ANOS, PENALTY_ANTIGUEDAD_7_A_10_ANOS, PENALTY_ANTIGUEDAD_5_A_7_ANOS, BONUS_DISTINTIVO_ECO_CERO_C, PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,  PENALTY_BEV_REEV_AVENTURA_OCASIONAL,PENALTY_PHEV_AVENTURA_OCASIONAL, PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA,BONUS_CARROCERIA_MONTANA, BONUS_CARROCERIA_COMERCIAL,BONUS_CARROCERIA_PASAJEROS_PRO, PENALTY_CARROCERIA_NO_AVENTURA , BONUS_SUV_AVENTURA_OCASIONAL, BONUS_TODOTERRENO_AVENTURA_EXTREMA, BONUS_PICKUP_AVENTURA_EXTREMA, BONUS_CARROCERIA_OBJETOS_ESPECIALES, PENALTY_CARROCERIA_OBJETOS_ESPECIALES,  BONUS_CARROCERIA_CONFORT, FACTOR_CONVERSION_PRECIO_CUOTA,
+    MIN_MAX_RANGES,PENALTY_PUERTAS_BAJAS,PENALTY_LOW_COST_POR_COMODIDAD, PENALTY_DEPORTIVIDAD_POR_COMODIDAD, PENALTY_ANTIGUEDAD_MAS_10_ANOS, PENALTY_ANTIGUEDAD_7_A_10_ANOS, PENALTY_ANTIGUEDAD_5_A_7_ANOS, BONUS_DISTINTIVO_ECO_CERO_C, PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,  PENALTY_BEV_REEV_AVENTURA_OCASIONAL,PENALTY_PHEV_AVENTURA_OCASIONAL, PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA,BONUS_CARROCERIA_MONTANA, BONUS_CARROCERIA_COMERCIAL,BONUS_CARROCERIA_PASAJEROS_PRO, PENALTY_CARROCERIA_NO_AVENTURA , BONUS_SUV_AVENTURA_OCASIONAL, BONUS_TODOTERRENO_AVENTURA_EXTREMA, BONUS_PICKUP_AVENTURA_EXTREMA, BONUS_CARROCERIA_OBJETOS_ESPECIALES, PENALTY_CARROCERIA_OBJETOS_ESPECIALES,  BONUS_CARROCERIA_CONFORT, FACTOR_CONVERSION_PRECIO_CUOTA,
     BONUS_OCASION_POR_USO_OCASIONAL, PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL, BONUS_BEV_REEV_USO_DEFINIDO,PENALTY_PHEV_USO_INTENSIVO_LARGO, BONUS_MOTOR_POCO_KM, PENALTY_OCASION_POCO_KM, PENALTY_OCASION_MEDIO_KM, BONUS_MOTOR_MUCHO_KM, PENALTY_OCASION_MUCHO_KM, PENALTY_OCASION_MUY_ALTO_KM_V2 ,BONUS_BEV_MUY_ALTO_KM , BONUS_REEV_MUY_ALTO_KM , BONUS_DIESEL_HEVD_MUY_ALTO_KM, BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM, BONUS_PUNTO_CARGA_PROPIO, PENALTY_AWD_NINGUNA_AVENTURA,  BONUS_AWD_AVENTURA_OCASIONAL, BONUS_AWD_AVENTURA_EXTREMA, BONUS_AWD_ZONA_NIEVE, BONUS_AWD_ZONA_MONTA,
-    BONUS_REDUCTORAS_AVENTURA_EXTREMA , PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA, PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B , BONUS_ZBE_DISTINTIVO_FAVORABLE_C , BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO, BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO, PENALTY_DIESEL_CIUDAD , BONUS_DIESEL_CIUDAD_OCASIONAL,
+    BONUS_REDUCTORAS_AVENTURA_EXTREMA , PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA, PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B , BONUS_ZBE_DISTINTIVO_FAVORABLE_C , BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO, BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO, PENALTY_DIESEL_CIUDAD , BONUS_DIESEL_CIUDAD_OCASIONAL, FACTOR_ESCALA_BASE, PENALTY_OCASION_KILOMETRAJE_EXTREMO
 )
-
 
 logging.basicConfig(level=logging.INFO) # Cambiado a INFO por defecto, DEBUG puede ser muy verboso
 FiltrosDict = Dict[str, Any] 
@@ -117,7 +99,7 @@ def buscar_coches_bq(
     flag_bonus_montana_val = bool(filtros.get("flag_bonus_awd_montana", False))
     flag_reductoras_aventura_val = bool(filtros.get("flag_logica_reductoras_aventura"))
     flag_bonus_clima_val = bool(filtros.get("flag_bonus_awd_clima_adverso", False))
-    flag_diesel_ciudad_val = bool(filtros.get("flag_logica_diesel_ciudad")) # <-- AÑADIR (obtiene el string o None)
+    flag_diesel_ciudad_val = bool(filtros.get("flag_logica_diesel_ciudad", False)) # <-- AÑADIR (obtiene el string o None)
 
     m = MIN_MAX_RANGES
     min_est, max_est = m["estetica"]; min_prem, max_prem = m["premium"]; min_sing, max_sing = m["singular"]
@@ -210,10 +192,9 @@ def buscar_coches_bq(
         bigquery.ScalarQueryParameter("k", "INT64", k)
     ]
     
-    # Segundo, inicializa la lista para las cláusulas WHERE.
+    # inicializa la lista para las cláusulas WHERE.
     sql_where_clauses = []
 
-    # Tercero, añade las cláusulas y parámetros DINÁMICOS según los filtros.
     transmision_val = filtros.get("transmision_preferida")
     if isinstance(transmision_val, str) and transmision_val != "ambos":
         param_name_trans = "param_transmision_auto"
@@ -234,11 +215,6 @@ def buscar_coches_bq(
         tipos_mecanica_str_list = [m.value if hasattr(m, 'value') else str(m) for m in tipos_mecanica_list]
         sql_where_clauses.append(f"sd.tipo_mecanica IN UNNEST(@tipos_mecanica)")
         params.append(bigquery.ArrayQueryParameter("tipos_mecanica", "STRING", tipos_mecanica_str_list))
-
-    # tipos_carroceria_list = filtros.get("tipo_carroceria")
-    # if isinstance(tipos_carroceria_list, list) and tipos_carroceria_list:
-    #     sql_where_clauses.append(f"sd.tipo_carroceria IN UNNEST(@tipos_carroceria)")
-    #     params.append(bigquery.ArrayQueryParameter("tipos_carroceria", "STRING", tipos_carroceria_list))
 
     modo_adq_rec = filtros.get("modo_adquisicion_recomendado")
     precio_a_filtrar, cuota_a_filtrar = None, None
@@ -316,14 +292,19 @@ def buscar_coches_bq(
                 WHEN COALESCE(potencia_maxima_carga_DC, 0) = 0 THEN 0.0 -- Si no tiene carga DC, su puntuación escalada es 0
                 ELSE COALESCE(SAFE_DIVIDE(potencia_maxima_carga_DC - {min_pot_dc}, NULLIF({max_pot_dc} - {min_pot_dc}, 0)), 0)
             END) AS potencia_maxima_carga_DC_scaled,
-            (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END) AS puertas_penalty
         FROM
             `thecarmentor-mvp2.web_cars.match_coches_pruebas`
     ),
-    RankedData AS (
-        SELECT
-          sd.*,      
-          ( 
+RankedData AS (
+    SELECT
+      sd.*,      
+      ( 
+        -----------------------------------------------------------------------
+        -- PARTE 1: PUNTOS POR PREFERENCIAS DEL USUARIO (MÁXIMO 100 PUNTOS)
+        -----------------------------------------------------------------------
+        -- Se calcula la puntuación base normalizada y se multiplica por 100.
+        -- Un coche que es un 85% perfecto para el usuario (score 0.85) obtendrá 85 puntos base.
+        (
             sd.estetica_scaled * @peso_estetica 
             + sd.premium_scaled * @peso_premium
             + sd.singular_scaled * @peso_singular
@@ -331,7 +312,6 @@ def buscar_coches_bq(
             + sd.batalla_scaled * @peso_batalla 
             + sd.indice_altura_scaled * @peso_indice_altura
             + sd.ancho_scaled * @peso_ancho_general_score
-            + sd.puertas_penalty
             + (sd.fiabilidad_scaled + sd.durabilidad_scaled) * @peso_rating_fiabilidad_durabilidad
             + sd.seguridad_scaled * @peso_rating_seguridad               
             + sd.comodidad_scaled * @peso_rating_comodidad
@@ -364,7 +344,16 @@ def buscar_coches_bq(
             + sd.menor_tiempo_carga_min_scaled * @peso_menor_tiempo_carga_min
             + sd.potencia_maxima_carga_AC_scaled * @peso_potencia_maxima_carga_AC
             + sd.potencia_maxima_carga_DC_scaled * @peso_potencia_maxima_carga_DC
-            + sd.menor_aceleracion_scaled * @peso_fav_menor_aceleracion_score            
+            + sd.menor_aceleracion_scaled * @peso_fav_menor_aceleracion_score 
+        ) * {FACTOR_ESCALA_BASE} -- ¡Multiplicamos por 100!
+        ) AS puntuacion_base,
+
+        -----------------------------------------------------------------------
+        -- PARTE 2: PUNTOS POR AJUSTES DE EXPERTO (SUMA/RESTA DIRECTA)
+        -- Ahora cada CONSTANTE representa puntos directos (ej: +20, -15, etc.)
+        -----------------------------------------------------------------------
+        (   + (CASE WHEN COALESCE(sd.km_ocasion, 0) >= 300000 THEN {PENALTY_OCASION_KILOMETRAJE_EXTREMO} ELSE 0.0 END)
+            + (CASE WHEN @penalizar_puertas = TRUE AND puertas <= 3 THEN {PENALTY_PUERTAS_BAJAS} ELSE 0.0 END)
             + (CASE 
                 WHEN @flag_penalizar_low_cost_comodidad = TRUE 
                 THEN (sd.acceso_low_cost_scaled * {PENALTY_LOW_COST_POR_COMODIDAD}) 
@@ -423,7 +412,7 @@ def buscar_coches_bq(
                 THEN {BONUS_PUNTO_CARGA_PROPIO}
                 ELSE 0.0
               END)
-            # ✅ POR ESTA VERSIÓN MEJORADA Y UNIFICADA:
+            --   ✅ POR ESTA VERSIÓN MEJORADA Y UNIFICADA:
             + (CASE
                 -- El bonus por clima tiene la máxima prioridad
                 WHEN @flag_bonus_awd_clima_adverso = TRUE AND sd.traccion = 'ALL' THEN {BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO}
@@ -480,29 +469,49 @@ def buscar_coches_bq(
                 -- Si no entra en ningún rango, no se aplica bonus ni penalización
                 ELSE 0.0
               END)
-          ) AS score_total
+          ) AS ajustes_experto
         FROM ScaledData sd
-        WHERE 1=1 {sql_where_clauses_str} 
+        WHERE 1=1 {sql_where_clauses_str} -- Los filtros WHERE se aplican aquí
     ),
-    DeduplicatedData AS (
+    -- ✅ Usamos la suma de las partes para ordenar y encontrar al "mejor" de cada grupo
+        DeduplicatedData AS (
+            SELECT
+                *,
+                -- Calculamos el score_total aquí para poder usarlo en los siguientes pasos
+                (puntuacion_base + ajustes_experto) AS score_total,
+                ROW_NUMBER() OVER(
+                    PARTITION BY modelo, tipo_mecanica
+                    ORDER BY (puntuacion_base + ajustes_experto) DESC, precio_compra_contado ASC
+                ) as rn
+            FROM 
+                RankedData
+        ),
+
+        -- ✅ PASO 3 (NUEVO): Ranking por marca para diversificar
+        BrandRankedData AS (
+            SELECT
+                *,
+                -- Numeramos los coches DENTRO de cada marca, del mejor al peor score
+                ROW_NUMBER() OVER(
+                    PARTITION BY marca
+                    ORDER BY score_total DESC
+                ) as brand_rank
+            FROM 
+                DeduplicatedData
+            WHERE 
+                rn = 1 -- Nos aseguramos de trabajar solo con los coches ya deduplicados
+        )
+
+        -- ✅ PASO 4 (FINAL): Aplicamos el filtro de diversificación
         SELECT
-            *,
-            ROW_NUMBER() OVER(
-                PARTITION BY modelo, tipo_mecanica
-                ORDER BY score_total DESC, precio_compra_contado ASC
-            ) as rn
+            * EXCEPT(rn, brand_rank) -- No necesitamos mostrar las columnas de ranking
         FROM 
-            RankedData
-    )
-    SELECT
-        * EXCEPT(rn)
-    FROM 
-        DeduplicatedData
-    WHERE 
-        rn = 1
-    ORDER BY 
-        score_total DESC, precio_compra_contado ASC
-    LIMIT @k 
+            BrandRankedData
+        WHERE 
+            brand_rank <= 2 -- La nueva regla: solo nos quedamos con el 1º y 2º de cada marca
+        ORDER BY 
+            score_total DESC -- Ordenamos la lista final por la puntuación general
+        LIMIT @k -- Aplicamos el límite final de resultados a mostrar
     """  
     
     # PASO 5: LOGGING Y EJECUCIÓN
@@ -539,3 +548,74 @@ def buscar_coches_bq(
 # modelo (el modelo, ej: "León")
 # tipo_mecanica (el motor, ej: "GLP")
 # cambio_automatico (si es automático o manual)
+
+# La mejor forma de implementar esta regla ("máximo 2 coches por marca") es directamente en la consulta de BigQuery, después de haber calculado todas las puntuaciones y de haber eliminado los duplicados.
+
+# Usaremos una función de ventana ROW_NUMBER() adicional, muy parecida a la que ya usas para deduplicar, pero esta vez la usaremos para "numerar" los coches dentro de cada marca.
+
+# Solución: Modificar la Consulta SQL
+# Vamos a reestructurar el final de tu consulta en buscar_coches_bq para añadir esta nueva capa de filtrado.
+
+# Lógica Actual (Simplificada)
+# Tu consulta actual termina con una estructura parecida a esta:
+
+# DeduplicatedData: Elimina duplicados de modelo/tipo_mecanica.
+# SELECT Final: Ordena todo por score_total y coge los k mejores.
+# Nueva Lógica Integrada y Corregida
+# Vamos a insertar un paso intermedio. Reemplaza el final de tu consulta (desde la CTE DeduplicatedData en adelante) por esta nueva estructura:
+
+# SQL
+
+# -- ... (Tus CTEs ScaledData y RankedData se mantienen igual que antes) ...
+
+# ), -- Cierra la CTE RankedData
+
+# -- PASO 2 (MODIFICADO): Calculamos el score_total y eliminamos duplicados de modelo/versión
+# DeduplicatedData AS (
+#     SELECT
+#         *,
+#         -- Calculamos el score_total aquí para poder usarlo en los siguientes pasos
+#         (puntuacion_base + ajustes_experto) AS score_total,
+#         ROW_NUMBER() OVER(
+#             PARTITION BY modelo, tipo_mecanica
+#             ORDER BY (puntuacion_base + ajustes_experto) DESC, precio_compra_contado ASC
+#         ) as rn
+#     FROM 
+#         RankedData
+# ),
+
+# -- ✅ PASO 3 (NUEVO): Ranking por marca para diversificar
+# BrandRankedData AS (
+#     SELECT
+#         *,
+#         -- Numeramos los coches DENTRO de cada marca, del mejor al peor score
+#         ROW_NUMBER() OVER(
+#             PARTITION BY marca
+#             ORDER BY score_total DESC
+#         ) as brand_rank
+#     FROM 
+#         DeduplicatedData
+#     WHERE 
+#         rn = 1 -- Nos aseguramos de trabajar solo con los coches ya deduplicados
+# )
+
+# -- ✅ PASO 4 (FINAL): Aplicamos el filtro de diversificación
+# SELECT
+#     * EXCEPT(rn, brand_rank) -- No necesitamos mostrar las columnas de ranking
+# FROM 
+#     BrandRankedData
+# WHERE 
+#     brand_rank <= 2 -- La nueva regla: solo nos quedamos con el 1º y 2º de cada marca
+# ORDER BY 
+#     score_total DESC -- Ordenamos la lista final por la puntuación general
+# LIMIT @k -- Aplicamos el límite final de resultados a mostrar
+# Explicación del Nuevo Flujo
+# DeduplicatedData (Paso 2): Primero, calculamos el score_total y eliminamos las versiones duplicadas de un mismo modelo (como hacías antes). El resultado es una lista limpia donde cada coche aparece solo una vez, con su puntuación final.
+# BrandRankedData (Paso 3 - El Nuevo Truco):
+# Tomamos esa lista limpia.
+# PARTITION BY marca: Agrupamos virtualmente todos los coches por su marca (todos los Kia juntos, todos los Subaru juntos, etc.).
+# ROW_NUMBER() OVER(...): Dentro de cada grupo de marca, los numeramos del 1 en adelante, ordenándolos por su score_total de mayor a menor. Al mejor Kia se le asigna brand_rank = 1, al segundo mejor Kia brand_rank = 2, y así sucesivamente.
+# SELECT Final (Paso 4):
+# WHERE brand_rank <= 2: Esta es tu nueva regla en acción. Filtramos la lista para quedarnos únicamente con aquellos coches cuyo ranking dentro de su marca sea 1 o 2.
+# ORDER BY score_total DESC LIMIT @k: Finalmente, de la lista ya diversificada, tomamos los @k coches con la puntuación más alta en general para presentárselos al usuario.
+

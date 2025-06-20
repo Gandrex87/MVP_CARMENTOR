@@ -244,7 +244,6 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
         mensaje_para_pregunta_pendiente = response.contenido_mensaje # Mensaje del LLM
 
         # Aplicar post-procesamiento a las preferencias obtenidas del LLM
-        # Es importante que aplicar_postprocesamiento_perfil maneje un input None si preferencias_del_llm es None
         if preferencias_del_llm is None: # Si el LLM no devolvió un objeto de preferencias
             logging.warning("WARN (Perfil) ► llm_solo_perfil devolvió preferencias_usuario como None.")
             preferencias_del_llm = PerfilUsuario() # Usar uno vacío para el post-procesador
@@ -1615,7 +1614,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     """
     print("--- Ejecutando Nodo: buscar_coches_finales_node ---")
     logging.debug(f"DEBUG (Buscar BQ Init) ► Estado completo recibido: {state}") 
-    k_coches = 10 
+    k_coches = 25 
     historial = state.get("messages", [])
     tabla_resumen_criterios_md = state.get("tabla_resumen_criterios", "No se pudo generar el resumen de criterios.")
     preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario
