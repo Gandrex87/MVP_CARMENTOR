@@ -95,3 +95,6 @@ def aplicar_postprocesamiento_filtros(
     logging.info(f"--- FIN DEBUG PostProc Filtros --- Filtros de mecánica finales construidos: {filtros_actualizado.tipo_mecanica}")
     
     return filtros_actualizado
+
+
+#REPARTIR LOS PUNTO NO EQUITATIVAMENTE SINO ENTREGAR LOS PUNTOS A LOS MEJORES NORMALIZANDO DESDE 80 AL MEJOR Y 0 AL PermissionError

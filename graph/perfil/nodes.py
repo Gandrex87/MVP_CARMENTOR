@@ -806,6 +806,7 @@ def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
         X = info_pasajeros_obj.num_ninos_silla or 0
         Z = info_pasajeros_obj.num_otros_pasajeros or 0
         logger.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Info recibida: freq='{frecuencia}', X={X}, Z={Z}")
+        print(f"DEBUG (Aplicar Filtros Pasajeros) ► Info recibida: freq='{frecuencia}', X={X}, Z={Z}")
     else:
         logger.error("ERROR (Aplicar Filtros Pasajeros) ► No hay información de pasajeros en el estado. Se usarán defaults.")
         frecuencia = "nunca" # Asumir 'nunca' si no hay info
@@ -825,50 +826,15 @@ def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
     filtros_actualizados = filtros_actuales_obj.model_copy(update=update_filtros_dict)
     logger.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Filtros actualizados (con plazas_min): {filtros_actualizados}")
     return {
-        # **state, # Considera devolver solo lo que cambia o el estado explícito
-        "preferencias_usuario": state.get("preferencias_usuario"),
-        "info_pasajeros": info_pasajeros_obj, # El objeto original
-        "filtros_inferidos": filtros_actualizados, # Con plazas_min actualizado
-        "economia": state.get("economia"),          
-        "pesos": state.get("pesos"), 
-        "pregunta_pendiente": state.get("pregunta_pendiente"), 
-        "coches_recomendados": state.get("coches_recomendados"), 
-        "tabla_resumen_criterios": state.get("tabla_resumen_criterios"),
-        "penalizar_puertas_bajas": penalizar_p,  # Guardar flag actualizado
-        "flag_penalizar_low_cost_comodidad": state.get("flag_penalizar_low_cost_comodidad"), # Mantener estos
-        "flag_penalizar_deportividad_comodidad": state.get("flag_penalizar_deportividad_comodidad")
-    }
+    **state, # Pasa todas las claves existentes del estado
+    "filtros_inferidos": filtros_actualizados, # Sobrescribe solo la clave que has modificado
+    "penalizar_puertas_bajas": penalizar_p,      # Y la nueva flag que has calculado
+}
 
 # --- Fin Nueva Etapa Pasajeros ---
 # --- Fin Etapa 1 ---
 
 # --- Etapa 2: Inferencia y Validación de Filtros Técnicos ---
-# def preguntar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
-#      """Toma la pregunta de filtros pendiente y la añade al historial."""
-#      print("--- Ejecutando Nodo: preguntar_filtros_node ---")
-#      pregunta = state.get("pregunta_pendiente")
-#      historial_actual = state.get("messages", [])
-#      historial_nuevo = historial_actual 
-#      mensaje_a_enviar = None
-#      if pregunta and pregunta.strip():
-#          mensaje_a_enviar = pregunta
-#          # Podrías añadir lógica fallback si la pregunta está vacía
-#      else:
-#          mensaje_a_enviar = "¿Podrías darme más detalles sobre los filtros técnicos?" # Fallback muy genérico
-
-#      # Añadir mensaje
-#      if mensaje_a_enviar:
-#          ai_msg = AIMessage(content=mensaje_a_enviar)
-#          if not historial_actual or historial_actual[-1].content != ai_msg.content:
-#              historial_nuevo = historial_actual + [ai_msg]
-#              print(f"DEBUG (Preguntar Filtros) ► Mensaje final añadido: {mensaje_a_enviar}")
-#          else:
-#               print("DEBUG (Preguntar Filtros) ► Mensaje final duplicado.")
-
-#      return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
-
-
-
 def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Construye y refina los filtros de búsqueda de forma determinista
@@ -1582,7 +1548,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     """
     print("--- Ejecutando Nodo: buscar_coches_finales_node ---")
     logging.debug(f"DEBUG (Buscar BQ Init) ► Estado completo recibido: {state}") 
-    k_coches = 25 
+    k_coches = 12 
     historial = state.get("messages", [])
     tabla_resumen_criterios_md = state.get("tabla_resumen_criterios", "No se pudo generar el resumen de criterios.")
     preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario

@@ -89,22 +89,24 @@ def compute_raw_weights(
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir dims por altura: {raw}")
     
     # --- 3. LÓGICA MODIFICADA PARA 'ancho_general_score' BASADA EN PASAJEROS ---
-    raw["ancho_general_score"] = PESO_CRUDO_BASE_ANCHO_GRAL # Peso base bajo por defecto para el ancho general
-    frecuencia_pasajeros = pasajeros_info.get("frecuencia_viaje_con_acompanantes") or pasajeros_info.get("frecuencia")
-    num_ninos_silla_X = pasajeros_info.get("num_ninos_silla", 0) # Usamos .get() con default 0
-    num_otros_pasajeros_Z = pasajeros_info.get("num_otros_pasajeros", 0) # Usamos .get() con default 0
-    total_acompanantes = num_ninos_silla_X + num_otros_pasajeros_Z
-    logging.debug(f"Weights: Info pasajeros para ancho_general_score -> frecuencia='{frecuencia_pasajeros}', X={num_ninos_silla_X}, Z={num_otros_pasajeros_Z}, Total Acompañantes={total_acompanantes}")
-    print(f"DEBUG (Weights) ► Info pasajeros para ancho_general_score -> frecuencia='{frecuencia_pasajeros}', X={num_ninos_silla_X}, Z={num_otros_pasajeros_Z}, Total Acompañantes={total_acompanantes}")
-    # Condición basada en el total de acompañantes y la frecuencia.
-    # Solo se prioriza el ancho si la frecuencia NO es "nunca" Y hay al menos 2 acompañantes en total.
-    if frecuencia_pasajeros and frecuencia_pasajeros != "nunca" and total_acompanantes >= 2:
-        if frecuencia_pasajeros == "ocasional":
-            raw["ancho_general_score"] = PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL
-            logging.debug(f"Weights: Pasajeros ocasionales (Total Acompañantes={total_acompanantes}>=2). ancho_general_score ajustado a {raw['ancho_general_score']}")
-        elif frecuencia_pasajeros == "frecuente":
-            raw["ancho_general_score"] = PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE
-            logging.debug(f"Weights: Pasajeros frecuentes (Total Acompañantes={total_acompanantes}>=2). ancho_general_score ajustado a {raw['ancho_general_score']}")
+    raw["ancho_general_score"] = PESO_CRUDO_BASE_ANCHO_GRAL # Asignamos el peso base por defecto
+
+    # Obtenemos los valores necesarios del perfil de pasajeros
+    frecuencia_pasajeros = pasajeros_info.get("frecuencia") # Asumiendo que 'frecuencia' es el campo principal
+    num_ninos_silla_X = pasajeros_info.get("num_ninos_silla", 0)
+    num_otros_pasajeros_Z = pasajeros_info.get("num_otros_pasajeros", 0)
+    
+    # Caso 1: Viaje frecuente con 2 o más pasajeros que NO usan silla
+    if frecuencia_pasajeros == "frecuente" and num_otros_pasajeros_Z >= 2:
+        raw["ancho_general_score"] = PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE # Asigna 8.0
+        logging.info(f"DEBUG (Weights) ► Priorizando ANCHO: viaje frecuente con Z={num_otros_pasajeros_Z} >= 2.")
+        
+    # Caso 2: Viaje ocasional (mantenemos la lógica anterior de acompañantes totales)
+    elif frecuencia_pasajeros == "ocasional" and num_otros_pasajeros_Z >= 2:
+        raw["ancho_general_score"] = PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL # Asigna 4.0
+        logging.info(f"DEBUG (Weights) ► Priorizando ANCHO moderadamente: viaje ocasional con Z={num_otros_pasajeros_Z} >= 2.")
+    
+    # Si no se cumple ninguna de las condiciones anteriores, el peso se queda en su valor base (1.0)
     else:
         logging.debug(f"Weights: No se cumplen condiciones para priorizar ancho por pasajeros (frecuencia='{frecuencia_pasajeros}', total_acompanantes={total_acompanantes}). ancho_general_score se mantiene en {raw['ancho_general_score']}")
      
@@ -287,10 +289,10 @@ def compute_raw_weights(
         raw["par_motor_style_score"] = RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO
         raw["fav_menor_aceleracion_score"] = RAW_PESO_MENOR_ACELERACION_BAJO
 
-     # Clamp final para todos los pesos que podrían haberse acumulado
-    for key in list(raw.keys()): # Iterar sobre una copia de las claves si modificas el dict
-        if isinstance(raw[key], (int, float)): # Solo clampear números
-            raw[key] = max(MIN_SINGLE_RAW_WEIGHT, min(MAX_SINGLE_RAW_WEIGHT, raw[key]))
+    #  # Clamp final para todos los pesos que podrían haberse acumulado
+    # for key in list(raw.keys()): # Iterar sobre una copia de las claves si modificas el dict
+    #     if isinstance(raw[key], (int, float)): # Solo clampear números
+    #         raw[key] = max(MIN_SINGLE_RAW_WEIGHT, min(MAX_SINGLE_RAW_WEIGHT, raw[key]))
     print(f"DEBUG (Weights) ► Pesos crudos tras añadir ratings: {raw}")
     raw_float = {k: float(v or 0.0) for k, v in raw.items()}
     #print(f"DEBUG (Weights) ► Pesos Crudos FINALES: {raw_float}")

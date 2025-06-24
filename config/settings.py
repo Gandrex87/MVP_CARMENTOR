@@ -70,11 +70,17 @@ MAPA_RATING_A_PREGUNTA_AMIGABLE = {
 }
 
 # Definir aquí los rangos mínimos y máximos para cada característica/Valores de bd
+#El objetivo de ScaledData es simple: convertir cada característica técnica de un coche en una "nota" estandarizada en una escala de 0 a 1. Piensa en ello como si cada coche hiciera un "examen" para cada una de sus características.
 MIN_MAX_RANGES = {
-    "estetica": (1.0, 10.0),"premium": (1.0, 10.0),"singular": (1.0, 10.0),
-    "altura_libre_suelo": (79.0, 314.0), "batalla": (1650.0, 4035.0),        
-    "indice_altura_interior": (0.9, 2.7), "ancho": (1410.0, 2164.0),
-    "fiabilidad": (1.0, 10.0), "durabilidad": (1.0, 10.0), 
+    "estetica": (1.0, 10.0),
+    "premium": (1.0, 10.0),
+    "singular": (1.0, 10.0),
+    "altura_libre_suelo": (79.0, 314.0), 
+    "batalla": (1650.0, 4035.0),        
+    "indice_altura_interior": (0.9, 2.7), 
+    "ancho": (1410.0, 2164.0),
+    "fiabilidad": (1.0, 10.0), 
+    "durabilidad": (1.0, 10.0), 
     "seguridad": (1.0, 10.0),  "comodidad": (1.0, 10.0),  
     "tecnologia": (1.0, 10.0), "acceso_low_cost": (1.0, 10.0), 
     "deportividad": (1.0, 10.0),"devaluacion": (0.0, 10.0), 
@@ -338,6 +344,9 @@ WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM = 9.0  # Menor tiempo es mejor
 WEIGHT_POTENCIA_AC_MUY_ALTO_KM = 1.0
 WEIGHT_POTENCIA_DC_MUY_ALTO_KM = 9.0
 
+PESO_CRUDO_BASE_ANCHO_GRAL = 1.0
+PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
+
 # filtro de la cuota máxima en la funcion de busqueda en BigQuery bigquery_tools.py
 FACTOR_CONVERSION_PRECIO_CUOTA = 1.35 / 96
 
@@ -372,3 +381,4 @@ MAPA_REALIZA_VIAJES_LARGOS_KM = {
 # Con 100, un coche que sea un 85% perfecto para el usuario (score normalizado 0.85)
 # obtendrá 85 puntos base.
 FACTOR_ESCALA_BASE = 100.0
+
