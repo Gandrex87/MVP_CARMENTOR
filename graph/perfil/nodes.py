@@ -8,19 +8,19 @@ from .state import (EstadoAnalisisPerfil,
                     InfoPasajeros, ResultadoPasajeros,
                     InfoClimaUsuario, ResultadoCP, NivelAventura , FrecuenciaUso, DistanciaTrayecto, FrecuenciaViajesLargos
 )
-from config.llm import llm_solo_perfil, llm_solo_filtros, llm_economia, llm_pasajeros, llm_cp_extractor
+from config.llm import llm_solo_perfil, llm_economia, llm_pasajeros, llm_cp_extractor
 from prompts.loader import system_prompt_perfil, prompt_economia_structured_sys_msg, system_prompt_pasajeros, system_prompt_cp
 from utils.postprocessing import aplicar_postprocesamiento_perfil, aplicar_postprocesamiento_filtros
 from utils.validation import check_perfil_usuario_completeness , check_economia_completa, check_pasajeros_completo
 from utils.formatters import formatear_preferencias_en_tabla
 from utils.weights import compute_raw_weights, normalize_weights
-#from utils.rag_carroceria import get_recommended_carrocerias
 from utils.bigquery_tools import buscar_coches_bq
 from utils.bq_data_lookups import obtener_datos_climaticos_por_cp # IMPORT para la función de búsqueda de clima ---
 from utils.conversion import is_yes 
 from utils.bq_logger import log_busqueda_a_bigquery
 from utils.sanitize_dict_for_json import sanitize_dict_for_json
-import traceback 
+import traceback
+from langchain_core.runnables import RunnableConfig
 import pandas as pd
 import json # Para construir el contexto del prompt
 from typing import Literal, Optional ,Dict, Any
@@ -791,7 +791,7 @@ def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
     info_pasajeros_obj = state.get("info_pasajeros") # <-- Renombrado para claridad
     filtros_actuales_obj = state.get("filtros_inferidos") or FiltrosInferidos() 
 
-    # Valores por defecto para los flags
+    # Valores por defecto para los flags penalizar_puertas
     penalizar_p = False 
     
     # Valores para X y Z (default 0)
@@ -1269,7 +1269,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     # ---  LÓGICA PARA FLAG DE REDUCTORAS Y AVENTURA ---
     aventura_val = preferencias_obj.aventura
     if aventura_val == NivelAventura.extrema.value:
-        flag_logica_reductoras_aventura = "FAVORECER_EXTREMA"
+        flag_logica_reductoras_aventura = True
         logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'extrema'. Activando bonus alto para Reductoras.")
         # --- FIN LÓGICA ---
             
@@ -1328,7 +1328,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     if (es_uso_diario_frecuente and es_trayecto_medio_largo) and (sin_viajes_largos or viajes_largos_esporadicos):
         flag_favorecer_bev_uso_definido = True
         print("DEBUG (CalcFlags) ► Perfil de uso ideal para BEV/REEV detectado. Activando bonus.")
-        logging.info("DEBUG (CalcFlags) ► Perfil de uso ideal para BEV/REEV detectado. Activando bonus.")
+        logging.info("DEBUG (CalcFlags) ► Perfil de uso BEV/REEV detectado: FrecuenciaUso.DIARIO o FRECUENTEMENTE y DistanciaTrayecto.ENTRE_10_Y_50_KM.value o ENTRE_51_Y_150_KM. Activando bonus.")
  
     # --- LÓGICA PARA PENALIZAR PHEV EN TRAYECTOS LARGOS Y FRECUENTES ---
     es_uso_diario_frecuente = preferencias_obj.frecuencia_uso in [FrecuenciaUso.DIARIO.value, FrecuenciaUso.FRECUENTEMENTE.value]
@@ -1336,7 +1336,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     #Falta revisar condiciones en el documento
     if es_uso_diario_frecuente and es_trayecto_muy_largo:
         flag_penalizar_phev_uso_intensivo = True
-        logging.info("DEBUG (CalcFlags) ► Patrón de uso intensivo y largo detectado. Activando penalización para PHEVs.")
+        logging.info("DEBUG (CalcFlags) ► Patrón de uso intensivo y larga distancia detectado. Activando penalización para PHEVs.")
 
      # --- LÓGICA PARA PUNTO DE CARGA PROPIO ---
     if is_yes(preferencias_obj.tiene_punto_carga_propio):
@@ -1348,7 +1348,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         if preferencias_obj.frecuencia_uso == FrecuenciaUso.OCASIONALMENTE.value and FrecuenciaViajesLargos.OCASIONALMENTE:
             # Caso excepcional: uso ocasional en ciudad, no se penaliza, se bonifica
             flag_logica_diesel_ciudad = "BONIFICAR"
-            logging.info("DEBUG (CalcFlags) ► Conductor urbano ocasional. Activando pequeño bonus para diésel.")
+            logging.info("DEBUG (CalcFlags) ► Conductor urbano ocasional/ FrecuenciaUso.OCASIONALMENTE y FrecuenciaViajesLargos.OCASIONALMENTE. Activando pequeño bonus para diésel.")
         else:
             # Caso general: conductor urbano, se penaliza diésel
             flag_logica_diesel_ciudad = "PENALIZAR"
@@ -1502,7 +1502,7 @@ from config.settings import (MAPA_FRECUENCIA_USO, MAPA_DISTANCIA_TRAYECTO, MAPA_
 # --- ✅ NUEVA FUNCIÓN PARA SER USADA COMO NODO INDEPENDIENTE ---
 def calcular_km_anuales_postprocessing_node(state: EstadoAnalisisPerfil) -> Dict[str, Optional[int]]:
     """
-    Calcula los kilómetros anuales estimados basándose en las preferencias del usuario.
+    Calcula los km_anuales_estimados basándose en las preferencias del usuario.
     Actúa como un nodo del grafo que lee el estado y devuelve el nuevo campo calculado.
     """
     print("--- Ejecutando Nodo: calcular_km_anuales_postprocessing_node ---")
@@ -1515,9 +1515,11 @@ def calcular_km_anuales_postprocessing_node(state: EstadoAnalisisPerfil) -> Dict
     # --- Parte 1: Kilometraje por uso habitual (Fórmula: 52 * a * b) ---
     frecuencia_uso_val = getattr(preferencias, 'frecuencia_uso', None)
     a = MAPA_FRECUENCIA_USO.get(frecuencia_uso_val, 0)
+    print(f"a: {a}")
     
     distancia_trayecto_val = getattr(preferencias, 'distancia_trayecto', None)
     b = MAPA_DISTANCIA_TRAYECTO.get(distancia_trayecto_val, 0)
+    print(f"b: {b} -> 52 * {a} * {b}")
     
     km_habituales = 52 * a * b
 
@@ -1539,8 +1541,8 @@ def calcular_km_anuales_postprocessing_node(state: EstadoAnalisisPerfil) -> Dict
     return {"km_anuales_estimados": km_totales}
 
 
-from langchain_core.runnables import RunnableConfig
-#def buscar_coches_finales_node(state: EstadoAnalisisPerfil) -> dict:
+
+
 def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConfig) -> dict:
     """
     Usa los filtros y pesos finales, busca en BQ, y presenta un mensaje combinado
@@ -1867,3 +1869,4 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         "pregunta_pendiente": None, # Este nodo es final para el turno
     }
 
+ 

@@ -53,10 +53,6 @@ else:
 # Se usan solo en la query SQL de buscar_coches_bq, dentro de cláusulas CASE WHEN activadas por flags.
 # Modifican el score de forma aditiva después de la parte ponderada.
 
-
-
-
-
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- RANGOS MIN-MAX PARA ESCALADO EN BIGQUERY (`utils/bigquery_tools.py`) ---
 # Mapeo de nombres de campo de rating a texto amigable para el usuario para node Etapa 1
@@ -126,13 +122,27 @@ BONUS_REDUCTORAS_AVENTURA_EXTREMA = 20   #
 PENALTY_PUERTAS_BAJAS = -8
 
 # Penalizaciones por Comodidad (si comodidad es alta, penalizar estos)
-PENALTY_LOW_COST_POR_COMODIDAD = -10 # Cuánto restar si es muy low-cost y se quiere confort
-PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -10 # Cuánto restar si es muy deportivo y se quiere confort
+PENALTY_LOW_COST_POR_COMODIDAD = -1.5 # Cuánto restar si es muy low-cost y se quiere confort
+PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -1.5 # Cuánto restar si es muy deportivo y se quiere confort
+
+# Esto es para revisar con Teo. al multiplicar no es que reste -10 puntos como estaba antes, sino que exponencia ese valor dependiendo la calificacion del coche
+# solo ocurr con PENALTY_LOW_COST_POR_COMODIDAD y PENALTY_DEPORTIVIDAD_POR_COMODIDAD
+# no aplica una penalización fija, sino una penalización que escala con el nivel de deportividad del coche.
+
+# Veámoslo con un ejemplo práctico:
+# Supongamos que un usuario ha pedido máximo confort, por lo que el @flag_penalizar_deportividad_comodidad está en TRUE.
+
+# Coche A (Poco Deportivo): deportividad_bq_scaled = 2.0
+# Penalización aplicada: 2.0 * -2.0 = -4.0 puntos.
+# Coche B (Algo Deportivo): deportividad_bq_scaled = 6.0
+# Penalización aplicada: 6.0 * -2.0 = -12.0 puntos.
+# Coche C (Muy Deportivo): deportividad_bq_scaled = 9.5
+# Penalización aplicada: 9.5 * -2.0 = -19.0 puntos.
 
 # Penalización por Antigüedad (si tecnología es alta)
 PENALTY_ANTIGUEDAD_MAS_10_ANOS = -20
 PENALTY_ANTIGUEDAD_7_A_10_ANOS = -15
-PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -8
+PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -7
 
 #valores directos que se suman o restan al score (escala 0-1)
 PENALTY_BEV_REEV_AVENTURA_OCASIONAL = -10
@@ -223,20 +233,17 @@ PENALTY_OCASION_KILOMETRAJE_EXTREMO = -25
 UMBRAL_RATING_IMPACTO_PARA_FAV_PESO_CONSUMO = 8
 UMBRAL_RATING_COSTES_USO_PARA_FAV_CONSUMO_COSTES = 7
 UMBRAL_RATING_COMODIDAD_PARA_FAVORECER = 8
-UMBRAL_RATING_COMODIDAD_RAG = 8.0 # Umbral de rating de comodidad para activar sinónimos RAG
-UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS = 7
-UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG = 7
+UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS = 8
+UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG = 8
 UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG = 7
-
-
 UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA = 8
 
 # --------------------------------------- ## --------------------------------------- ## --------------------------------------
 # --- LÓGICA DE PESOS CRUDOS (`utils/weights.py`) ---
-# Límite máximo para cualquier peso crudo individual antes de normalizar
-MAX_SINGLE_RAW_WEIGHT = 10.0 #
-MIN_SINGLE_RAW_WEIGHT = 0.0 #
 PESO_CRUDO_BASE = 1.0
+
+MIN_SINGLE_RAW_WEIGHT =1.0
+MAX_SINGLE_RAW_WEIGHT = 10.0
 
 #Valores Pesos basado en 'priorizar_ancho' (priorizar_ancho de pasajeros Z>=2)
 PESO_CRUDO_BASE_ANCHO_GRAL = 1.0
@@ -246,12 +253,6 @@ PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
 # --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
 # Ajustes de pesos crudos aditivos por clima
 AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
-
-
-
-
-
-
 
 # Mapeo directo del nivel de aventura al peso crudo deseado.
 altura_map = {
@@ -266,7 +267,6 @@ PESO_CRUDO_BASE_BATALLA_ALTURA_MAYOR_190 = 1.0
 PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190 = 5.0
 PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190 = 8.0
 
-
 #Valores Pesos basado en prioriza_baja_depreciacion
 PESO_CRUDO_BASE_DEVALUACION = 1.0
 PESO_CRUDO_FAV_DEVALUACION = 10.0
@@ -280,7 +280,7 @@ PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_LARGO = 7.0
 
 
 # Valores de peso crudo a sumar si se cumplen umbrales de ratings en weights.py
-RAW_PESO_BASE_AUT_VEHI = 0.5
+RAW_PESO_BASE_AUT_VEHI = 1.0
 RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD = 6.0
 RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD = 4.0
 RAW_PESO_BASE_COSTE_USO_DIRECTO = 1.0
@@ -345,7 +345,11 @@ WEIGHT_POTENCIA_AC_MUY_ALTO_KM = 1.0
 WEIGHT_POTENCIA_DC_MUY_ALTO_KM = 9.0
 
 PESO_CRUDO_BASE_ANCHO_GRAL = 1.0
-PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
+PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 7.0
+
+# Bonus de peso crudo si el usuario tiene un alto rating de impacto ambiental
+RAW_WEIGHT_BONUS_FIABILIDAD_POR_IMPACTO = 2.0
+RAW_WEIGHT_BONUS_DURABILIDAD_POR_IMPACTO = 3.0
 
 # filtro de la cuota máxima en la funcion de busqueda en BigQuery bigquery_tools.py
 FACTOR_CONVERSION_PRECIO_CUOTA = 1.35 / 96
