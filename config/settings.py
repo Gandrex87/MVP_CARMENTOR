@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
-import logging
-logging.basicConfig(level=logging.INFO)
+# import logging
+# logging.basicConfig(level=logging.INFO)
 
 # Carga las variables desde un archivo .env si existe (ideal para desarrollo local)
 load_dotenv()
@@ -240,21 +240,11 @@ UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA = 8
 
 # --------------------------------------- ## --------------------------------------- ## --------------------------------------
 # --- LÓGICA DE PESOS CRUDOS (`utils/weights.py`) ---
-PESO_CRUDO_BASE = 1.0
+PESO_CRUDO_BASE = 0.0
 
 MIN_SINGLE_RAW_WEIGHT =1.0
 MAX_SINGLE_RAW_WEIGHT = 10.0
 
-#Valores Pesos basado en 'priorizar_ancho' (priorizar_ancho de pasajeros Z>=2)
-PESO_CRUDO_BASE_ANCHO_GRAL = 1.0
-PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL = 4.0
-PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
-
-# --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
-# Ajustes de pesos crudos aditivos por clima
-AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
-
-# Mapeo directo del nivel de aventura al peso crudo deseado.
 altura_map = {
         "ninguna": 1.0,
         "ocasional": 4.0,
@@ -262,17 +252,26 @@ altura_map = {
     }
 
 
+#Valores Pesos basado en 'priorizar_ancho' (priorizar_ancho de pasajeros Z>=2)
+
+PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL = 4.0
+PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
+
+# --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
+# Ajustes de pesos crudos aditivos por clima
+AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
+
+
 # Valores de Pesos basados en altura_mayor_190 en Weights.py
-PESO_CRUDO_BASE_BATALLA_ALTURA_MAYOR_190 = 1.0
+
 PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190 = 5.0
 PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190 = 8.0
 
 #Valores Pesos basado en prioriza_baja_depreciacion
-PESO_CRUDO_BASE_DEVALUACION = 1.0
 PESO_CRUDO_FAV_DEVALUACION = 10.0
 
 # Valores pesos de carga y espacio en weights.py
-PESO_CRUDO_BASE_MALETERO= 1.0
+
 PESO_CRUDO_FAV_MALETERO_MIN = 8.0
 PESO_CRUDO_FAV_MALETERO_MAX = 6.0
 PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_ANCHO = 5.0 
@@ -280,11 +279,11 @@ PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_LARGO = 7.0
 
 
 # Valores de peso crudo a sumar si se cumplen umbrales de ratings en weights.py
-RAW_PESO_BASE_AUT_VEHI = 1.0
+
 RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD = 6.0
 RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD = 4.0
-RAW_PESO_BASE_COSTE_USO_DIRECTO = 1.0
-RAW_PESO_BASE_COSTE_MANTENIMIENTO_DIRECTO = 1.0
+
+
 RAW_WEIGHT_ADICIONAL_FAV_BAJO_PESO_POR_IMPACTO = 10.0
 RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_IMPACTO = 7.0
 RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES = 5.0 
@@ -305,7 +304,7 @@ PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO = 6.0
 PESO_CRUDO_FAV_MENOR_SUPERFICIE = 3.0 # fav_menor_superficie_planta
 PESO_CRUDO_FAV_MENOR_DIAMETRO_GIRO = 5.0 #fav_menor_diametro_giro
 PESO_CRUDO_FAV_MENOR_DIMENSION_GARAJE = 8.0 # Para largo, ancho, alto problemáticos
-PESO_CRUDO_BASE_BAJO_DIMENSIONES_GARAJE = 1.0 # Peso si no es una preocupación explícita
+ # Peso si no es una preocupación explícita
 
 # Pesos crudos para Estilo de Conducción
 # Si estilo es DEPORTIVO
@@ -321,6 +320,7 @@ RAW_PESO_POTENCIA_MAXIMA_MEDIO = 2.5
 RAW_PESO_PAR_MOTOR_DEPORTIVO_MEDIO = 2.0
 RAW_PESO_MENOR_ACELERACION_MEDIO = 3.0
 # Si estilo es TRANQUILO o no definido (base)
+
 RAW_PESO_DEPORTIVIDAD_BAJO = 1.0
 RAW_PESO_MENOR_REL_PESO_POTENCIA_BAJO = 1.0
 RAW_PESO_POTENCIA_MAXIMA_BAJO = 1.0
@@ -332,7 +332,6 @@ RAW_PESO_PAR_MOTOR_REMOLQUE = 6.0
 RAW_PESO_CAP_REMOLQUE_CF = 7.0
 RAW_PESO_CAP_REMOLQUE_SF = 3.0
 # Pesos crudos base para remolque si es 'no' o None
-RAW_PESO_BASE_REMOLQUE = 1.0
 
 #Peso crudo favorecer por conducir en ciudad
 PESO_CRUDO_FAV_DIAMETRO_GIRO_CONDUC_CIUDAD = 7.0
@@ -341,10 +340,10 @@ PESO_CRUDO_FAV_DIAMETRO_GIRO_CONDUC_CIUDAD = 7.0
 WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM = 9.0
 WEIGHT_AUTONOMIA_2ND_DRIVE_MUY_ALTO_KM = 3.0
 WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM = 9.0  # Menor tiempo es mejor
-WEIGHT_POTENCIA_AC_MUY_ALTO_KM = 1.0
+
 WEIGHT_POTENCIA_DC_MUY_ALTO_KM = 9.0
 
-PESO_CRUDO_BASE_ANCHO_GRAL = 1.0
+
 PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 7.0
 
 # Bonus de peso crudo si el usuario tiene un alto rating de impacto ambiental

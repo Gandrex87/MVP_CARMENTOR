@@ -29,8 +29,7 @@ from utils.explanation_generator import generar_explicacion_coche_mejorada # <--
 import logging
 
 # --- Configuración de Logging ---
-logging.basicConfig(level=logging.DEBUG) #INFO PARA CUANDO PASE A PRODUCCION
-logger = logging.getLogger(__name__) # Logger para este módulo
+logger = logging.getLogger(__name__)  # ayuda a tener logs mas claros INFO:graph.perfil.nodes:Calculando flags dinámicos...
 
 # En graph/nodes.py
 
@@ -224,10 +223,10 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
 
     # Si el último mensaje es de la IA, no llamar al LLM de nuevo.
     if historial and isinstance(historial[-1], AIMessage):
-        logging.debug("DEBUG (Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
+        logging.debug("(Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
         return {"pregunta_pendiente": state.get("pregunta_pendiente")}
 
-    logging.debug("DEBUG (Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
+    logging.debug("(Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
     
     # Inicializar variables para la salida del nodo
     preferencias_para_actualizar_estado = preferencias_actuales_obj # Default: mantener las actuales si todo falla
@@ -239,7 +238,39 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
         )
         logging.debug(f"DEBUG (Perfil) ► Respuesta llm_solo_perfil: {response}")
+        # --- ✅ INICIO DEL BLOQUE DE DEPURACIÓN PROFUNDA TEMPORAL ---
+        logging.debug("\n" + "="*40)
+        logging.debug("🕵️  INSPECCIÓN PROFUNDA DEL NODO 'recopilar_preferencias_node' 🕵️")
+        logging.debug("="*40)
+        logging.debug(f"INPUT DEL USUARIO: '{historial[-1].content}'")
 
+        if 'response' in locals() and response:
+            logging.debug("\n--- SALIDA DIRECTA DEL LLM ---")
+            # Usamos repr() para ver claramente si es un string vacío ''
+            logging.debug(f"CONTENIDO MENSAJE (para pregunta_pendiente): {repr(getattr(response, 'contenido_mensaje', 'NO ENCONTRADO'))}")
+
+            prefs_llm = getattr(response, 'preferencias_usuario', None)
+            if prefs_llm:
+                logging.debug("\n--- CAMBIOS PROPUESTOS AL PERFIL (del LLM) ---")
+                perfil_actual = state.get("preferencias_usuario") or PerfilUsuario()
+                # Comparamos el perfil actual con el que propone el LLM para ver qué ha intentado cambiar
+                diff = {
+                    k: v
+                    for k, v in prefs_llm.dict(exclude_unset=True).items()
+                    if perfil_actual.dict().get(k) != v
+                }
+                if diff:
+                    print(f"Campos que el LLM intentó cambiar: {diff}")
+                else:
+                    print("El LLM no propuso ningún cambio en el perfil (¡lo cual es correcto para un meta-comentario!).")
+            else:
+                print("El LLM no devolvió un objeto 'preferencias_usuario'.")
+        else:
+            print("La variable 'response' del LLM no se generó o está vacía.")
+        
+        print("="*40 + "\n")
+        # --- FIN DEL BLOQUE DE DEPURACIÓN ---
+        
         preferencias_del_llm = response.preferencias_usuario # Objeto PerfilUsuario del LLM
         mensaje_para_pregunta_pendiente = response.contenido_mensaje # Mensaje del LLM
 
@@ -368,18 +399,6 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if prefs.arrastra_remolque is None: return "¿Vas a arrastrar remolque pesado o caravana?"
     if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
     if prefs.estilo_conduccion is None: return "¿Cómo describirías tu estilo de conducción habitual? Por ejemplo: tranquilo, deportivo, o una mezcla de ambos (mixto)."
-     # --- NUEVA LÓGICA DE PREGUNTAS PARA GARAJE/APARCAMIENTO ---
-    # if prefs.tiene_garage is None:
-    #     return "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?"
-    # if prefs.tiene_garage is not None and not is_yes(prefs.tiene_garage): # Si respondió 'no' a tiene_garage
-    #     if prefs.problemas_aparcar_calle is None:
-    #         return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?"
-    # elif prefs.tiene_garage is not None and is_yes(prefs.tiene_garage): # Si respondió 'sí' a tiene_garage
-    #     if prefs.espacio_sobra_garage is None:
-    #         return "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
-    #     if prefs.espacio_sobra_garage is not None and not is_yes(prefs.espacio_sobra_garage): # Si respondió 'no' a espacio_sobra_garage
-    #         if prefs.problema_dimension_garage is None or not prefs.problema_dimension_garage: # Si es None o lista vacía
-    #             return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? Podría ser el largo, el ancho, o la altura del coche. (Puedes mencionar una o varias, ej: 'largo y ancho')"
     if prefs.tiene_garage is None:
         return "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?\n ✅ Sí\n ❌ No"
     else:
@@ -410,59 +429,129 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     # --- FIN NUEVAS PREGUNTAS DE RATING --- 
     return "¿Podrías darme algún detalle más sobre tus preferencias?" # Fallback muy genérico 
 
-def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
+
+
+def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> Dict:
     """
     Añade la pregunta de seguimiento correcta al historial.
-    Si el perfil no está completo, SIEMPRE prioriza la pregunta generada por la lógica
-    interna para asegurar el flujo correcto de preguntas anidadas.
+    Prioriza el mensaje generado por el LLM si existe; si no, genera
+    una pregunta de forma determinista como fallback.
     """
     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
-    preferencias = state.get("preferencias_usuario")
-    historial_actual = state.get("messages", [])
-    historial_nuevo = list(historial_actual) 
     
-    mensaje_a_enviar = None 
+    preferencias = state.get("preferencias_usuario")
+    mensaje_pendiente = state.get("pregunta_pendiente") 
+    historial_actual = state.get("messages", [])
+    
+    historial_nuevo = list(historial_actual)
+    mensaje_a_enviar = None
 
     perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
 
-    # --- LÓGICA CORREGIDA ---
     if not perfil_esta_completo:
-        # Si el perfil está incompleto, nuestra lógica determinista tiene el control total
-        # para asegurar que no se salten preguntas anidadas.
-        print("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. La lógica interna tiene prioridad.")
-        try:
-            mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
-            print(f"DEBUG (Preguntar Perfil) ► Pregunta correcta generada y seleccionada: {mensaje_a_enviar}")
-        except Exception as e:
-            print(f"ERROR (Preguntar Perfil) ► Error generando pregunta: {e}")
-            mensaje_a_enviar = "¿Podrías darme más detalles sobre tus preferencias?"
-            
-    else: # El perfil SÍ está completo
-        # Si el perfil ya está completo, podemos usar el mensaje de confirmación del LLM.
-        print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
-        mensaje_pendiente = state.get("pregunta_pendiente")
+        #logging.debug("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. Decidiendo qué preguntar...")
+        logging.debug("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. Decidiendo qué preguntar...")
+        
+        # --- ✅ LÓGICA SIMPLIFICADA Y ROBUSTA ---
         if mensaje_pendiente and mensaje_pendiente.strip():
-             print(f"DEBUG (Preguntar Perfil) ► Usando mensaje de confirmación pendiente: {mensaje_pendiente}")
+            # Si el LLM ya generó un mensaje (sea el de bienvenida o una respuesta empática),
+            # confiamos en él como la fuente principal de la verdad.
+            logging.info("DEBUG (Preguntar Perfil) ► Usando mensaje pendiente generado por el LLM.")
+            mensaje_a_enviar = mensaje_pendiente
+        else:
+            # Si el LLM no generó nada (por un error o porque no era su turno),
+            # usamos nuestra lógica determinista como un fallback seguro.
+            logging.warning("DEBUG (Preguntar Perfil) ► No hay mensaje del LLM. Generando pregunta con lógica interna.")
+            try:
+                 mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
+                 logging.info(f"DEBUG (Preguntar Perfil) ► Pregunta de fallback generada: {mensaje_a_enviar}")
+            except Exception as e_fallback:
+                 logging.error(f"ERROR (Preguntar Perfil) ► Error generando pregunta fallback: {e_fallback}")
+                 mensaje_a_enviar = "¿Podrías darme más detalles sobre tus preferencias?"
+        
+    else: 
+        # Si el perfil ya está completo, usamos el mensaje de confirmación del LLM.
+        print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
+        if mensaje_pendiente and mensaje_pendiente.strip():
              mensaje_a_enviar = mensaje_pendiente
         else:
-             print("WARN (Preguntar Perfil) ► Perfil completo pero no había mensaje pendiente. Usando confirmación genérica.")
              mensaje_a_enviar = "¡Perfecto! He recopilado todas tus preferencias. Ahora continuaré con el siguiente paso."
 
-    # Añadir el mensaje decidido al historial (esta parte no cambia)
+    # --- Añadir el mensaje al historial (sin cambios aquí) ---
     if mensaje_a_enviar and mensaje_a_enviar.strip():
         ai_msg = AIMessage(content=mensaje_a_enviar)
         if not historial_actual or historial_actual[-1].content != ai_msg.content:
             historial_nuevo.append(ai_msg)
-            print(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}") 
+            logging.info(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}")
         else:
-             print("DEBUG (Preguntar Perfil) ► Mensaje final duplicado, no se añade.")
+             logging.warning("DEBUG (Preguntar Perfil) ► Mensaje final duplicado, no se añade.")
     else:
-         print("ERROR (Preguntar Perfil) ► No se determinó ningún mensaje a enviar.")
+         logging.error("ERROR (Preguntar Perfil) ► No se determinó ningún mensaje a enviar.")
          ai_msg = AIMessage(content="No estoy seguro de qué preguntar ahora. ¿Puedes darme más detalles?")
          historial_nuevo.append(ai_msg)
 
     # Devolver estado
-    return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
+    return {
+        **state,
+        "messages": historial_nuevo,
+        "pregunta_pendiente": None 
+    }
+
+
+#Version funcional
+# def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Añade la pregunta de seguimiento correcta al historial.
+#     Si el perfil no está completo, SIEMPRE prioriza la pregunta generada por la lógica
+#     interna para asegurar el flujo correcto de preguntas anidadas.
+#     """
+#     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
+#     preferencias = state.get("preferencias_usuario")
+#     historial_actual = state.get("messages", [])
+#     historial_nuevo = list(historial_actual) 
+    
+#     mensaje_a_enviar = None 
+
+#     perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
+
+#     # --- LÓGICA CORREGIDA ---
+#     if not perfil_esta_completo:
+#         # Si el perfil está incompleto, nuestra lógica determinista tiene el control total
+#         # para asegurar que no se salten preguntas anidadas.
+#         print("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. La lógica interna tiene prioridad.")
+#         try:
+#             mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
+#             print(f"DEBUG (Preguntar Perfil) ► Pregunta correcta generada y seleccionada: {mensaje_a_enviar}")
+#         except Exception as e:
+#             print(f"ERROR (Preguntar Perfil) ► Error generando pregunta: {e}")
+#             mensaje_a_enviar = "¿Podrías darme más detalles sobre tus preferencias?"
+            
+#     else: # El perfil SÍ está completo
+#         # Si el perfil ya está completo, podemos usar el mensaje de confirmación del LLM.
+#         print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
+#         mensaje_pendiente = state.get("pregunta_pendiente")
+#         if mensaje_pendiente and mensaje_pendiente.strip():
+#              print(f"DEBUG (Preguntar Perfil) ► Usando mensaje de confirmación pendiente: {mensaje_pendiente}")
+#              mensaje_a_enviar = mensaje_pendiente
+#         else:
+#              print("WARN (Preguntar Perfil) ► Perfil completo pero no había mensaje pendiente. Usando confirmación genérica.")
+#              mensaje_a_enviar = "¡Perfecto! He recopilado todas tus preferencias. Ahora continuaré con el siguiente paso."
+
+#     # Añadir el mensaje decidido al historial (esta parte no cambia)
+#     if mensaje_a_enviar and mensaje_a_enviar.strip():
+#         ai_msg = AIMessage(content=mensaje_a_enviar)
+#         if not historial_actual or historial_actual[-1].content != ai_msg.content:
+#             historial_nuevo.append(ai_msg)
+#             print(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}") 
+#         else:
+#              print("DEBUG (Preguntar Perfil) ► Mensaje final duplicado, no se añade.")
+#     else:
+#          print("ERROR (Preguntar Perfil) ► No se determinó ningún mensaje a enviar.")
+#          ai_msg = AIMessage(content="No estoy seguro de qué preguntar ahora. ¿Puedes darme más detalles?")
+#          historial_nuevo.append(ai_msg)
+
+#     # Devolver estado
+#     return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
 
 
 # def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:

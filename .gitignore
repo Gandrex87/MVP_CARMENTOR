@@ -93,7 +93,12 @@ embedings
 tests
 query_prueba.ipynb
 *query_prueba.ipynb
-
+*calculadora_pesos.py
+calculadora_pesos.py
+calculadora_pesos_paso2.py
+calculadora_pesos_paso1.py
+calculadora_pesos_paso3.py
+docker_guia.md
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
 #   intended to run in multiple environments; otherwise, check them in:

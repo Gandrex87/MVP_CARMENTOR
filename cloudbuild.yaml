@@ -1,15 +1,14 @@
 # cloudbuild.yaml - Archivo de configuración para Google Cloud Build
 # gcloud builds submit --config cloudbuild.yaml .
 
+# cloudbuild.yaml - Archivo de configuración para Google Cloud Build (Versión Final)
+
 steps:
 # Paso 1: Construir la imagen de Docker
-# Usa el constructor de Docker oficial de Cloud Builders.
-# La etiqueta '-t' apunta a nuestro Artifact Registry. Usamos ':latest' para la última versión.
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'europe-west1-docker.pkg.dev/thecarmentor-mvp2/carblau-repo/carblau-agent-api:latest', '.']
 
 # Paso 2: Subir (Push) la imagen construida a Artifact Registry
-# Una vez construida, la subimos a nuestro repositorio privado.
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'europe-west1-docker.pkg.dev/thecarmentor-mvp2/carblau-repo/carblau-agent-api:latest']
 
@@ -24,13 +23,18 @@ steps:
     - '--region=europe-west1'
     - '--platform=managed'
     - '--allow-unauthenticated'
+    # Asegúrate de que tu Dockerfile usa ${PORT:-8000} para que este puerto funcione
     - '--port=8000'
-    - '--service-account=carblau-run-sa@thecarmentor-mvp2.iam.gserviceaccount.com'  
-    # --- Configuración de la base de datos y secretos ---
+    - '--service-account=carblau-run-sa@thecarmentor-mvp2.iam.gserviceaccount.com'
     - '--add-cloudsql-instances=thecarmentor-mvp2:europe-west1:carblau-sql-instance'
     - '--set-env-vars=DB_HOST=/cloudsql/thecarmentor-mvp2:europe-west1:carblau-sql-instance'
     - '--set-secrets=DB_USER=DB_USER:latest,DB_PASSWORD=DB_PASSWORD:latest,DB_NAME=DB_NAME:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest'
+    
+    # --- LÍNEAS AÑADIDAS: ASIGNACIÓN DE RECURSOS ---
+    - '--memory=2Gi'
+    - '--cpu=2'
+    - '--timeout=600s'
 
 # Opciones adicionales del build
 options:
-  logging: CLOUD_LOGGING_ONLY # Manda los logs del build a Cloud Logging
+  logging: CLOUD_LOGGING_ONLY
