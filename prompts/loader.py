@@ -32,7 +32,7 @@ def cargar_prompt(nombre_archivo: str) -> str:
     with open(prompt_path, "r", encoding="utf-8") as f:
         return f.read()
     
-system_prompt_filtros_template = cargar_prompt("system_prompt_filtros_template.txt")
+#system_prompt_filtros_template = cargar_prompt("system_prompt_filtros_template.txt")
 
 system_prompt_perfil= cargar_prompt("system_prompt_perfil.txt")
 

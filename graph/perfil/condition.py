@@ -1,6 +1,6 @@
 # En graph/condition.py
 from .state import EstadoAnalisisPerfil # o donde esté tu TypedDict
-from utils.validation import check_perfil_usuario_completeness, check_filtros_completos, check_economia_completa, check_pasajeros_completo
+from utils.validation import check_perfil_usuario_completeness, check_economia_completa, check_pasajeros_completo
 from typing import Literal
 
 
@@ -73,17 +73,17 @@ def ruta_decision_perfil(state: EstadoAnalisisPerfil) -> str:
         # String que mapearemos al nuevo nodo preguntar_preferencias_node
         return "necesita_pregunta_perfil"
 
-def ruta_decision_filtros(state: EstadoAnalisisPerfil) -> str:
-    """Decide si los filtros están completos para pasar a economía o si necesita más información."""
-    print("--- Evaluando Condición: ruta_decision_filtros ---")
-    filtros = state.get("filtros_inferidos")
-    if check_filtros_completos(filtros):
-        print("DEBUG (Condición Filtros) ► Filtros COMPLETOS. Avanzando a economía.")
-        return "pasar_a_economia" # Ruta hacia la siguiente etapa
-    else:
-        print("DEBUG (Condición Filtros) ► Filtros INCOMPLETOS. Volviendo a inferir filtros.")
-        # Volvemos al nodo que procesa/pregunta por filtros
-        return "necesita_pregunta_filtro"
+# def ruta_decision_filtros(state: EstadoAnalisisPerfil) -> str:
+#     """Decide si los filtros están completos para pasar a economía o si necesita más información."""
+#     print("--- Evaluando Condición: ruta_decision_filtros ---")
+#     filtros = state.get("filtros_inferidos")
+#     if check_filtros_completos(filtros):
+#         print("DEBUG (Condición Filtros) ► Filtros COMPLETOS. Avanzando a economía.")
+#         return "pasar_a_economia" # Ruta hacia la siguiente etapa
+#     else:
+#         print("DEBUG (Condición Filtros) ► Filtros INCOMPLETOS. Volviendo a inferir filtros.")
+#         # Volvemos al nodo que procesa/pregunta por filtros
+#         return "necesita_pregunta_filtro"
 
 # En builder.py o condition.py
 
@@ -122,10 +122,9 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
     coches = state.get("coches_recomendados")
     
     # Prints de depuración (opcional mantenerlos)
-    print(f"DEBUG Router: CP OK? {info_clima is not None}")
+    print(f"DEBUG Router: Codigo Postal OK? {info_clima is not None}")
     print(f"DEBUG Router: Prefs OK? {check_perfil_usuario_completeness(preferencias)}")
     print(f"DEBUG Router: Pasajeros OK? {check_pasajeros_completo(info_pasajeros)}")
-    print(f"DEBUG Router: Filtros OK? {check_filtros_completos(filtros)}")
     print(f"DEBUG Router: Economía OK? {check_economia_completa(economia)}")
     print(f"DEBUG Router: Pesos Calculados? {pesos is not None}")
     print(f"DEBUG Router: Coches Buscados? {coches is not None}")
@@ -142,9 +141,6 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
     elif not check_pasajeros_completo(info_pasajeros):
         print("DEBUG Router: Decisión -> recopilar_info_pasajeros")
         return "recopilar_info_pasajeros"
-    elif not check_filtros_completos(filtros):
-        print("DEBUG Router: Decisión -> inferir_filtros")
-        return "inferir_filtros"
     elif not check_economia_completa(economia):
          print("DEBUG Router: Decisión -> recopilar_economia")
          return "recopilar_economia" 

@@ -47,7 +47,7 @@ load_dotenv()
 
 MODEL_NAME_OPENAI = "gpt-4o-mini" # O el modelo OpenAI que prefieras
 MODEL_NAME_OPENAI_2 = "gpt-3.5-turbo" # mas barato
-TEMPERATURE_AGENT = 0.2 # Puedes ajustar la temperatura
+TEMPERATURE_AGENT = 0.3 # Puedes ajustar la temperatura
 TEMPERATURE_AGENT_2 = 0.4
 
 

@@ -3,12 +3,12 @@
 from langgraph.graph import StateGraph, START, END
 from graph.perfil.state import EstadoAnalisisPerfil # Ajusta la ruta si es necesario
 from graph.perfil.nodes import (preguntar_cp_inicial_node,   recopilar_cp_node, validar_cp_node, buscar_info_clima_node,
-    recopilar_preferencias_node,validar_preferencias_node, inferir_filtros_node,validar_filtros_node,recopilar_economia_node, preguntar_economia_node,
-    validar_economia_node, preguntar_preferencias_node, preguntar_filtros_node, preguntar_economia_node,buscar_coches_finales_node,
+    recopilar_preferencias_node,validar_preferencias_node, inferir_filtros_node,recopilar_economia_node, preguntar_economia_node,
+    validar_economia_node, preguntar_preferencias_node, preguntar_economia_node,buscar_coches_finales_node,
     recopilar_info_pasajeros_node, validar_info_pasajeros_node,  preguntar_info_pasajeros_node,aplicar_filtros_pasajeros_node, calcular_recomendacion_economia_modo1_node,
     calcular_flags_dinamicos_node,calcular_pesos_finales_node,formatear_tabla_resumen_node, calcular_km_anuales_postprocessing_node)
 from graph.perfil.memory import get_memory 
-from graph.perfil.condition import (ruta_decision_cp, ruta_decision_economia, ruta_decision_filtros, ruta_decision_perfil,ruta_decision_pasajeros, 
+from graph.perfil.condition import (ruta_decision_cp, ruta_decision_economia, ruta_decision_perfil,ruta_decision_pasajeros, 
                                     decidir_ruta_inicial, route_based_on_state_node)
 
     
@@ -34,8 +34,8 @@ def build_sequential_agent_graph():
     workflow.add_node("aplicar_filtros_pasajeros", aplicar_filtros_pasajeros_node)
     # Etapa 2: Filtros Técnicos
     workflow.add_node("inferir_filtros", inferir_filtros_node)
-    workflow.add_node("validar_filtros", validar_filtros_node)
-    workflow.add_node("preguntar_filtros", preguntar_filtros_node) 
+    #workflow.add_node("validar_filtros", validar_filtros_node)
+    #workflow.add_node("preguntar_filtros", preguntar_filtros_node) 
     # Etapa 3: Economía
     workflow.add_node("recopilar_economia", recopilar_economia_node)
     workflow.add_node("validar_economia", validar_economia_node)
@@ -99,14 +99,7 @@ def build_sequential_agent_graph():
     workflow.add_edge("aplicar_filtros_pasajeros", "inferir_filtros") # <-- CORRECTO: Va a Etapa 2 (Filtros)
 
     # Etapa 2: Filtros Técnicos -> Economía
-    workflow.add_edge("inferir_filtros", "validar_filtros")
-    workflow.add_conditional_edges(
-         "validar_filtros",
-         ruta_decision_filtros,
-         { "necesita_pregunta_filtro": "preguntar_filtros",
-           "pasar_a_economia": "recopilar_economia" # <-- Va directo a recopilar economía
-         })
-    workflow.add_edge("preguntar_filtros", END) 
+    workflow.add_edge("inferir_filtros", "recopilar_economia")
  
     # Etapa 3: Economía -> Finalizar
     workflow.add_edge("recopilar_economia", "validar_economia")

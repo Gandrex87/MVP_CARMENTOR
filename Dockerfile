@@ -40,3 +40,5 @@ EXPOSE 8080
 # - "--port 8080": Coincide con el puerto que hemos expuesto.
 #CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
 CMD uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}
+
+

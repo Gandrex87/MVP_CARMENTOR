@@ -15,8 +15,8 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         return False
     campos_obligatorios = [
         "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "frecuencia_uso", "distancia_trayecto", "circula_principalmente_ciudad" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100",
-        "transporta_carga_voluminosa", "arrastra_remolque","aventura", "estilo_conduccion", "tiene_garage", "tiene_punto_carga_propio", "solo_electricos",  "prioriza_baja_depreciacion","transmision_preferida","rating_fiabilidad_durabilidad", 
-        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_tecnologia_conectividad", "rating_costes_uso"
+        "transporta_carga_voluminosa", "arrastra_remolque","aventura", "estilo_conduccion", "tiene_garage", "tiene_punto_carga_propio", "solo_electricos", "transmision_preferida", "prioriza_baja_depreciacion","rating_fiabilidad_durabilidad", 
+        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_costes_uso", "rating_tecnologia_conectividad", 
     ] # por ahora no va 
     for campo in campos_obligatorios:
         valor = getattr(prefs, campo, None)
@@ -29,12 +29,12 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
         # Si el trayecto es corto/medio, la pregunta sobre viajes largos es obligatoria
         if prefs.realiza_viajes_largos is None:
             print("DEBUG (Validation Perfil) ► 'distancia_trayecto' es corta/media, pero 'realiza_viajes_largos' es None. Perfil INCOMPLETO.")
-            return False
-        
+            return False  
         # Si la respuesta es 'sí', la frecuencia es obligatoria
         if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
             print("DEBUG (Validation Perfil) ► 'realiza_viajes_largos' es 'sí', pero 'frecuencia_viajes_largos' es None. Perfil INCOMPLETO.")
             return False  
+    
     # 1. tipo_uso_profesional
     if is_yes(prefs.uso_profesional): 
         if prefs.tipo_uso_profesional is None: # El tipo es Enum, Pydantic maneja valores inválidos
@@ -67,39 +67,39 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     print("DEBUG (Validation Perfil) ► Todos los campos obligatorios del perfil están presentes.")
     return True
 
-# --- Función de Validación de Filtros ---
-def check_filtros_completos(filtros: Optional[FiltrosInferidos]) -> bool:
-    """
-    Verifica si un objeto FiltrosInferidos tiene los campos esenciales 
-    (principalmente tipo_mecanica) para proceder a la etapa de economía.
-    """
-    if filtros is None:
-        print("DEBUG (Validation Filtros) ► Objeto FiltrosInferidos es None.")
-        return False # No hay objeto de filtros, no está completo
+# # --- Función de Validación de Filtros ---
+# def check_filtros_completos(filtros: Optional[FiltrosInferidos]) -> bool:
+#     """
+#     Verifica si un objeto FiltrosInferidos tiene los campos esenciales 
+#     (principalmente tipo_mecanica) para proceder a la etapa de economía.
+#     """
+#     if filtros is None:
+#         print("DEBUG (Validation Filtros) ► Objeto FiltrosInferidos es None.")
+#         return False # No hay objeto de filtros, no está completo
 
-    # Define qué filtros consideras OBLIGATORIOS para pasar a economía.
-    # Por ahora, el más crítico es tipo_mecanica.
-    campos_obligatorios = ["tipo_mecanica"] 
+#     # Define qué filtros consideras OBLIGATORIOS para pasar a economía.
+#     # Por ahora, el más crítico es tipo_mecanica.
+#     campos_obligatorios = ["tipo_mecanica"] 
 
-    for campo in campos_obligatorios:
-        valor = getattr(filtros, campo, None)
+#     for campo in campos_obligatorios:
+#         valor = getattr(filtros, campo, None)
         
-        # Validación específica para tipo_mecanica (lista)
-        if campo == "tipo_mecanica":
-            # Consideramos incompleto si es None O si es una lista vacía []
-            if valor is None or not valor: # not valor cubre el caso de lista vacía
-                 print(f"DEBUG (Validation Filtros) ► Campo '{campo}' es None o lista vacía.")
-                 return False # Filtro obligatorio ausente o vacío
+#         # Validación específica para tipo_mecanica (lista)
+#         if campo == "tipo_mecanica":
+#             # Consideramos incompleto si es None O si es una lista vacía []
+#             if valor is None or not valor: # not valor cubre el caso de lista vacía
+#                  print(f"DEBUG (Validation Filtros) ► Campo '{campo}' es None o lista vacía.")
+#                  return False # Filtro obligatorio ausente o vacío
         
-        # Validación para otros campos si los añades a campos_obligatorios
-        # elif campo == "otro_campo_obligatorio":
-        #    if valor is None or (isinstance(valor, str) and not valor.strip()):
-        #         print(f"DEBUG (Validation Filtros) ► Campo '{campo}' está vacío/None.")
-        #         return False 
+#         # Validación para otros campos si los añades a campos_obligatorios
+#         # elif campo == "otro_campo_obligatorio":
+#         #    if valor is None or (isinstance(valor, str) and not valor.strip()):
+#         #         print(f"DEBUG (Validation Filtros) ► Campo '{campo}' está vacío/None.")
+#         #         return False 
 
-    # Si todos los campos obligatorios revisados están bien:
-    print("DEBUG (Validation Filtros) ► Todos los campos obligatorios de filtros ('tipo_mecanica') están presentes y válidos.")
-    return True
+#     # Si todos los campos obligatorios revisados están bien:
+#     print("DEBUG (Validation Filtros) ► Todos los campos obligatorios de filtros ('tipo_mecanica') están presentes y válidos.")
+#     return True
 
 # --- función de Validación de Economía ---
 

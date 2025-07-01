@@ -32,10 +32,7 @@ class PerfilUsuario(BaseModel):
     distancia_trayecto: Optional[DistanciaTrayecto] = Field(default=None, description="Distancia del trayecto más frecuente o habitual en kilómetros.")
     realiza_viajes_largos: Optional[str] = Field(default=None, description="¿El usuario realiza viajes largos (>150km) además de su trayecto habitual? Responde 'sí' o 'no'")
     frecuencia_viajes_largos: Optional[FrecuenciaViajesLargos] = Field(default=None,description="Si realiza viajes largos, ¿con qué frecuencia lo hace?" )
-    circula_principalmente_ciudad: Optional[str] = Field(
-        default=None,
-        description="¿El usuario circula principalmente por ciudad? Responde 'sí' o 'no'"
-    )
+    circula_principalmente_ciudad: Optional[str] = Field(default=None, description="¿El usuario circula principalmente por ciudad? Responde 'sí' o 'no'" )
     uso_profesional: Optional[str] = Field(default=None, description="¿Usará el coche para trabajo? Responde 'sí' o 'no'")
     tipo_uso_profesional: Optional[TipoUsoProfesional] = Field(default=None, description="Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'")
     prefiere_diseno_exclusivo: Optional[str] = Field(default=None,description="¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?")
@@ -67,7 +64,7 @@ class PerfilUsuario(BaseModel):
     class ConfigDict:
         use_enum_values = True
 
-
+#lleva pasajero e important epasajeros vayan anchos y comodos
 # --- Modelo Pydantic para InfoPasajeros (MODIFICADO) ---
 class InfoPasajeros(BaseModel):
     # NUEVOS CAMPOS PARA EL FLUJO DE PREGUNTAS
@@ -106,13 +103,8 @@ class InfoPasajeros(BaseModel):
         use_enum_values = True # Para que los Literal se traten como sus valores
 
 class FiltrosInferidos(BaseModel):
-    #batalla_min: Optional[float] = Field(default=None, description="Valor mínimo de batalla recomendado (rango: 1500.0 a 4490.0 mm). Relevante si el usuario mide más de 189 cm.")
-    #indice_altura_interior_min: Optional[float] = Field(default=None, description="Valor mínimo de índice de altura interior recomendado (rango: 0.90 a 3.020). Relevante si el usuario mide más de 189 cm.")
-    #estetica_min: Optional[float] = Field(default=None, description="Mínimo valor de estética recomendado (0.0 a 10.0)")
     tipo_mecanica: Optional[List[TipoMecanica]] = Field(default=None, description="Lista de motorizaciones recomendadas")
-    #premium_min: Optional[float] = Field(default=None, description="Mínimo valor de premium recomendado (0.0 a 10.0)")
-    #singular_min: Optional[float] = Field(default=None, description="Mínimo valor de singularidad recomendado (0.0 a 10.0)")
-    tipo_carroceria: Optional[List[str]] = Field(default=None, description="Lista de tipos de carrocería recomendados por RAG (ej: ['SUV', 'COUPE'])")
+    tipo_carroceria: Optional[List[str]] = Field(default=None, description="Lista de tipos de carrocería recomendados (ej: ['SUV', 'COUPE'])")
     modo_adquisicion_recomendado: Optional[Literal['Contado', 'Financiado']] = Field(
         default=None,
         description="Modo de compra recomendado (Contado/Financiado) basado en análisis Modo 1."
@@ -211,10 +203,11 @@ class EstadoAnalisisPerfil(TypedDict):
     favorecer_carroceria_montana: Optional[bool]
     favorecer_carroceria_comercial: Optional[bool]
     favorecer_carroceria_pasajeros_pro: Optional[bool]
-    desfavorecer_carroceria_no_aventura: Optional[bool]
+    desfavorecer_carroceria_no_aventura: Optional[bool] #No tienes intención de pisar nada que no sea asfalto, Penalizar ('PICKUP', 'TODOTERRENO') 
     favorecer_suv_aventura_ocasional: Optional[bool]
     favorecer_pickup_todoterreno_aventura_extrema:Optional[bool]
-    penalizar_awd_ninguna_aventura: Optional[bool]  # <-- ✅ 
+    penalizar_awd_ninguna_aventura: Optional[bool]  # <-- ✅
+    flag_bonus_awd_clima_adverso: Optional[bool]
     favorecer_awd_aventura_ocasional: Optional[bool] # <-- ✅ 
     favorecer_awd_aventura_extrema: Optional[bool]   # <-- ✅ 
     aplicar_logica_objetos_especiales: Optional[bool]
@@ -223,12 +216,13 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_favorecer_bev_uso_definido: Optional[bool]
     flag_penalizar_phev_uso_intensivo: Optional[bool]
     flag_favorecer_electrificados_por_punto_carga: Optional[bool]
-    flag_logica_diesel_ciudad: Optional[str]
+    flag_logica_diesel_ciudad: Optional[str] # circula_principalmente_ciudad
     flag_bonus_awd_nieve: Optional[bool]  # <-- ✅ 
     flag_bonus_awd_montana: Optional[bool] # <-- ✅ 
     flag_logica_reductoras_aventura: Optional[str]
     km_anuales_estimados: Optional[int]
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
+
 
 
 

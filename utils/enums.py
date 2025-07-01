@@ -75,5 +75,3 @@ class FrecuenciaViajesLargos(str, Enum):
     ESPORADICAMENTE = "esporádicamente"
     
 
-
-

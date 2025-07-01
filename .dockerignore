@@ -20,6 +20,7 @@ __pycache__/
 .vscode
 .idea/
 .DS_Store
+img
 
 # Ignorar directorios de Git
 .git/
@@ -41,3 +42,7 @@ query_prueba.ipynb
 *query_prueba.ipynb
 /img
 img
+calculadora_pesos.py
+calculadora_pesos_paso1.py
+calculadora_pesos_paso2.py
+calculadora_pesos_paso3.py
