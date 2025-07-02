@@ -1639,7 +1639,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     """
     print("--- Ejecutando Nodo: buscar_coches_finales_node ---")
     logging.debug(f"DEBUG (Buscar BQ Init) ► Estado completo recibido: {state}") 
-    k_coches = 12 
+    k_coches = 10 
     historial = state.get("messages", [])
     tabla_resumen_criterios_md = state.get("tabla_resumen_criterios", "No se pudo generar el resumen de criterios.")
     preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario

@@ -408,27 +408,13 @@ def compute_raw_weights(
                 if "ancho" in problema_dim: multiplicadores['fav_menor_ancho_garage'] *= 8.0
                 if "alto" in problema_dim:  multiplicadores['fav_menor_alto_garage'] *= 8.0
 
-    # --- 3.4: Lógica de Estilo de Conducción ---
-    estilo = preferencias.get("estilo_conduccion", "tranquilo")
-    if estilo == "deportivo":
-        multiplicadores.update({
-            'deportividad_style_score': 4.0, 'fav_menor_rel_peso_potencia_score': 10.0,
-            'potencia_maxima_style_score': 5.0, 'par_motor_style_score': 4.0,
-            'fav_menor_aceleracion_score': 6.0
-        })
-    elif estilo == "mixto":
-        multiplicadores.update({
-            'deportividad_style_score': 2.0, 'fav_menor_rel_peso_potencia_score': 5.0,
-            'potencia_maxima_style_score': 2.5, 'par_motor_style_score': 2.0,
-            'fav_menor_aceleracion_score': 3.0
-        })
     
     # --- 3.5: Lógica de Ratings por Umbrales (Versión Final) ---
     def get_rating_multiplier(rating_val: Optional[float]) -> float:
         """Helper para convertir un rating de 1-10 en un multiplicador."""
         rating_val = rating_val or 0
-        if rating_val >= 9: return 8.0  # Prioridad Crítica
-        if rating_val >= 7: return 4.0  # Interés Fuerte
+        if rating_val >= 9: return 9.0  # Prioridad Crítica
+        if rating_val >= 7: return 6.0  # Interés Fuerte
         if rating_val >= 5: return 2.0  # Interés Moderado
         return 1.0                     # Sin interés / Por defecto
 
@@ -471,16 +457,51 @@ def compute_raw_weights(
         for key in master_weights
     }
 
-    # --- PASO 5: Clamping (Válvula de Seguridad) ---
-    # Limita el rango dinámico para evitar resultados extremos y asegurar recomendaciones equilibradas.
-    MIN_SINGLE_RAW_WEIGHT = 1.0
+# --- PASO 4.5: Aplicar Overrides de Perfil de Comportamiento (LÓGICA CORREGIDA) ---
+    # Aquí es donde sobrescribimos los pesos calculados con valores absolutos
+    # para definir un "estilo de conducción" de forma contundente.
+    estilo = preferencias.get("estilo_conduccion", "tranquilo")
+    if estilo == "deportivo":
+        logging.info("Aplicando override de perfil DEPORTIVO.")
+        raw_weights.update({
+            'deportividad_style_score': 4.0,
+            'fav_menor_rel_peso_potencia_score': 10.0,
+            'potencia_maxima_style_score': 5.0,
+            'par_motor_style_score': 4.0,
+            'fav_menor_aceleracion_score': 6.0
+        })
+    elif estilo == "mixto":
+        logging.info("Aplicando override de perfil MIXTO.")
+        raw_weights.update({
+            'deportividad_style_score': 2.0,
+            'fav_menor_rel_peso_potencia_score': 5.0,
+            'potencia_maxima_style_score': 2.5,
+            'par_motor_style_score': 2.0,
+            'fav_menor_aceleracion_score': 3.0
+        })
+    
+    logging.debug(f"Pesos Crudos (Antes de Clamping): {raw_weights}")
+    print(f"DEBUG (Weights) ► Pesos Crudos (Antes de Clamping): {raw_weights}")
+
+
+    # --- PASO 5: Clamping (Lógica Corregida) ---
     MAX_SINGLE_RAW_WEIGHT = 10.0
-    for key in raw_weights:
-        raw_weights[key] = max(MIN_SINGLE_RAW_WEIGHT, min(MAX_SINGLE_RAW_WEIGHT, raw_weights[key]))
-        
+    for key, value in raw_weights.items():
+        # El mínimo es el valor base del genoma para esa característica.
+        min_weight = master_weights.get(key, 0.0)
+        # El valor final es el mayor entre el valor calculado y su propio mínimo,
+        # pero nunca superando el máximo global.
+        raw_weights[key] = max(min_weight, min(MAX_SINGLE_RAW_WEIGHT, value))
+
     logging.info("Pesos crudos finales calculados con éxito usando la arquitectura 'Genoma + Multiplicadores'.")
     
-    return {k: float(v or 0.0) for k, v in raw_weights.items()}
+    final_weights = {k: float(v or 0.0) for k, v in raw_weights.items()}
+    
+    # --- PRINT AÑADIDO 2: Para ver los pesos crudos FINALES que se devuelven ---
+    logging.debug(f"Pesos Crudos Finales (Después de Clamping): {final_weights}")
+    print(f"DEBUG (Weights) ► Pesos Crudos Finales (Después de Clamping): {final_weights}")
+    
+    return final_weights
 
 
 
