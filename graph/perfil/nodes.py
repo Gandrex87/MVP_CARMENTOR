@@ -214,7 +214,7 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     y guarda el contenido del mensaje devuelto en 'pregunta_pendiente'.
     Maneja errores de validación de Pydantic para ratings fuera de rango.
     """
-    print("--- Ejecutando Nodo: recopilar_preferencias_node ---")
+    #print("--- Ejecutando Nodo: recopilar_preferencias_node ---")
     logging.debug("--- Ejecutando Nodo: recopilar_preferencias_node ---")
     
     historial = state.get("messages", [])
@@ -238,38 +238,38 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
         )
         logging.debug(f"DEBUG (Perfil) ► Respuesta llm_solo_perfil: {response}")
-        # --- ✅ INICIO DEL BLOQUE DE DEPURACIÓN PROFUNDA TEMPORAL ---
-        logging.debug("\n" + "="*40)
-        logging.debug("🕵️  INSPECCIÓN PROFUNDA DEL NODO 'recopilar_preferencias_node' 🕵️")
-        logging.debug("="*40)
-        logging.debug(f"INPUT DEL USUARIO: '{historial[-1].content}'")
+        # # --- ✅ INICIO DEL BLOQUE DE DEPURACIÓN PROFUNDA TEMPORAL --Comentar o descomentar para depuracion unicamente
+        # logging.debug("\n" + "="*40)
+        # logging.debug("🕵️  INSPECCIÓN PROFUNDA DEL NODO 'recopilar_preferencias_node' 🕵️")
+        # logging.debug("="*40)
+        # logging.debug(f"INPUT DEL USUARIO: '{historial[-1].content}'")
 
-        if 'response' in locals() and response:
-            logging.debug("\n--- SALIDA DIRECTA DEL LLM ---")
-            # Usamos repr() para ver claramente si es un string vacío ''
-            logging.debug(f"CONTENIDO MENSAJE (para pregunta_pendiente): {repr(getattr(response, 'contenido_mensaje', 'NO ENCONTRADO'))}")
+        # if 'response' in locals() and response:
+        #     logging.debug("\n--- SALIDA DIRECTA DEL LLM ---")
+        #     # Usamos repr() para ver claramente si es un string vacío ''
+        #     logging.debug(f"CONTENIDO MENSAJE (para pregunta_pendiente): {repr(getattr(response, 'contenido_mensaje', 'NO ENCONTRADO'))}")
 
-            prefs_llm = getattr(response, 'preferencias_usuario', None)
-            if prefs_llm:
-                logging.debug("\n--- CAMBIOS PROPUESTOS AL PERFIL (del LLM) ---")
-                perfil_actual = state.get("preferencias_usuario") or PerfilUsuario()
-                # Comparamos el perfil actual con el que propone el LLM para ver qué ha intentado cambiar
-                diff = {
-                    k: v
-                    for k, v in prefs_llm.dict(exclude_unset=True).items()
-                    if perfil_actual.dict().get(k) != v
-                }
-                if diff:
-                    print(f"Campos que el LLM intentó cambiar: {diff}")
-                else:
-                    print("El LLM no propuso ningún cambio en el perfil (¡lo cual es correcto para un meta-comentario!).")
-            else:
-                print("El LLM no devolvió un objeto 'preferencias_usuario'.")
-        else:
-            print("La variable 'response' del LLM no se generó o está vacía.")
+        #     prefs_llm = getattr(response, 'preferencias_usuario', None)
+        #     if prefs_llm:
+        #         logging.debug("\n--- CAMBIOS PROPUESTOS AL PERFIL (del LLM) ---")
+        #         perfil_actual = state.get("preferencias_usuario") or PerfilUsuario()
+        #         # Comparamos el perfil actual con el que propone el LLM para ver qué ha intentado cambiar
+        #         diff = {
+        #             k: v
+        #             for k, v in prefs_llm.dict(exclude_unset=True).items()
+        #             if perfil_actual.dict().get(k) != v
+        #         }
+        #         if diff:
+        #             print(f"Campos que el LLM intentó cambiar: {diff}")
+        #         else:
+        #             print("El LLM no propuso ningún cambio en el perfil (¡lo cual es correcto para un meta-comentario!).")
+        #     else:
+        #         print("El LLM no devolvió un objeto 'preferencias_usuario'.")
+        # else:
+        #     print("La variable 'response' del LLM no se generó o está vacía.")
         
-        print("="*40 + "\n")
-        # --- FIN DEL BLOQUE DE DEPURACIÓN ---
+        # print("="*40 + "\n")
+        # # --- FIN DEL BLOQUE DE DEPURACIÓN ---
         
         preferencias_del_llm = response.preferencias_usuario # Objeto PerfilUsuario del LLM
         mensaje_para_pregunta_pendiente = response.contenido_mensaje # Mensaje del LLM
@@ -372,35 +372,54 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if prefs.apasionado_motor is None: return "¿Te consideras una persona entusiasta del mundo del motor y la tecnología automotriz?"
     if prefs.valora_estetica is None: return "¿La Estética es importante para ti o crees que hay factores más importantes?"
     if prefs.coche_principal_hogar is None: return "¿El coche que estamos buscando será el vehículo principal de tu hogar?."
-    if prefs.frecuencia_uso is None: return "¿Con qué frecuencia usarás el coche?\n 💨 A diario (incluso varias veces al día)\n 🔄 Frecuentemente (varias veces por semana)\n  🕐 Ocasionalmente (pocas veces al mes)"
-    if prefs.distancia_trayecto is None:  return "¿Cuál es la distancia de tu trayecto más habitual?\n 🟢 Hasta 10 km\n 🟡 10-50 km\n 🟠 51-150 km\n 🔴 Más de 150 km" 
+    if prefs.frecuencia_uso is None: return (
+            "¿Con qué frecuencia usarás el coche?\n\n"
+            "* 💨 A diario (incluso varias veces al día)\n"
+            "* 🔄 Frecuentemente (varias veces por semana)\n"
+            "* 🕐 Ocasionalmente (pocas veces al mes)"
+        )
+    if prefs.distancia_trayecto is None:return (
+            "¿Cuál es la distancia de tu trayecto más habitual?\n\n"
+            "* 🟢 Hasta 10 km\n"
+            "* 🟡 10-50 km\n"
+            "* 🟠 51-150 km\n"
+            "* 🔴 Más de 150 km"
+        )
     # Solo pregunta por viajes largos si el trayecto habitual NO es ya un viaje largo
     # Lógica anidada para viajes largos
     if (prefs.distancia_trayecto is not None and
             prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value and
             prefs.realiza_viajes_largos is None):
-        return "¿Haces recorridos de más de 150 km?\n ✅ Sí\n ❌ No"
+        return "¿Haces recorridos de más de 150 km además de tus trayectos habituales?\n\n* ✅ Sí\n* ❌ No"
     
     if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
-        return ("¿Y con qué frecuencia realizas estos viajes largos?\n"
-                "💨 Frecuentemente (Unas cuantas veces por mes)\n"
-                "🗓️ Ocasionalmente (Unas pocas veces por mes)\n"
-                "🕐 Esporádicamente (Unas pocas veces por año)")
-    if prefs.circula_principalmente_ciudad is None: return "Cuentame, ¿circulas principalmente por ciudad?\n ✅ Sí\n ❌ No"
+        return (
+            "¿Y con qué frecuencia realizas estos viajes largos?\n\n"
+            "* 💨 Frecuentemente (Unas cuantas veces por mes)\n"
+            "* 🗓️ Ocasionalmente (Unas pocas veces por mes)\n"
+            "* 🕐 Esporádicamente (Unas pocas veces por año)"
+        )
+    if prefs.circula_principalmente_ciudad is None: return "Cuentame, ¿circulas principalmente por ciudad?\n\n* ✅ Sí\n* ❌ No"
     if prefs.uso_profesional is None: return "¿El coche lo destinaras principalmente para uso personal o más para fines profesionales (trabajo)?"
     if is_yes(prefs.uso_profesional) and prefs.tipo_uso_profesional is None:
         return "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
     if prefs.prefiere_diseno_exclusivo is None: return "En cuanto al estilo del coche, ¿te inclinas más por un diseño exclusivo y llamativo, o por algo más discreto y convencional?"
     if prefs.altura_mayor_190 is None: return "Para recomendarte un vehículo con espacio adecuado, ¿tu altura supera los 1.90 metros?"
     if prefs.peso_mayor_100 is None: return "Para garantizar tu máxima comodidad, ¿tienes un peso superior a 100 kg?"
-    if prefs.transporta_carga_voluminosa is None: return "¿Acostumbras a viajar con el maletero muy cargado?\n ✅ Sí\n ❌ No"
+    if prefs.transporta_carga_voluminosa is None: return "¿Acostumbras a viajar con el maletero muy cargado?\n\n* ✅ Sí\n* ❌ No"
     if is_yes(prefs.transporta_carga_voluminosa) and prefs.necesita_espacio_objetos_especiales is None:
         return "¿Y ese transporte de carga incluye objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos para bebé, sillas de ruedas, instrumentos musicales, etc?"
-    if prefs.arrastra_remolque is None: return "¿Vas a arrastrar remolque pesado o caravana?"
-    if prefs.aventura is None: return "Para conocer tu espíritu aventurero, dime que prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
+    if prefs.arrastra_remolque is None: return "¿Vas a arrastrar remolque pesado o caravana?\n\n* ✅ Sí\n* ❌ No"
+    if prefs.aventura is None: 
+        return (
+            "Para conocer tu espíritu aventurero, dime que prefieres:\n\n"
+            "* 🛣️ Solo asfalto (ninguna)\n"
+            "* 🌲 Salidas off‑road de vez en cuando (ocasional)\n"
+            "* 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
+        )
     if prefs.estilo_conduccion is None: return "¿Cómo describirías tu estilo de conducción habitual? Por ejemplo: tranquilo, deportivo, o una mezcla de ambos (mixto)."
     if prefs.tiene_garage is None:
-        return "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?\n ✅ Sí\n ❌ No"
+        return "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?\n\n* ✅ Sí\n* ❌ No"
     else:
         # Si ya sabemos si tiene garaje, entramos en las sub-preguntas
         if is_yes(prefs.tiene_garage): # --- CASO SÍ TIENE GARAJE ---
@@ -414,18 +433,42 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
                 return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?"
     # --- FIN NUEVA LÓGICA DE PREGUNTAS ---
     if prefs.tiene_punto_carga_propio is None:
-        return "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual?\n ✅ Sí\n ❌ No"
+        return "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual?\n\n* ✅ Sí\n* ❌ No"
     # --- FIN NUEVAS PREGUNTAS DE CARGA ---
-    if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?\n ✅ Sí\n ❌ No"
-    if prefs.transmision_preferida is None: return "En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n 1) Automático\n 2) Manual\n 3) Ambos, puedo considerar ambas opciones"
-    if prefs.prioriza_baja_depreciacion is None: return "¿Es importante para ti que la depreciación del coche sea lo más baja posible?\n ✅ Sí\n ❌ No"
+    if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?\n\n* ✅ Sí\n* ❌ No"
+    if prefs.transmision_preferida is None: return (
+            "En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n\n"
+            "* 1) Automático\n"
+            "* 2) Manual\n"
+            "* 3) Ambos, puedo considerar ambas opciones"
+        )
+    if prefs.prioriza_baja_depreciacion is None: return "¿Es importante para ti que la depreciación del coche sea lo más baja posible?\n\n* ✅ Sí\n* ❌ No"
      # --- NUEVAS PREGUNTAS DE RATING (0-10) ---
-    if prefs.rating_fiabilidad_durabilidad is None: return "¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche? \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)"
-    if prefs.rating_seguridad is None:return "Pensando en la Seguridad, ¿qué puntuación le darías en importancia? \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)"
-    if prefs.rating_comodidad is None:return "Y en cuanto a la comodidad y confort del vehiculo que tan importante es que se maximice?\n 📊 0 (nada importante) ——————— 10 (extremadamente importante)"
-    if prefs.rating_impacto_ambiental is None: return "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección? \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)" 
-    if prefs.rating_costes_uso is None: return "¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)" 
-    if prefs.rating_tecnologia_conectividad is None: return "finalmente, en cuanto a la Tecnología y Conectividad del coche, \n 📊 0 (nada importante) ——————— 10 (extremadamente importante)"
+    if prefs.rating_fiabilidad_durabilidad is None: 
+        return ( 
+            "¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche?\n\n" 
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+        )
+    if prefs.rating_seguridad is None:return (
+            "Pensando en la Seguridad, ¿qué puntuación le darías en importancia? \n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+        )
+    if prefs.rating_comodidad is None:return (
+            "Y en cuanto a la comodidad y confort del vehiculo que tan importante es que se maximice?\n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+        )
+    if prefs.rating_impacto_ambiental is None: return (
+            "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección? \n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+        )
+    if prefs.rating_costes_uso is None: return (
+            "¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? \n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+        )
+    if prefs.rating_tecnologia_conectividad is None: return (
+            "finalmente, en cuanto a la Tecnología y Conectividad del coche, \n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+        )
     # --- FIN NUEVAS PREGUNTAS DE RATING --- 
     return "¿Podrías darme algún detalle más sobre tus preferencias?" # Fallback muy genérico 
 
@@ -747,11 +790,11 @@ def _obtener_siguiente_pregunta_pasajeros(info: Optional[InfoPasajeros]) -> str:
     siguiendo el nuevo flujo condicional.
     """
     if info is None: # Si no hay objeto InfoPasajeros, empezar por la primera pregunta
-        return "¿Sueles viajar con acompañantes en el coche habitualmente? \n ✅ Sí\n ❌ No"
+        return "¿Sueles viajar con acompañantes en el coche habitualmente?\n\n* ✅ Sí\n* ❌ No"
 
     # 1. Pregunta inicial
     if info.suele_llevar_acompanantes is None:
-        return "¿Sueles viajar con acompañantes en el coche habitualmente? \n ✅ Sí\n ❌ No"
+        return "¿Sueles viajar con acompañantes en el coche habitualmente?\n\n* ✅ Sí\n* ❌ No"
 
     # Si la respuesta fue 'no', no debería llegar aquí si el LLM y la validación funcionan,
     # ya que se consideraría completo. Pero por si acaso:
@@ -1767,69 +1810,108 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
             if coches_encontrados:
                 mensaje_coches = f"¡Listo! Basado en todo lo que hablamos, aquí tienes {len(coches_encontrados)} coche(s) que podrían interesarte:\n\n"
                 
-                ##CODIGO BUCLE PARA CUANDO INTEGREMOS LOGICA EXPLICACION LLM
-                # #coches_para_df = []
-                # for i, coche_dict_completo in enumerate(coches_encontrados):
-                #     # --- LLAMAR AL NUEVO GENERADOR DE EXPLICACIONES ---
-                #     explicacion_coche = generar_explicacion_coche_mejorada(
-                #         coche_dict_completo=coche_dict_completo,
-                #         preferencias_usuario=preferencias_obj,
-                #         pesos_normalizados=pesos_finales,
-                #         flag_penalizar_lc_comod=flag_penalizar_lc_comod,
-                #         flag_penalizar_dep_comod=flag_penalizar_dep_comod,
-                #         flag_penalizar_ant_tec=flag_penalizar_antiguo_tec_val,
-                #         flag_es_zbe=flag_es_zbe_val,
-                #         flag_aplicar_dist_gen=flag_aplicar_distintivo_val,
-                #         flag_penalizar_puertas = penalizar_puertas_flag,                 
-                #     )
-                #     # --- FIN LLAMADA ---
-                #     # Añadir la explicación al string del mensaje
-                #     # (Formato más integrado con la tabla)
-                #     mensaje_coches += f"\n**{i+1}. {coche_dict_completo.get('nombre', 'Coche Desconocido')}**"
-                #     if coche_dict_completo.get('precio_compra_contado') is not None:
-                #         precio_f = f"{coche_dict_completo.get('precio_compra_contado'):,.0f}€".replace(",",".")
-                #         mensaje_coches += f" - {precio_f}"
-                #     if coche_dict_completo.get('score_total') is not None:
-                #         score_f = f"{coche_dict_completo.get('score_total'):.3f}"
-                #         mensaje_coches += f" (Score: {score_f})"
-                #     mensaje_coches += f"\n   *Por qué podría interesarte:* {explicacion_coche}\n"
+                # ##CODIGO BUCLE PARA CUANDO INTEGREMOS LOGICA EXPLICACION LLM
+                # # #coches_para_df = []
+                # # for i, coche_dict_completo in enumerate(coches_encontrados):
+                # #     # --- LLAMAR AL NUEVO GENERADOR DE EXPLICACIONES ---
+                # #     explicacion_coche = generar_explicacion_coche_mejorada(
+                # #         coche_dict_completo=coche_dict_completo,
+                # #         preferencias_usuario=preferencias_obj,
+                # #         pesos_normalizados=pesos_finales,
+                # #         flag_penalizar_lc_comod=flag_penalizar_lc_comod,
+                # #         flag_penalizar_dep_comod=flag_penalizar_dep_comod,
+                # #         flag_penalizar_ant_tec=flag_penalizar_antiguo_tec_val,
+                # #         flag_es_zbe=flag_es_zbe_val,
+                # #         flag_aplicar_dist_gen=flag_aplicar_distintivo_val,
+                # #         flag_penalizar_puertas = penalizar_puertas_flag,                 
+                # #     )
+                # #     # --- FIN LLAMADA ---
+                # #     # Añadir la explicación al string del mensaje
+                # #     # (Formato más integrado con la tabla)
+                # #     mensaje_coches += f"\n**{i+1}. {coche_dict_completo.get('nombre', 'Coche Desconocido')}**"
+                # #     if coche_dict_completo.get('precio_compra_contado') is not None:
+                # #         precio_f = f"{coche_dict_completo.get('precio_compra_contado'):,.0f}€".replace(",",".")
+                # #         mensaje_coches += f" - {precio_f}"
+                # #     if coche_dict_completo.get('score_total') is not None:
+                # #         score_f = f"{coche_dict_completo.get('score_total'):.3f}"
+                # #         mensaje_coches += f" (Score: {score_f})"
+                # #     mensaje_coches += f"\n   *Por qué podría interesarte:* {explicacion_coche}\n"
 
 
-                # Si quieres una tabla resumen de los coches (además de la explicación individual)
-                # df_coches_display = pd.DataFrame(coches_para_df)
-                # columnas_deseadas_tabla = ['Nº', 'nombre', 'marca', 'precio_compra_contado', 'score_total', 'tipo_carroceria', 'tipo_mecanica']
-                # # ... (formateo de columnas del df_coches_display) ...
-                # tabla_coches_md = df_coches_display[columnas_deseadas_tabla].to_markdown(index=False)
-                # mensaje_coches += "\n" + tabla_coches_md + "\n"
+                # # Si quieres una tabla resumen de los coches (además de la explicación individual)
+                # # df_coches_display = pd.DataFrame(coches_para_df)
+                # # columnas_deseadas_tabla = ['Nº', 'nombre', 'marca', 'precio_compra_contado', 'score_total', 'tipo_carroceria', 'tipo_mecanica']
+                # # # ... (formateo de columnas del df_coches_display) ...
+                # # tabla_coches_md = df_coches_display[columnas_deseadas_tabla].to_markdown(index=False)
+                # # mensaje_coches += "\n" + tabla_coches_md + "\n"
                 
-                mensaje_coches += "\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles?\n"
-                try:
-                    df_coches = pd.DataFrame(coches_encontrados)
-                    columnas_deseadas = [ # Define tus columnas deseadas
-                        'nombre', 'marca', 'precio_compra_contado', 'score_total',
-                        'tipo_carroceria', 'tipo_mecanica', 'traccion', 'reductoras' 
-                        # ... añade más columnas si las necesitas en la tabla de coches ...
-                    ]
-                    columnas_a_mostrar = [col for col in columnas_deseadas if col in df_coches.columns]
+                # mensaje_coches += "\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles?\n"
+                # try:
+                #     df_coches = pd.DataFrame(coches_encontrados)
+                #     columnas_deseadas = [ # Define tus columnas deseadas
+                #         'nombre', 'marca', 'precio_compra_contado', 'score_total',
+                #         'tipo_carroceria', 'tipo_mecanica', 'traccion', 'reductoras', 'foto' 
+                        
+                #     ]
+                #     columnas_a_mostrar = [col for col in columnas_deseadas if col in df_coches.columns]
                     
-                    if columnas_a_mostrar:
-                        if 'precio_compra_contado' in df_coches.columns:
-                            df_coches['precio_compra_contado'] = df_coches['precio_compra_contado'].apply(lambda x: f"{x:,.0f}€".replace(",",".") if isinstance(x, (int, float)) else "N/A")
-                        if 'score_total' in df_coches.columns:
-                             df_coches['score_total'] = df_coches['score_total'].apply(lambda x: f"{x:.3f}" if isinstance(x, float) else x)
-                        tabla_coches_md = df_coches[columnas_a_mostrar].to_markdown(index=False)
-                        mensaje_coches += tabla_coches_md
-                    else:
-                        mensaje_coches += "No se pudieron formatear los detalles de los coches."
-                except Exception as e_format_coches:
-                    logging.error(f"ERROR (Buscar BQ) ► Falló el formateo de la tabla de coches: {e_format_coches}")
-                    mensaje_coches += "Hubo un problema al mostrar los detalles. Aquí una lista simple:\n"
-                    for i, coche in enumerate(coches_encontrados):
-                        nombre = coche.get('nombre', 'N/D'); precio = coche.get('precio_compra_contado')
-                        precio_str = f"{precio:,.0f}€".replace(",",".") if isinstance(precio, (int, float)) else "N/A"
-                        mensaje_coches += f"{i+1}. {nombre} - {precio_str}\n"
-                # mensaje_coches += "\n\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles o hacemos otra búsqueda?"
+                #     if columnas_a_mostrar:
+                #         if 'precio_compra_contado' in df_coches.columns:
+                #             df_coches['precio_compra_contado'] = df_coches['precio_compra_contado'].apply(lambda x: f"{x:,.0f}€".replace(",",".") if isinstance(x, (int, float)) else "N/A")
+                #         if 'score_total' in df_coches.columns:
+                #              df_coches['score_total'] = df_coches['score_total'].apply(lambda x: f"{x:.3f}" if isinstance(x, float) else x)
+                #         tabla_coches_md = df_coches[columnas_a_mostrar].to_markdown(index=False)
+                #         mensaje_coches += tabla_coches_md
+                #     else:
+                #         mensaje_coches += "No se pudieron formatear los detalles de los coches."
+                # except Exception as e_format_coches:
+                #     logging.error(f"ERROR (Buscar BQ) ► Falló el formateo de la tabla de coches: {e_format_coches}")
+                #     mensaje_coches += "Hubo un problema al mostrar los detalles. Aquí una lista simple:\n"
+                #     for i, coche in enumerate(coches_encontrados):
+                #         nombre = coche.get('nombre', 'N/D'); precio = coche.get('precio_compra_contado')
+                #         precio_str = f"{precio:,.0f}€".replace(",",".") if isinstance(precio, (int, float)) else "N/A"
+                #         mensaje_coches += f"{i+1}. {nombre} - {precio_str}\n"
+                # Iteramos sobre cada coche para construir su "tarjeta" de presentación
+                for i, coche in enumerate(coches_encontrados):
+                    
+                    # --- 1. Preparamos los datos de cada coche ---
+                    nombre = coche.get('nombre', 'Coche Desconocido')
+                    url_foto = coche.get('foto')
+                    
+                    # Formateamos el precio y el score para mostrarlos
+                    precio_str = "N/A"
+                    if coche.get('precio_compra_contado') is not None:
+                        try:
+                            precio_str = f"{coche.get('precio_compra_contado'):,.0f}€".replace(",", ".")
+                        except (ValueError, TypeError):
+                            pass # Mantenemos "N/A" si el formato falla
+
+                    score_str = "N/A"
+                    if coche.get('score_total') is not None:
+                        try:
+                            score_str = f"{coche.get('score_total'):.2f} pts"
+                        except (ValueError, TypeError):
+                            pass
+
+                    # --- 2. Generamos la explicación personalizada (lógica omitida temporalmente) ---
+                    # Se omite la llamada a generar_explicacion_coche_mejorada y se usa un texto provisional.
+                    explicacion_coche = "Análisis detallado de la recomendación pendiente de desarrollo."
+
+                    # --- 3. Construimos el mensaje en Markdown para este coche ---
+                    mensaje_coches += f"\n---\n" # Separador horizontal
+                    mensaje_coches += f"### {i+1}. {nombre}\n" # Título del coche
+                    
+                    # Añadimos la imagen si la URL existe
+                    if url_foto and url_foto.strip():
+                        mensaje_coches += f"![Foto de {nombre}]({url_foto})\n\n"
+                    
+                    # Añadimos los detalles clave y la explicación
+                    mensaje_coches += f"**Precio:** {precio_str} | **Puntuación:** {score_str}\n\n"
+                    mensaje_coches += f"*{explicacion_coche}*"
                 
+                mensaje_coches += "\n\n---\n\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles?"
+                # --- ✅ FIN DE LA NUEVA LÓGICA DE PRESENTACIÓN ---
+               
                 
             else:
                 # ... (Tu lógica de sugerencias heurísticas para mensaje_coches) ...

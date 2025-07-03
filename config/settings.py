@@ -241,115 +241,115 @@ UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA = 8
 
 # --------------------------------------- ## --------------------------------------- ## --------------------------------------
 # --- LÓGICA DE PESOS CRUDOS (`utils/weights.py`) ---
-PESO_CRUDO_BASE = 0.0
+# PESO_CRUDO_BASE = 0.0
 
-MIN_SINGLE_RAW_WEIGHT =1.0
-MAX_SINGLE_RAW_WEIGHT = 10.0
+# MIN_SINGLE_RAW_WEIGHT =1.0
+# MAX_SINGLE_RAW_WEIGHT = 10.0
 
-altura_map = {
-        "ninguna": 1.0,
-        "ocasional": 4.0,
-        "extrema": 10.0
-    }
-
-
-#Valores Pesos basado en 'priorizar_ancho' (priorizar_ancho de pasajeros Z>=2)
-
-PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL = 4.0
-PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
-
-# --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
-# Ajustes de pesos crudos aditivos por clima
-AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
+# altura_map = {
+#         "ninguna": 1.0,
+#         "ocasional": 4.0,
+#         "extrema": 10.0
+#     }
 
 
-# Valores de Pesos basados en altura_mayor_190 en Weights.py
+# #Valores Pesos basado en 'priorizar_ancho' (priorizar_ancho de pasajeros Z>=2)
 
-PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190 = 5.0
-PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190 = 8.0
+# PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL = 4.0
+# PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
 
-#Valores Pesos basado en prioriza_baja_depreciacion
-PESO_CRUDO_FAV_DEVALUACION = 10.0
-
-# Valores pesos de carga y espacio en weights.py
-
-PESO_CRUDO_FAV_MALETERO_MIN = 8.0
-PESO_CRUDO_FAV_MALETERO_MAX = 6.0
-PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_ANCHO = 5.0 
-PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_LARGO = 7.0
+# # --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
+# # Ajustes de pesos crudos aditivos por clima
+# AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
 
 
-# Valores de peso crudo a sumar si se cumplen umbrales de ratings en weights.py
+# # Valores de Pesos basados en altura_mayor_190 en Weights.py
 
-RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD = 6.0
-RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD = 4.0
+# PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190 = 5.0
+# PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190 = 8.0
 
+# #Valores Pesos basado en prioriza_baja_depreciacion
+# PESO_CRUDO_FAV_DEVALUACION = 10.0
 
-RAW_WEIGHT_ADICIONAL_FAV_BAJO_PESO_POR_IMPACTO = 10.0
-RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_IMPACTO = 7.0
-RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES = 5.0 
-RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO = 9.0
-RAW_WEIGHT_FAV_BAJO_COSTE_MANTENIMIENTO_DIRECTO = 7.0
+# # Valores pesos de carga y espacio en weights.py
 
-
-RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_USO_INTENSIVO = 5.0
-
-# --- Reglas para estetica_min, premium_min, singular_min postprocessing.py ---
-PESO_CRUDO_FAV_ESTETICA = 6.0
-
-PESO_CRUDO_FAV_PREMIUM_APASIONADO_MOTOR = 6.0
-PESO_CRUDO_FAV_SINGULAR_APASIONADO_MOTOR= 5.0
-PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO = 6.0
-
-# Pesos crudos para preferencias de garaje/aparcamiento
-PESO_CRUDO_FAV_MENOR_SUPERFICIE = 3.0 # fav_menor_superficie_planta
-PESO_CRUDO_FAV_MENOR_DIAMETRO_GIRO = 5.0 #fav_menor_diametro_giro
-PESO_CRUDO_FAV_MENOR_DIMENSION_GARAJE = 8.0 # Para largo, ancho, alto problemáticos
- # Peso si no es una preocupación explícita
-
-# Pesos crudos para Estilo de Conducción
-# Si estilo es DEPORTIVO
-RAW_PESO_DEPORTIVIDAD_ALTO = 4.0
-RAW_PESO_MENOR_REL_PESO_POTENCIA_ALTO = 10.0
-RAW_PESO_POTENCIA_MAXIMA_ALTO = 5.0
-RAW_PESO_PAR_MOTOR_DEPORTIVO_ALTO = 4.0
-RAW_PESO_MENOR_ACELERACION_ALTO = 6.0
-# Si estilo es MIXTO ()
-RAW_PESO_DEPORTIVIDAD_MEDIO = 2.0
-RAW_PESO_MENOR_REL_PESO_POTENCIA_MEDIO = 5.0
-RAW_PESO_POTENCIA_MAXIMA_MEDIO = 2.5
-RAW_PESO_PAR_MOTOR_DEPORTIVO_MEDIO = 2.0
-RAW_PESO_MENOR_ACELERACION_MEDIO = 3.0
-# Si estilo es TRANQUILO o no definido (base)
-
-RAW_PESO_DEPORTIVIDAD_BAJO = 1.0
-RAW_PESO_MENOR_REL_PESO_POTENCIA_BAJO = 1.0
-RAW_PESO_POTENCIA_MAXIMA_BAJO = 1.0
-RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO = 1.0
-RAW_PESO_MENOR_ACELERACION_BAJO = 1.0
-
-# Pesos crudos para arrastre de remolque si es 'sí' weights.py
-RAW_PESO_PAR_MOTOR_REMOLQUE = 6.0
-RAW_PESO_CAP_REMOLQUE_CF = 7.0
-RAW_PESO_CAP_REMOLQUE_SF = 3.0
-# Pesos crudos base para remolque si es 'no' o None
-
-#Peso crudo favorecer por conducir en ciudad
-PESO_CRUDO_FAV_DIAMETRO_GIRO_CONDUC_CIUDAD = 7.0
-
-# Pesos para nuevas características de carga y autonomía Si km/año > 60.000 
-WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM = 9.0
-WEIGHT_AUTONOMIA_2ND_DRIVE_MUY_ALTO_KM = 3.0
-WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM = 9.0  # Menor tiempo es mejor
-
-WEIGHT_POTENCIA_DC_MUY_ALTO_KM = 9.0
+# PESO_CRUDO_FAV_MALETERO_MIN = 8.0
+# PESO_CRUDO_FAV_MALETERO_MAX = 6.0
+# PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_ANCHO = 5.0 
+# PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_LARGO = 7.0
 
 
-PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 7.0
+# # Valores de peso crudo a sumar si se cumplen umbrales de ratings en weights.py
 
-# Bonus de peso crudo si el usuario tiene un alto rating de impacto ambiental
-RAW_WEIGHT_BONUS_FIABILIDAD_POR_IMPACTO = 2.0
-RAW_WEIGHT_BONUS_DURABILIDAD_POR_IMPACTO = 3.0
+# RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD = 6.0
+# RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD = 4.0
+
+
+# RAW_WEIGHT_ADICIONAL_FAV_BAJO_PESO_POR_IMPACTO = 10.0
+# RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_IMPACTO = 7.0
+# RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES = 5.0 
+# RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO = 9.0
+# RAW_WEIGHT_FAV_BAJO_COSTE_MANTENIMIENTO_DIRECTO = 7.0
+
+
+# RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_USO_INTENSIVO = 5.0
+
+# # --- Reglas para estetica_min, premium_min, singular_min postprocessing.py ---
+# PESO_CRUDO_FAV_ESTETICA = 6.0
+
+# PESO_CRUDO_FAV_PREMIUM_APASIONADO_MOTOR = 6.0
+# PESO_CRUDO_FAV_SINGULAR_APASIONADO_MOTOR= 5.0
+# PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO = 6.0
+
+# # Pesos crudos para preferencias de garaje/aparcamiento
+# PESO_CRUDO_FAV_MENOR_SUPERFICIE = 3.0 # fav_menor_superficie_planta
+# PESO_CRUDO_FAV_MENOR_DIAMETRO_GIRO = 5.0 #fav_menor_diametro_giro
+# PESO_CRUDO_FAV_MENOR_DIMENSION_GARAJE = 8.0 # Para largo, ancho, alto problemáticos
+#  # Peso si no es una preocupación explícita
+
+# # Pesos crudos para Estilo de Conducción
+# # Si estilo es DEPORTIVO
+# RAW_PESO_DEPORTIVIDAD_ALTO = 4.0
+# RAW_PESO_MENOR_REL_PESO_POTENCIA_ALTO = 10.0
+# RAW_PESO_POTENCIA_MAXIMA_ALTO = 5.0
+# RAW_PESO_PAR_MOTOR_DEPORTIVO_ALTO = 4.0
+# RAW_PESO_MENOR_ACELERACION_ALTO = 6.0
+# # Si estilo es MIXTO ()
+# RAW_PESO_DEPORTIVIDAD_MEDIO = 2.0
+# RAW_PESO_MENOR_REL_PESO_POTENCIA_MEDIO = 5.0
+# RAW_PESO_POTENCIA_MAXIMA_MEDIO = 2.5
+# RAW_PESO_PAR_MOTOR_DEPORTIVO_MEDIO = 2.0
+# RAW_PESO_MENOR_ACELERACION_MEDIO = 3.0
+# # Si estilo es TRANQUILO o no definido (base)
+
+# RAW_PESO_DEPORTIVIDAD_BAJO = 1.0
+# RAW_PESO_MENOR_REL_PESO_POTENCIA_BAJO = 1.0
+# RAW_PESO_POTENCIA_MAXIMA_BAJO = 1.0
+# RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO = 1.0
+# RAW_PESO_MENOR_ACELERACION_BAJO = 1.0
+
+# # Pesos crudos para arrastre de remolque si es 'sí' weights.py
+# RAW_PESO_PAR_MOTOR_REMOLQUE = 6.0
+# RAW_PESO_CAP_REMOLQUE_CF = 7.0
+# RAW_PESO_CAP_REMOLQUE_SF = 3.0
+# # Pesos crudos base para remolque si es 'no' o None
+
+# #Peso crudo favorecer por conducir en ciudad
+# PESO_CRUDO_FAV_DIAMETRO_GIRO_CONDUC_CIUDAD = 7.0
+
+# # Pesos para nuevas características de carga y autonomía Si km/año > 60.000 
+# WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM = 9.0
+# WEIGHT_AUTONOMIA_2ND_DRIVE_MUY_ALTO_KM = 3.0
+# WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM = 9.0  # Menor tiempo es mejor
+
+# WEIGHT_POTENCIA_DC_MUY_ALTO_KM = 9.0
+
+
+# PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 7.0
+
+# # Bonus de peso crudo si el usuario tiene un alto rating de impacto ambiental
+# RAW_WEIGHT_BONUS_FIABILIDAD_POR_IMPACTO = 2.0
+# RAW_WEIGHT_BONUS_DURABILIDAD_POR_IMPACTO = 3.0
 
 # filtro de la cuota máxima en la funcion de busqueda en BigQuery bigquery_tools.py
 FACTOR_CONVERSION_PRECIO_CUOTA = 1.35 / 96

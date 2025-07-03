@@ -1000,7 +1000,7 @@ def buscar_coches_bq(
     )
     SELECT
         -- Columnas principales
-        nombre, ID, marca, modelo, score_total, puntuacion_base, ajustes_experto,
+        nombre, ID, marca, modelo, score_total, puntuacion_base, ajustes_experto, foto,
         
         -- Desglose completo para depuración
         * EXCEPT (nombre, ID, marca, modelo, score_total, puntuacion_base, ajustes_experto, rn, brand_rank)
@@ -1026,10 +1026,16 @@ def buscar_coches_bq(
             except Exception as e_log_param:
                 logging.error(f"Error procesando param para log: {p}, error: {e_log_param}")
     
-    print(f"--- 🧠 SQL Query (buscar_coches_bq) ---\n{sql}") 
-    print(f"\n--- 📦 Parameters (buscar_coches_bq) ---\n{log_params_for_logging}") 
+  # --- ESTOS SON LOS PRINTS CLAVE PARA EL DEBUG ---
+    print("--- 🧠 SQL Query Template Enviada a BigQuery ---")
+    print(sql) # Este print ya contiene el valor de FACTOR_ESCALA_BASE
+    print("-------------------------------------------------")
+    print(f"\n--- 📦 Parameters Enviados a BigQuery ---\n{log_params_for_logging}")
+    print("-------------------------------------------------")
+
 
     try:
+        # No necesitas el bloque de .format() aquí
         job_config = bigquery.QueryJobConfig(query_parameters=params)
         query_job = client.query(sql, job_config=job_config)
         df = query_job.result().to_dataframe() 

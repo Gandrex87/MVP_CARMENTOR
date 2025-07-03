@@ -21,6 +21,7 @@ __pycache__/
 .idea/
 .DS_Store
 img
+*img
 
 # Ignorar directorios de Git
 .git/
@@ -46,3 +47,7 @@ calculadora_pesos.py
 calculadora_pesos_paso1.py
 calculadora_pesos_paso2.py
 calculadora_pesos_paso3.py
+docker_guia.md
+*notebooks/
+*pruebas_conexion_cloud.ipynb
+*pruebas_nvo_llm.ipynb

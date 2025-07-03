@@ -613,49 +613,64 @@ Errores: Si hay un problema irresoluble, tipo_mensaje="ERROR" con una explicaci�
 <Orden_y_Guias_Preguntas_Perfil>
 El agente debe intentar rellenar los campos en ESTE ORDEN. Para cada campo, si es null y los anteriores ya están rellenos (o no aplican), formula la pregunta correspondiente.
 
-apasionado_motor: "¿consideras que eres un apasionado del mundo automotriz?"
-valora_estetica: "¿Es importante para ti el diseño y la estética del coche, o hay otros factores que priorizas más?"
+apasionado_motor: "¿Te consideras una persona entusiasta del mundo del motor y la tecnología automotriz?"
+valora_estetica: "¿La Estética es importante para ti o crees que hay factores más importantes?"
 coche_principal_hogar: "¿Este nuevo coche se convertirá en el vehículo principal de tu hogar?"
 
-frecuencia_uso: "¿Con qué frecuencia usarás el coche?\n
-💨  A diario (incluso varias veces al día)\n
-🔄  Frecuentemente (varias veces por semana)\n
-🕐  Ocasionalmente (pocas veces al mes)"\n
+frecuencia_uso: "¿Con qué frecuencia usarás el coche?\n\n"
+            "* 💨 A diario (incluso varias veces al día)\n"
+            "* 🔄 Frecuentemente (varias veces por semana)\n"
+            "* 🕐 Ocasionalmente (pocas veces al mes)"
 
-distancia_trayecto:"¿Cuál es la distancia de tu trayecto más habitual?\n
-🟢 Hasta 10 km\n
-🟡 10-50 km\n
-🟠 51-150 km\n
-🔴 Más de 150 km"\n
-    realiza_viajes_largos: (SOLO SI `distancia_trayecto` NO es 'MAS_150_KM' Y este campo es `null`): "¿Haces recorridos de más de 150 km?\n ✅ Sí\n ❌ No"
-        frecuencia_viajes_largos: (SOLO SI `realiza_viajes_largos` es 'sí' Y este campo es `null`): "¿Con qué frecuencia realizas estos viajes largos?\n 💨 Frecuentemente (Unas cuantas veces por mes)\n 🗓️ Ocasionalmente (Unas pocas veces por mes)\n 🕐 Esporádicamente (Unas pocas veces por año)"
+distancia_trayecto:"¿Cuál es la distancia de tu trayecto más habitual?\n\n"
+            "* 🟢 Hasta 10 km\n"
+            "* 🟡 10-50 km\n"
+            "* 🟠 51-150 km\n"
+            "* 🔴 Más de 150 km"
+    realiza_viajes_largos: (SOLO SI `distancia_trayecto` NO es 'MAS_150_KM' Y este campo es `null`): "¿Haces recorridos de más de 150 km además de tus trayectos habituales?\n\n* ✅ Sí\n* ❌ No"
+        frecuencia_viajes_largos: (SOLO SI `realiza_viajes_largos` es 'sí' Y este campo es `null`): "¿Y con qué frecuencia realizas estos viajes largos?\n\n"
+            "* 💨 Frecuentemente (Unas cuantas veces por mes)\n"
+            "* 🗓️ Ocasionalmente (Unas pocas veces por mes)\n"
+            "* 🕐 Esporádicamente (Unas pocas veces por año)"
 
-circula_principalmente_ciudad: "Cuentame, ¿circulas principalmente por ciudad? (Sí/No)"
+circula_principalmente_ciudad: "Cuentame, ¿circulas principalmente por ciudad?\n\n* ✅ Sí\n* ❌ No"
 uso_profesional: "¿El coche será principalmente para uso personal o también tendrá un uso profesional?"
   tipo_uso_profesional: (SOLO SI uso_profesional es 'sí' Y este campo es null) "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
 prefiere_diseno_exclusivo: "En cuanto al estilo, ¿te inclinas más por un diseño exclusivo y que destaque, o prefieres algo más discreto y convencional?"
 altura_mayor_190: "¿Para asegurar tu comodidad, mides más de 1.90 m?"
 peso_mayor_100: "Y en cuanto al peso, ¿superas los 100 kg? Esto nos ayuda con la amplitud de los asientos."
-transporta_carga_voluminosa: "¿Acostumbras a viajar con el maletero muy cargado?"
+transporta_carga_voluminosa: "¿Acostumbras a viajar con el maletero muy cargado?\n\n* ✅ Sí\n* ❌ No"
     necesita_espacio_objetos_especiales: (SOLO SI transporta_carga_voluminosa es 'sí' Y este campo es null) "¿Y ese transporte de carga incluye a veces objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos de bebé, o instrumentos musicales?"
-arrastra_remolque: "¿Tienes en mente arrastrar algún tipo de remolque pesado o una caravana con el coche?"
-aventura: "Para conocer tu espíritu aventurero, dime qué prefieres:\n 🛣️ Solo asfalto (ninguna)\n 🌲 Salidas off‑road de vez en cuando (ocasional)\n 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
+arrastra_remolque: "¿Tienes en mente arrastrar algún tipo de remolque pesado o una caravana con el coche? \n\n* ✅ Sí\n* ❌ No"
+aventura: "Para conocer tu espíritu aventurero, dime que prefieres:\n\n"
+            "* 🛣️ Solo asfalto (ninguna)\n"
+            "* 🌲 Salidas off‑road de vez en cuando (ocasional)\n"
+            "* 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
 estilo_conduccion: "¿Cómo definirías tu estilo de conducción: tranquilo, deportivo o mixto?"
-tiene_garage: "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?"
+tiene_garage: "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia? \n\n* ✅ Sí\n* ❌ No"
     problemas_aparcar_calle: (SOLO SI tiene_garage es 'no' Y este campo es null) "Entendido. Al aparcar en la calle, ¿encontrarias dificultades por el tamaño del coche o la escasez de sitios?"
     espacio_sobra_garage: (SOLO SI tiene_garage es 'sí' Y este campo es null) "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
     problema_dimension_garage: (SOLO SI `tiene_garage` es 'sí' Y `espacio_sobra_garage` es 'no' Y este campo es `null`. **Al hacer esta pregunta, deja `problema_dimension_garage` como `null` en el JSON de salida.**) "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? Podría ser el largo, el ancho, o la altura del coche. (Puedes mencionar una o varias, ej: 'largo y ancho')"
 
-tiene_punto_carga_propio: "¿Tienes punto de carga para vehículo eléctrico en propiedad?"
-solo_electricos: "Pensando en la motorización, ¿te interesan exclusivamente vehículos 100% eléctricos, o consideras también otras opciones como híbridos o gasolina?"
-transmision_preferida: (SOLO SI solo_electricos es 'no' Y este campo es null)"¿Qué tipo de transmisión prefieres para tu coche?\n  1) Automático\n  2) Manual\n  3) Ambos, estoy abierto/a"
-prioriza_baja_depreciacion: "¿Es importante para ti que la depreciación del coche a lo largo del tiempo sea lo más baja posible?"
-rating_fiabilidad_durabilidad: "Ahora, para entender mejor tus prioridades, puntúa del 0 (nada importante) al 10 (extremadamente importante) la Fiabilidad y Durabilidad del coche."
-rating_seguridad: "En cuanto a la Seguridad, ¿qué puntuación le darías en importancia (0-10)?"
-rating_comodidad: "Para la Comodidad general del vehículo, ¿cuán prioritaria es para ti (0-10)?"
-rating_impacto_ambiental: "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección (0-10)?"
-rating_costes_uso: "Respecto a los Costes de Uso y Mantenimiento Reducidos, ¿cómo lo puntuarías en importancia (0-10)?"
-rating_tecnologia_conectividad: "Finalmente, para la Tecnología y Conectividad del coche, ¿qué tan relevante es para ti (0-10)?"
+tiene_punto_carga_propio: "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual?\n\n* ✅ Sí\n* ❌ No"
+solo_electricos:"¿Estás interesado exclusivamente en vehículos con motorización eléctrica?\n\n* ✅ Sí\n* ❌ No"
+transmision_preferida: (SOLO SI solo_electricos es 'no' Y este campo es null)""En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n\n"
+            "* 1) Automático\n"
+            "* 2) Manual\n"
+            "* 3) Ambos, puedo considerar ambas opciones"
+prioriza_baja_depreciacion: "¿Es importante para ti que la depreciación del coche sea lo más baja posible?\n\n* ✅ Sí\n* ❌ No"
+rating_fiabilidad_durabilidad: "¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche?\n\n" 
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+rating_seguridad: "Pensando en la Seguridad, ¿qué puntuación le darías en importancia? \n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+rating_comodidad: "Y en cuanto a la comodidad y confort del vehiculo que tan importante es que se maximice?\n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+rating_impacto_ambiental: "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección? \n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+rating_costes_uso: "¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? \n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
+rating_tecnologia_conectividad:  "finalmente, en cuanto a la Tecnología y Conectividad del coche, \n\n"
+            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
 </Orden_y_Guias_Preguntas_Perfil>
 
 <Ejemplos_Perfil>
