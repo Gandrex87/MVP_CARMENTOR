@@ -37,9 +37,8 @@ class PerfilUsuario(BaseModel):
     tipo_uso_profesional: Optional[TipoUsoProfesional] = Field(default=None, description="Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'")
     prefiere_diseno_exclusivo: Optional[str] = Field(default=None,description="¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?")
     altura_mayor_190: Optional[str] = Field(default=None, description="¿El usuario mide más de 1.90 metros? Responde 'sí' o 'no'")
-    peso_mayor_100: Optional[str] = Field(default=None, description="¿El usuario pesa más de 100 kg? Responde 'sí' o 'no'")
     transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'") #acostumbra a viajar con mucho equipaje
-    necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'")    
+    necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="¿Vas a transportar objetos voluminosos como bicicletas, tablas de surf, cochecitos, instrumentos musicales o similares? Responde 'sí' o 'no'")    
     arrastra_remolque: Optional[str] = Field(default=None, description="¿Va a arrastrar remolque pesado o caravana? Responde 'sí' o 'no'" )
      # --- NUEVOS CAMPOS PARA GARAJE/APARCAMIENTO ---
     tiene_garage: Optional[str] = Field(default=None, description="¿Tiene garaje o plaza de aparcamiento propia? Responde 'sí' o 'no'" )
@@ -81,7 +80,7 @@ class InfoPasajeros(BaseModel):
         description="Respuesta textual del usuario a la pregunta sobre la composición de los pasajeros (ej: 'dos niños y un adulto', 'tres adultos')."
     )
     
-    # CAMPO EXISTENTE: se inferirá de los nuevos o se preguntará si es necesario
+    # CAMPO quitarlo a futuro EXISTENTE: se inferirá de los nuevos o se preguntará si es necesario
     frecuencia: Optional[Literal["nunca", "ocasional", "frecuente"]] = Field(
         default=None, 
         description="Frecuencia general con la que viaja con pasajeros (inferido o preguntado)."
@@ -220,6 +219,11 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_bonus_awd_nieve: Optional[bool]  # <-- ✅ 
     flag_bonus_awd_montana: Optional[bool] # <-- ✅ 
     flag_logica_reductoras_aventura: Optional[str]
+    flag_bonus_seguridad_critico: Optional[bool]
+    flag_bonus_seguridad_fuerte: Optional[bool]
+    flag_bonus_fiab_dur_critico: Optional[bool]
+    flag_bonus_fiab_dur_fuerte: Optional[bool]
+    flag_bonus_costes_critico: Optional[bool] 
     km_anuales_estimados: Optional[int]
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
 

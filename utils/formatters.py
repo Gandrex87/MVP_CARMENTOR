@@ -66,58 +66,57 @@ def formatear_preferencias_en_tabla(
     cp_str = codigo_postal_usuario if codigo_postal_usuario and codigo_postal_usuario.strip() else "No proporcionado"
     
     # --- 1) Cabecera de preferencias ---
-    texto = "✅ He entendido lo siguiente sobre tus preferencias:\n\n"
-    texto += "| Preferencia              | Valor                      |\n"
-    texto += "|--------------------------|----------------------------|\n" 
-    texto +=f"| Código Postal            | {cp_str} |\n"
+    texto = "✅ He entendido lo siguiente sobre tus preferencias:         \n\n"
+    texto += "| Preferencia                 | Valor                      |\n"
+    texto += "|-----------------------------|----------------------------|\n" 
+    texto +=f"| Código Postal               | {cp_str}                   |\n"
     # --- NUEVA SECCIÓN PARA INFO CLIMA ---
     # Solo mostrar si hay datos climáticos y el CP fue válido y encontrado
     if info_clima_dict and info_clima_dict.get("cp_valido_encontrado", False):
         climas_activos = []
         # Nombres más amigables para mostrar en la tabla
         mapa_nombres_clima = {
-            "MUNICIPIO_ZBE": "Zona Bajas Emisiones (ZBE)",
-            "ZONA_LLUVIAS": "Zona Lluvias Frecuentes",
-            "ZONA_NIEBLAS": "Zona Nieblas Frecuentes",
-            "ZONA_NIEVE": "Zona Nieve Frecuente",
-            "ZONA_CLIMA_MONTA": "Zona Clima de Montaña",
-            "ZONA_GLP": "Disponibilidad GLP Común",
-            "ZONA_GNV": "Disponibilidad GNV Común"
+            "MUNICIPIO_ZBE": "Zona Bajas Emis. (ZBE)",
+            "ZONA_LLUVIAS": "Zona Lluvias Frec.",
+            "ZONA_NIEBLAS": "Zona Nieblas Frec.",
+            "ZONA_NIEVE": "Zona Nieve Frec.",
+            "ZONA_CLIMA_MONTA": "Zona Clima Montaña",
+            "ZONA_GLP": "Disponib. GLP Común",
+            "ZONA_GNV": "Disponib. GNV Común"
         }
         for clave_clima, nombre_amigable in mapa_nombres_clima.items():
             if info_clima_dict.get(clave_clima) is True: # Comprobar explícitamente True
                 climas_activos.append(nombre_amigable)
         
         if climas_activos:
-            texto += f"|Condiciones Zona  | {', '.join(climas_activos)} \n"
+            texto += f"|Condiciones Zona   | {', '.join(climas_activos)} \n"
         else:
-            texto += f"|Condiciones Zona  | Generales / No específicas \n"
+            texto += f"|Condiciones Zona   | Generales / No específicas  \n"
     elif cp_str != "No proporcionado": # Se dio CP pero no se encontraron datos de zona
-         texto += f"|Condiciones Zona     | No disponibles para este CP \n"
+         texto += f"|Condiciones Zona      | No disponibles para este CP \n"
     # --- FIN SECCIÓN INFO CLIMA ---
-    texto += f"| Apasionado del motor    | {'Sí' if is_yes(prefs_dict.get('apasionado_motor')) else 'No'} \n" # Usar Sí/No directamente
-    texto += f"| Estética                | {estetica_str} \n"
-    texto += f"| Principal del Hogar     | {coche_principal_str} \n" # <-- Fila añadida
-    texto += f"| Uso                     | {uso_prof_str} \n"
+    texto += f"| Apasionado del motor      | {'Sí' if is_yes(prefs_dict.get('apasionado_motor')) else 'No'} \n" # Usar Sí/No directamente
+    texto += f"| Estética                  | {estetica_str}              \n"
+    texto += f"| Principal del Hogar       | {coche_principal_str}       \n" # <-- Fila añadida
+    texto += f"| Uso                       | {uso_prof_str}              \n"
     if is_yes(uso_prof_val):
         tipo_uso_val_str = prefs_dict.get("tipo_uso_profesional") 
         tipo_uso_display_str = "No especificado" # Default para esta sección
         if tipo_uso_val_str and tipo_uso_val_str.strip():
             tipo_uso_display_str = tipo_uso_val_str.capitalize()
-        texto+=f"|   ↳ Tipo Profesional  | {tipo_uso_display_str} \n" # AHORA ESTÁ DENTRO DEL IF  
-    texto += f"| Tipo de coche           | {'Eléctrico' if is_yes(prefs_dict.get('solo_electricos')) else 'No necesariamente eléctrico'} \n"
-    texto += f"| Diseño exclusivo        | {dise_exclusivo_str} |\n"
-    texto += f"| Altura                  | {'Mayor a 1.90 m' if is_yes(prefs_dict.get('altura_mayor_190')) else 'Menor a 1.90 m'} \n"
-    texto += f"| Peso                    | {'Mayor a 100 kg' if is_yes(prefs_dict.get('peso_mayor_100')) else 'Menor a 100 kg'}  \n"
-    texto += f"| Transmisión preferida   | {transm_str}      \n"
-    texto += f"| Aventura                | {aventura_str}    \n"
-    texto += f"| Prioriza Baja Depreciación| {baja_depr_str} \n"
+        texto+=f"|   ↳ Tipo Profesional    | {tipo_uso_display_str}      \n" # AHORA ESTÁ DENTRO DEL IF  
+    texto += f"| Tipo de coche             | {'Eléctrico' if is_yes(prefs_dict.get('solo_electricos')) else 'No necesariamente eléctrico'} \n"
+    texto += f"| Diseño exclusivo          | {dise_exclusivo_str}        \n"
+    texto += f"| Altura                    | {'Mayor a 1.90 m' if is_yes(prefs_dict.get('altura_mayor_190')) else 'Menor a 1.90 m'} \n"
+    texto += f"| Transmisión preferida     | {transm_str}                \n"
+    texto += f"| Aventura                  | {aventura_str}              \n"
+    texto += f"| Prioriza Baja Depreciación| {baja_depr_str}             \n"
     
     # Mostrar los nuevos ratings 0-10
     if any(prefs_dict.get(f"rating_{cat}") is not None for cat in ["fiabilidad_durabilidad", "seguridad", "comodidad", "impacto_ambiental", "costes_uso", "tecnologia_conectividad"]):
-        texto += "\n📊 Importancia de Características (0-10):\n\n" # Nueva sub-sección
-        texto += "| Característica                   | Rating (0-10) |\n"
-        texto += "|----------------------------------|---------------|\n"
+        texto += "\n📊 Importancia de Características  \n\n" # Nueva sub-sección
+        texto += "| Característica         | Rating (0-10)               |\n"
+        texto += "|------------------------|-----------------------------|\n"
         
         ratings_map = {
             "Fiabilidad y Durabilidad": prefs_dict.get("rating_fiabilidad_durabilidad"),
@@ -129,22 +128,22 @@ def formatear_preferencias_en_tabla(
             
         }
         for desc, val in ratings_map.items():
-            texto += f"| {desc:<32} | {val if val is not None else 'N/A'} |\n"
+            texto += f"| {desc:<32} | {val if val is not None else 'N/A'}\n"
     # --- NUEVA SECCIÓN PARA INFO PASAJEROS ---
     texto += "\n👥 Información de Pasajeros:\n\n"
-    texto += "| Detalle Pasajeros            | Valor                      |\n"
-    texto += "|------------------------------|----------------------------|\n"
+    texto += "| Detalle Pasajeros          | Valor                       |\n"
+    texto += "|----------------------------|-----------------------------|\n"
 
     suele_acomp_val = pasajeros_dict.get("suele_llevar_acompanantes") # Ahora es booleano
     suele_acomp_str = "No especificado"
     if suele_acomp_val is not None:
         suele_acomp_str = "Sí" if suele_acomp_val else "No"
-    texto += f"| Suele llevar acompañantes   | {suele_acomp_str} |\n"
+    texto += f"| Suele llevar acompañantes|{suele_acomp_str}             |\n"
 
     if suele_acomp_val is True: # Solo mostrar detalles si SÍ suele llevar acompañantes
         frec_viaje_acomp_val = pasajeros_dict.get("frecuencia_viaje_con_acompanantes")
         frec_viaje_acomp_str = frec_viaje_acomp_val.capitalize() if frec_viaje_acomp_val else "No especificada"
-        texto += f"|   ↳ Frecuencia con ellos | {frec_viaje_acomp_str} |\n"
+        texto += f"|  ↳ Frecuencia con ellos| {frec_viaje_acomp_str}     |\n"
 
         # compos_pasajeros_val = pasajeros_dict.get("composicion_pasajeros_texto")
         # compos_pasajeros_str = compos_pasajeros_val if compos_pasajeros_val and compos_pasajeros_val.strip() else "No detallada"
@@ -152,11 +151,11 @@ def formatear_preferencias_en_tabla(
 
         num_ninos_silla_val = pasajeros_dict.get("num_ninos_silla")
         num_ninos_silla_str = str(num_ninos_silla_val) if num_ninos_silla_val is not None else "0"
-        texto += f"|   ↳ Niños en Silla       | {num_ninos_silla_str} |\n"
+        texto += f"|   ↳ Niños en Silla    | {num_ninos_silla_str}       |\n"
         
         num_otros_pas_val = pasajeros_dict.get("num_otros_pasajeros")
         num_otros_pas_str = str(num_otros_pas_val) if num_otros_pas_val is not None else "0"
-        texto += f"|   ↳ Otros Pasajeros      | {num_otros_pas_str} |\n"
+        texto += f"|   ↳ Otros Pasajeros   | {num_otros_pas_str}         |\n"
 
     # El campo 'frecuencia' general (nunca, ocasional, frecuente) se puede mostrar si es diferente
     # o si resume bien lo anterior. Por ahora, los detalles de arriba son más informativos.
@@ -176,40 +175,40 @@ def formatear_preferencias_en_tabla(
         card_list = filtros_dict.get("tipo_carroceria", []) # Asumiendo que RAG devuelve lista de strings
         card = ", ".join(card_list) if card_list else "No definido"
         
-        texto += "\n🎯 Filtros técnicos inferidos:\n\n"
-        texto += "| Filtro técnico        | Valor                            |\n"
-        texto += "|-----------------------|----------------------------------|\n"
-        texto += f"| Tipo de mecánica     | {mech} |\n"
-        texto += f"| Tipo de carrocería   | {card} |\n" # Asegúrate que tipo_carroceria esté en FiltrosInferidos
+        texto += "\n🎯 Filtros técnicos inferidos:                       \n\n"
+        texto += "| Filtro técnico        | Valor                        |\n"
+        texto += "|-----------------------|------------------------------|\n"
+        texto +=f"| Tipo de mecánica      | {mech} |\n"
+        texto +=f"| Tipo de carrocería    | {card} |\n" # Asegúrate que tipo_carroceria esté en FiltrosInferidos
 
     # --- AÑADIR FILAS PARA RECOMENDACIÓN MODO 1 ---
         modo_adq = filtros_dict.get("modo_adquisicion_recomendado")
         if modo_adq: # Solo mostrar si se calculó
-             texto += f"| Modo Adquisición Rec. | {modo_adq} |\n"
+             texto += f"| Modo Adquisición Rec. | {modo_adq}             |\n"
              if modo_adq == "Contado":
                   precio_rec = filtros_dict.get("precio_max_contado_recomendado")
                   precio_str = f"{precio_rec:,.0f} €".replace(",",".") if isinstance(precio_rec, float) else "N/A"
-                  texto += f"| Precio Máx. Contado Rec.| {precio_str} |\n"
+                  texto += f"| Precio Máx. Contado Rec.| {precio_str}    |\n"
              elif modo_adq == "Financiado":
                   cuota_calc = filtros_dict.get("cuota_max_calculada")
                   cuota_str = f"{cuota_calc:,.0f} €/mes".replace(",",".") if isinstance(cuota_calc, float) else "N/A"
-                  texto += f"| Cuota Máx. Calculada    | {cuota_str} |\n"
+                  texto += f"| Cuota Máx. Calculada    | {cuota_str}     |\n"
 
     # --- 3) Economía del usuario ---
     if econ_dict: # Verifica si hay datos económicos
         texto += "\n💰 Economía del usuario:\n\n"
-        texto += "| Concepto                | Valor               |\n" # Ajustar ancho si es necesario
-        texto += "|-------------------------|---------------------|\n"
+        texto += "| Concepto              | Valor                        |\n" # Ajustar ancho si es necesario
+        texto += "|-----------------------|------------------------------|\n"
         
         modo = econ_dict.get("modo") 
         modo_str = "Asesor Financiero" if modo == 1 else "Presupuesto Definido" if modo == 2 else "No definido"
-        texto += f"| Modo                    | {modo_str} |\n"
+        texto += f"| Modo                 | {modo_str}                   |\n"
 
         # --- NUEVA LÍNEA AÑADIDA ---
         anos = econ_dict.get("anos_posesion")
         # Formatear si es un número, si no, indicar que no está definido
         anos_str = f"{anos} años" if isinstance(anos, int) else "No especificado" 
-        texto += f"| Años Posesión Estimados | {anos_str} |\n" # <-- Fila añadida
+        texto += f"|Años Posesión Estimados| {anos_str}                  |\n" # <-- Fila añadida
         # --- FIN LÍNEA AÑADIDA ---
 
         # Resto de la lógica para Modo 1 o Modo 2 (como la tenías corregida)
@@ -219,26 +218,26 @@ def formatear_preferencias_en_tabla(
             ing_str = f"{ing:,.0f} €".replace(",",".") if isinstance(ing, (int, float)) else "No definido"
             ah_str  = f"{ah:,.0f} €".replace(",",".")  if isinstance(ah, (int, float)) else "No definido"
             # Podrías ajustar el label si ingresos son mensuales vs anuales
-            texto += f"| Ingresos (Aprox Anual)| {ing_str} |\n" 
-            texto += f"| Ahorro disponible       | {ah_str} |\n"
+            texto += f"| Ingresos (Aprox Anual)| {ing_str}                |\n" 
+            texto += f"| Ahorro disponible     | {ah_str}                 |\n"
         elif modo == 2: 
             sub = econ_dict.get("submodo") 
             sub_str = "Pago Contado" if sub == 1 else "Cuotas Mensuales" if sub == 2 else "No definido"
-            texto += f"| Tipo de Pago            | {sub_str} |\n"
+            texto += f"| Tipo de Pago          | {sub_str}                |\n"
 
             if sub == 1: 
                 pago = econ_dict.get("pago_contado")
                 pago_str = f"{pago:,.0f} €".replace(",",".") if isinstance(pago, (int, float)) else "No definido"
-                texto += f"| Presupuesto Contado     | {pago_str} |\n"
+                texto += f"| Presupuesto Contado| {pago_str}              |\n"
             elif sub == 2: 
                 cuota = econ_dict.get("cuota_max")
                 entrada = econ_dict.get("entrada") 
                 
                 cuota_str = f"{cuota:,.0f} €/mes".replace(",",".") if isinstance(cuota, (int, float)) else "No definido"
-                texto += f"| Cuota máxima            | {cuota_str} |\n"
+                texto += f"| Cuota máxima      | {cuota_str}              |\n"
                 
                 if entrada is not None and isinstance(entrada, (int, float)):
                     ent_str = f"{entrada:,.0f} €".replace(",",".")
-                    texto += f"| Entrada inicial         | {ent_str} |\n"
+                    texto += f"|Entrada inicial| {ent_str}                |\n"
 
     return texto.strip()

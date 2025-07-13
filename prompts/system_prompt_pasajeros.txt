@@ -233,7 +233,7 @@ Salida JSON Esperada:
     "num_ninos_silla": null, "num_otros_pasajeros": null
   }},
   "tipo_mensaje": "PREGUNTA",
-  "contenido_mensaje": "¿Sueles viajar con acompañantes en el coche habitualmente? (Responde 'sí' o 'no')"
+  "contenido_mensaje": "¿Sueles viajar con acompañantes en el coche habitualmente?\n\n* ✅ Sí\n* ❌ No"
 }}
 
 Ejemplo 2: Usuario responde 'no' a llevar acompañantes

@@ -15,6 +15,11 @@ from graph.perfil.memory import ensure_tables_exist, set_checkpointer_instance
 from graph.perfil.builder import build_sequential_agent_graph
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
+# --- Configuración de Logging ---
+# En producción, considera cambiar level=logging.INFO
+logging.basicConfig(level=logging.DEBUG) 
+logger = logging.getLogger(__name__)
+
 
 # # Cargar variables de entorno ANTES de cualquier import que las use
 # load_dotenv() 
@@ -222,15 +227,8 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 # Cargar variables de entorno ANTES de cualquier import que las use
 load_dotenv() 
 
-# --- Configuración de Logging ---
-# En producción, considera cambiar level=logging.INFO
-logging.basicConfig(level=logging.DEBUG) 
-logger = logging.getLogger(__name__)
 
-# --- Importaciones del Agente LangGraph ---
-from graph.perfil.memory import ensure_tables_exist, set_checkpointer_instance
-from graph.perfil.builder import build_sequential_agent_graph
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
 
 # --- Variables Globales ---
 car_mentor_graph = None
@@ -264,7 +262,7 @@ class AgentMessageResponse(BaseModel):
 app = FastAPI(
     title="CarBlau Agent API",
     description="API para interactuar con el agente CarBlau y obtener recomendaciones de coches.",
-    version="0.3.1"
+    version="0.1.2"
 )
 
 # --- Middleware de CORS ---
@@ -317,6 +315,10 @@ async def shutdown_event():
 @app.get("/", tags=["root"])
 async def read_root():
     return {"message": "¡Bienvenido a la API del Agente CarBlau!"}
+
+@app.get("/test", tags=["test"])
+async def test_endpoint(): # ... (como antes)
+    logger.info("Solicitud recibida en el endpoint de prueba ('/test').")
 
 # ✅ CORREGIDO: La ruta ahora es /start para coincidir con el frontend.
 @app.post("/start", response_model=StartConversationResponse, status_code=201, tags=["conversation"])

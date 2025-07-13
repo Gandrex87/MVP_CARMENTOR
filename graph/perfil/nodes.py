@@ -19,6 +19,7 @@ from utils.bq_data_lookups import obtener_datos_climaticos_por_cp # IMPORT para 
 from utils.conversion import is_yes 
 from utils.bq_logger import log_busqueda_a_bigquery
 from utils.sanitize_dict_for_json import sanitize_dict_for_json
+from utils.question_bank import QUESTION_BANK
 import traceback
 from langchain_core.runnables import RunnableConfig
 import pandas as pd
@@ -26,6 +27,7 @@ import json # Para construir el contexto del prompt
 from typing import Literal, Optional ,Dict, Any
 from config.settings import (MAPA_RATING_A_PREGUNTA_AMIGABLE, UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG, UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA)
 from utils.explanation_generator import generar_explicacion_coche_mejorada # <-- NUEVO IMPORT
+import random
 import logging
 
 # --- Configuración de Logging ---
@@ -210,100 +212,75 @@ def buscar_info_clima_node(state: EstadoAnalisisPerfil) -> dict:
 
 def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Procesa entrada humana, llama a llm_solo_perfil, actualiza preferencias_usuario,
-    y guarda el contenido del mensaje devuelto en 'pregunta_pendiente'.
-    Maneja errores de validación de Pydantic para ratings fuera de rango.
+    Procesa la entrada del usuario, llama al LLM para extraer nueva información,
+    y FUSIONA esa nueva información con el perfil existente para evitar la pérdida de estado.
     """
-    #print("--- Ejecutando Nodo: recopilar_preferencias_node ---")
-    logging.debug("--- Ejecutando Nodo: recopilar_preferencias_node ---")
+    logging.info("--- Ejecutando Nodo: recopilar_preferencias_node ---")
     
     historial = state.get("messages", [])
-    # Obtener el estado actual de preferencias. Si no existe, inicializar uno nuevo.
+    # Obtenemos el perfil completo que ya tenemos guardado.
     preferencias_actuales_obj = state.get("preferencias_usuario") or PerfilUsuario()
 
-    # Si el último mensaje es de la IA, no llamar al LLM de nuevo.
     if historial and isinstance(historial[-1], AIMessage):
         logging.debug("(Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
         return {"pregunta_pendiente": state.get("pregunta_pendiente")}
 
-    logging.debug("(Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
+    logging.debug("(Perfil) ► Llamando a llm_solo_perfil...")
     
-    # Inicializar variables para la salida del nodo
-    preferencias_para_actualizar_estado = preferencias_actuales_obj # Default: mantener las actuales si todo falla
-    mensaje_para_pregunta_pendiente = "Lo siento, tuve un problema técnico al procesar tus preferencias." # Default
+    perfil_final_a_guardar = preferencias_actuales_obj
+    mensaje_para_siguiente_nodo = "Lo siento, tuve un problema técnico."
 
     try:
         response: ResultadoSoloPerfil = llm_solo_perfil.invoke(
             [system_prompt_perfil, *historial],
             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
         )
-        logging.debug(f"DEBUG (Perfil) ► Respuesta llm_solo_perfil: {response}")
-        # # --- ✅ INICIO DEL BLOQUE DE DEPURACIÓN PROFUNDA TEMPORAL --Comentar o descomentar para depuracion unicamente
-        # logging.debug("\n" + "="*40)
-        # logging.debug("🕵️  INSPECCIÓN PROFUNDA DEL NODO 'recopilar_preferencias_node' 🕵️")
-        # logging.debug("="*40)
-        # logging.debug(f"INPUT DEL USUARIO: '{historial[-1].content}'")
-
-        # if 'response' in locals() and response:
-        #     logging.debug("\n--- SALIDA DIRECTA DEL LLM ---")
-        #     # Usamos repr() para ver claramente si es un string vacío ''
-        #     logging.debug(f"CONTENIDO MENSAJE (para pregunta_pendiente): {repr(getattr(response, 'contenido_mensaje', 'NO ENCONTRADO'))}")
-
-        #     prefs_llm = getattr(response, 'preferencias_usuario', None)
-        #     if prefs_llm:
-        #         logging.debug("\n--- CAMBIOS PROPUESTOS AL PERFIL (del LLM) ---")
-        #         perfil_actual = state.get("preferencias_usuario") or PerfilUsuario()
-        #         # Comparamos el perfil actual con el que propone el LLM para ver qué ha intentado cambiar
-        #         diff = {
-        #             k: v
-        #             for k, v in prefs_llm.dict(exclude_unset=True).items()
-        #             if perfil_actual.dict().get(k) != v
-        #         }
-        #         if diff:
-        #             print(f"Campos que el LLM intentó cambiar: {diff}")
-        #         else:
-        #             print("El LLM no propuso ningún cambio en el perfil (¡lo cual es correcto para un meta-comentario!).")
-        #     else:
-        #         print("El LLM no devolvió un objeto 'preferencias_usuario'.")
-        # else:
-        #     print("La variable 'response' del LLM no se generó o está vacía.")
         
-        # print("="*40 + "\n")
-        # # --- FIN DEL BLOQUE DE DEPURACIÓN ---
-        
-        preferencias_del_llm = response.preferencias_usuario # Objeto PerfilUsuario del LLM
-        mensaje_para_pregunta_pendiente = response.contenido_mensaje # Mensaje del LLM
+        preferencias_del_llm = response.preferencias_usuario
+        mensaje_para_siguiente_nodo = response.contenido_mensaje
 
-        # Aplicar post-procesamiento a las preferencias obtenidas del LLM
-        if preferencias_del_llm is None: # Si el LLM no devolvió un objeto de preferencias
-            logging.warning("WARN (Perfil) ► llm_solo_perfil devolvió preferencias_usuario como None.")
-            preferencias_del_llm = PerfilUsuario() # Usar uno vacío para el post-procesador
+        # --- ✅ INICIO DE LA LÓGICA DE FUSIÓN INTELIGENTE ---
+        if preferencias_del_llm:
+            # 1. Creamos una copia del perfil actual para trabajar sobre ella.
+            perfil_actualizado = preferencias_actuales_obj.model_copy(deep=True)
 
-        preferencias_post_proc = aplicar_postprocesamiento_perfil(preferencias_del_llm)
-        
-        if preferencias_post_proc is not None:
-            preferencias_para_actualizar_estado = preferencias_post_proc
-            logging.debug(f"DEBUG (Perfil) ► Preferencias TRAS post-procesamiento: {preferencias_para_actualizar_estado.model_dump_json(indent=2) if hasattr(preferencias_para_actualizar_estado, 'model_dump_json') else preferencias_para_actualizar_estado}")
+            # 2. Convertimos la respuesta del LLM en un diccionario, pero SOLO
+            #    con los campos que el LLM realmente ha rellenado (excluye los None o no establecidos).
+            #    exclude_unset=True es crucial aquí.
+            nuevos_datos = preferencias_del_llm.model_dump(exclude_unset=True)
+            
+            if nuevos_datos:
+                logging.info(f"DEBUG (Perfil) ► Fusionando nuevos datos del LLM: {nuevos_datos}")
+                # 3. Usamos .model_copy(update=...) para fusionar los nuevos datos en el perfil existente.
+                #    Esto actualiza los campos nuevos sin borrar los antiguos.
+                perfil_consolidado = perfil_actualizado.model_copy(update=nuevos_datos)
+            else:
+                # Si el LLM se ejecutó pero no extrajo datos (ej. por un meta-comentario),
+                # mantenemos el perfil tal como estaba.
+                logging.info("DEBUG (Perfil) ► El LLM no extrajo nuevos datos, se mantiene el perfil actual.")
+                perfil_consolidado = perfil_actualizado
+            
+            # 4. Aplicamos el post-procesamiento sobre el perfil ya fusionado y completo.
+            perfil_final_a_guardar = aplicar_postprocesamiento_perfil(perfil_consolidado)
         else:
-            logging.warning("WARN (Perfil) ► aplicar_postprocesamiento_perfil devolvió None. Usando preferencias del LLM sin post-procesar (o las actuales si LLM falló).")
-            preferencias_para_actualizar_estado = preferencias_del_llm if preferencias_del_llm else preferencias_actuales_obj
-
+            logging.warning("WARN (Perfil) ► El LLM no devolvió un objeto de preferencias. Se mantiene el perfil actual.")
+            perfil_final_a_guardar = preferencias_actuales_obj
+        # --- FIN DE LA LÓGICA DE FUSIÓN ---
     except ValidationError as e_val:
         logging.error(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val.errors()}")
         
         custom_error_message = None
         campo_rating_erroneo_para_reset = None
-        preferencias_para_reset = preferencias_actuales_obj.model_copy(deep=True) # Trabajar sobre una copia de las actuales
+        preferencias_para_reset = preferencias_actuales_obj.model_copy(deep=True)
 
         for error in e_val.errors():
             loc = error.get('loc', ())
-            # El error de Pydantic v2 para modelos anidados puede tener 'preferencias_usuario' como primer elemento de 'loc'
-            if len(loc) > 0 and str(loc[0]) == 'preferencias_usuario' and len(loc) > 1 and str(loc[1]).startswith('rating_'):
+            if len(loc) > 1 and str(loc[0]) == 'preferencias_usuario' and str(loc[1]).startswith('rating_'):
                 campo_rating = str(loc[1])
                 tipo_error_pydantic = error.get('type')
                 valor_input = error.get('input')
 
-                if tipo_error_pydantic in ['less_than_equal', 'greater_than_equal', 'less_than', 'greater_than', 'finite_number', 'int_parsing']: # Añadir int_parsing
+                if tipo_error_pydantic in ['less_than_equal', 'greater_than_equal', 'less_than', 'greater_than', 'finite_number', 'int_parsing']:
                     nombre_amigable = MAPA_RATING_A_PREGUNTA_AMIGABLE.get(campo_rating, f"el campo '{campo_rating}'")
                     custom_error_message = (
                         f"Para {nombre_amigable}, necesito una puntuación entre 0 y 10. "
@@ -313,34 +290,26 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
                     break 
         
         if custom_error_message:
-            mensaje_para_pregunta_pendiente = custom_error_message
+            mensaje_para_siguiente_nodo = custom_error_message
             if campo_rating_erroneo_para_reset and hasattr(preferencias_para_reset, campo_rating_erroneo_para_reset):
                 setattr(preferencias_para_reset, campo_rating_erroneo_para_reset, None)
-                logging.debug(f"DEBUG (Perfil) ► Campo erróneo '{campo_rating_erroneo_para_reset}' reseteado a None.")
-            preferencias_para_actualizar_estado = preferencias_para_reset # Usar la versión con el campo reseteado
+            perfil_final_a_guardar = preferencias_para_reset
         else:
             error_msg_detalle = e_val.errors()[0]['msg'] if e_val.errors() else 'Error desconocido'
-            mensaje_para_pregunta_pendiente = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {error_msg_detalle}"
-            preferencias_para_actualizar_estado = preferencias_actuales_obj # Revertir a las preferencias antes de la llamada LLM
+            mensaje_para_siguiente_nodo = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {error_msg_detalle}"
+            perfil_final_a_guardar = preferencias_actuales_obj
 
     except Exception as e_general:
         logging.error(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil o en post-procesamiento: {e_general}", exc_info=True)
-        mensaje_para_pregunta_pendiente = "Lo siento, tuve un problema técnico al procesar tus preferencias. ¿Podríamos intentarlo de nuevo con la última pregunta?"
-        preferencias_para_actualizar_estado = preferencias_actuales_obj # Revertir a las preferencias antes de la llamada LLM
+        mensaje_para_siguiente_nodo = "Lo siento, tuve un problema técnico. ¿Podríamos intentarlo de nuevo?"
+        perfil_final_a_guardar = preferencias_actuales_obj
 
-    # Asegurar que pregunta_pendiente tenga un valor si no se estableció
-    if not mensaje_para_pregunta_pendiente or not mensaje_para_pregunta_pendiente.strip():
-        # Esto podría pasar si el LLM devuelve tipo_mensaje=CONFIRMACION y contenido_mensaje=""
-        # pero el perfil aún no está completo según check_perfil_usuario_completeness.
-        # En ese caso, el nodo preguntar_preferencias_node usará su fallback.
-        logging.debug(f"DEBUG (Perfil) ► No hay mensaje específico para pregunta_pendiente, se limpiará o usará fallback.")
-        mensaje_para_pregunta_pendiente = None
-    logging.debug(f"DEBUG (Perfil) ► Estado preferencias_usuario a actualizar: {preferencias_para_actualizar_estado.model_dump_json(indent=2) if hasattr(preferencias_para_actualizar_estado, 'model_dump_json') else None}")
-    logging.debug(f"DEBUG (Perfil) ► Guardando mensaje para pregunta_pendiente: {mensaje_para_pregunta_pendiente}")
+    logging.debug(f"DEBUG (Perfil) ► Estado final de 'preferencias_usuario' a guardar: {perfil_final_a_guardar.model_dump_json(indent=2) if perfil_final_a_guardar else 'None'}")
+    logging.debug(f"DEBUG (Perfil) ► Guardando 'pregunta_pendiente': {mensaje_para_siguiente_nodo}")
         
     return {
-        "preferencias_usuario": preferencias_para_actualizar_estado,
-        "pregunta_pendiente": mensaje_para_pregunta_pendiente
+        "preferencias_usuario": perfil_final_a_guardar,
+        "pregunta_pendiente": mensaje_para_siguiente_nodo
     }
 
 
@@ -366,60 +335,36 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
 
 def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     """Genera una pregunta específica basada en el primer campo obligatorio que falta."""
-    if prefs is None: 
+    if prefs is None:  
         return "¿Podrías contarme un poco sobre qué buscas o para qué usarás el coche?"
     # Revisa los campos en orden de prioridad deseado para preguntar
-    if prefs.apasionado_motor is None: return "¿Te consideras una persona entusiasta del mundo del motor y la tecnología automotriz?"
-    if prefs.valora_estetica is None: return "¿La Estética es importante para ti o crees que hay factores más importantes?"
-    if prefs.coche_principal_hogar is None: return "¿El coche que estamos buscando será el vehículo principal de tu hogar?."
-    if prefs.frecuencia_uso is None: return (
-            "¿Con qué frecuencia usarás el coche?\n\n"
-            "* 💨 A diario (incluso varias veces al día)\n"
-            "* 🔄 Frecuentemente (varias veces por semana)\n"
-            "* 🕐 Ocasionalmente (pocas veces al mes)"
-        )
-    if prefs.distancia_trayecto is None:return (
-            "¿Cuál es la distancia de tu trayecto más habitual?\n\n"
-            "* 🟢 Hasta 10 km\n"
-            "* 🟡 10-50 km\n"
-            "* 🟠 51-150 km\n"
-            "* 🔴 Más de 150 km"
-        )
-    # Solo pregunta por viajes largos si el trayecto habitual NO es ya un viaje largo
+    if prefs.apasionado_motor is None: return random.choice(QUESTION_BANK["apasionado_motor"])
+    if prefs.valora_estetica is None: return random.choice(QUESTION_BANK["valora_estetica"])
+    if prefs.coche_principal_hogar is None: return random.choice(QUESTION_BANK["coche_principal_hogar"])
+    if prefs.frecuencia_uso is None: return random.choice(QUESTION_BANK["frecuencia_uso"])
+    if prefs.distancia_trayecto is None: return random.choice(QUESTION_BANK["distancia_trayecto"])
     # Lógica anidada para viajes largos
     if (prefs.distancia_trayecto is not None and
             prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value and
             prefs.realiza_viajes_largos is None):
-        return "¿Haces recorridos de más de 150 km además de tus trayectos habituales?\n\n* ✅ Sí\n* ❌ No"
-    
+        return random.choice(QUESTION_BANK["realiza_viajes_largos"])    
     if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
-        return (
-            "¿Y con qué frecuencia realizas estos viajes largos?\n\n"
-            "* 💨 Frecuentemente (Unas cuantas veces por mes)\n"
-            "* 🗓️ Ocasionalmente (Unas pocas veces por mes)\n"
-            "* 🕐 Esporádicamente (Unas pocas veces por año)"
-        )
-    if prefs.circula_principalmente_ciudad is None: return "Cuentame, ¿circulas principalmente por ciudad?\n\n* ✅ Sí\n* ❌ No"
-    if prefs.uso_profesional is None: return "¿El coche lo destinaras principalmente para uso personal o más para fines profesionales (trabajo)?"
+        return random.choice(QUESTION_BANK["frecuencia_viajes_largos"])
+    if prefs.circula_principalmente_ciudad is None: return random.choice(QUESTION_BANK["circula_principalmente_ciudad"])
+    if prefs.uso_profesional is None: return random.choice(QUESTION_BANK["uso_profesional"])
     if is_yes(prefs.uso_profesional) and prefs.tipo_uso_profesional is None:
-        return "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
-    if prefs.prefiere_diseno_exclusivo is None: return "En cuanto al estilo del coche, ¿te inclinas más por un diseño exclusivo y llamativo, o por algo más discreto y convencional?"
-    if prefs.altura_mayor_190 is None: return "Para recomendarte un vehículo con espacio adecuado, ¿tu altura supera los 1.90 metros?"
-    if prefs.peso_mayor_100 is None: return "Para garantizar tu máxima comodidad, ¿tienes un peso superior a 100 kg?"
-    if prefs.transporta_carga_voluminosa is None: return "¿Acostumbras a viajar con el maletero muy cargado?\n\n* ✅ Sí\n* ❌ No"
+        return random.choice(QUESTION_BANK["tipo_uso_profesional"])
+    if prefs.prefiere_diseno_exclusivo is None: return random.choice(QUESTION_BANK["prefiere_diseno_exclusivo"])
+    if prefs.altura_mayor_190 is None: return random.choice(QUESTION_BANK["altura_mayor_190"])
+    if prefs.transporta_carga_voluminosa is None: return random.choice(QUESTION_BANK["transporta_carga_voluminosa"])
     if is_yes(prefs.transporta_carga_voluminosa) and prefs.necesita_espacio_objetos_especiales is None:
-        return "¿Y ese transporte de carga incluye objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos para bebé, sillas de ruedas, instrumentos musicales, etc?"
-    if prefs.arrastra_remolque is None: return "¿Vas a arrastrar remolque pesado o caravana?\n\n* ✅ Sí\n* ❌ No"
-    if prefs.aventura is None: 
-        return (
-            "Para conocer tu espíritu aventurero, dime que prefieres:\n\n"
-            "* 🛣️ Solo asfalto (ninguna)\n"
-            "* 🌲 Salidas off‑road de vez en cuando (ocasional)\n"
-            "* 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
-        )
-    if prefs.estilo_conduccion is None: return "¿Cómo describirías tu estilo de conducción habitual? Por ejemplo: tranquilo, deportivo, o una mezcla de ambos (mixto)."
+        return random.choice(QUESTION_BANK["necesita_espacio_objetos_especiales"])
+    if prefs.arrastra_remolque is None: return random.choice(QUESTION_BANK["arrastra_remolque"])
+    if prefs.aventura is None: return random.choice(QUESTION_BANK["aventura"])
+    if prefs.estilo_conduccion is None: return random.choice(QUESTION_BANK["estilo_conduccion"])
+        # --- ✅ LÓGICA DE GARAJE REFACTORIZADA ---
     if prefs.tiene_garage is None:
-        return "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?\n\n* ✅ Sí\n* ❌ No"
+        return random.choice(QUESTION_BANK["tiene_garage"]) 
     else:
         # Si ya sabemos si tiene garaje, entramos en las sub-preguntas
         if is_yes(prefs.tiene_garage): # --- CASO SÍ TIENE GARAJE ---
@@ -427,102 +372,148 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
                 return "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
             # Esta sub-pregunta solo se hace si el espacio NO sobra
             elif not is_yes(prefs.espacio_sobra_garage) and not prefs.problema_dimension_garage:
-                return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? (largo, ancho, o alto)"
+                return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión?\n ↔️ Ancho\n ↕️ Alto\n ⬅️➡️ Largo"
         else: # --- CASO NO TIENE GARAJE ---
             if prefs.problemas_aparcar_calle is None:
-                return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?"
+                return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?\n\n* ✅ Sí\n* ❌ No",
     # --- FIN NUEVA LÓGICA DE PREGUNTAS ---
-    if prefs.tiene_punto_carga_propio is None:
-        return "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual?\n\n* ✅ Sí\n* ❌ No"
-    # --- FIN NUEVAS PREGUNTAS DE CARGA ---
-    if prefs.solo_electricos is None: return "¿Estás interesado exclusivamente en vehículos con motorización eléctrica?\n\n* ✅ Sí\n* ❌ No"
-    if prefs.transmision_preferida is None: return (
-            "En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n\n"
-            "* 1) Automático\n"
-            "* 2) Manual\n"
-            "* 3) Ambos, puedo considerar ambas opciones"
-        )
-    if prefs.prioriza_baja_depreciacion is None: return "¿Es importante para ti que la depreciación del coche sea lo más baja posible?\n\n* ✅ Sí\n* ❌ No"
-     # --- NUEVAS PREGUNTAS DE RATING (0-10) ---
-    if prefs.rating_fiabilidad_durabilidad is None: 
-        return ( 
-            "¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche?\n\n" 
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-        )
-    if prefs.rating_seguridad is None:return (
-            "Pensando en la Seguridad, ¿qué puntuación le darías en importancia? \n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-        )
-    if prefs.rating_comodidad is None:return (
-            "Y en cuanto a la comodidad y confort del vehiculo que tan importante es que se maximice?\n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-        )
-    if prefs.rating_impacto_ambiental is None: return (
-            "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección? \n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-        )
-    if prefs.rating_costes_uso is None: return (
-            "¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? \n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-        )
-    if prefs.rating_tecnologia_conectividad is None: return (
-            "finalmente, en cuanto a la Tecnología y Conectividad del coche, \n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-        )
-    # --- FIN NUEVAS PREGUNTAS DE RATING --- 
-    return "¿Podrías darme algún detalle más sobre tus preferencias?" # Fallback muy genérico 
+    # --- FIN DE LA REFACTORIZACIÓN ---
+    if prefs.tiene_punto_carga_propio is None: return random.choice(QUESTION_BANK["tiene_punto_carga_propio"])
+    if prefs.solo_electricos is None: return random.choice(QUESTION_BANK["solo_electricos"])
+    if prefs.transmision_preferida is None: return random.choice(QUESTION_BANK["transmision_preferida"])
+    if prefs.prioriza_baja_depreciacion is None: return random.choice(QUESTION_BANK["prioriza_baja_depreciacion"])
+    # Ratings en el orden correcto para coincidir con la validación
+    if prefs.rating_fiabilidad_durabilidad is None: return random.choice(QUESTION_BANK["rating_fiabilidad_durabilidad"])
+    if prefs.rating_seguridad is None: return random.choice(QUESTION_BANK["rating_seguridad"])
+    if prefs.rating_comodidad is None: return random.choice(QUESTION_BANK["rating_comodidad"])
+    if prefs.rating_impacto_ambiental is None: return random.choice(QUESTION_BANK["rating_impacto_ambiental"])
+    if prefs.rating_costes_uso is None: return random.choice(QUESTION_BANK["rating_costes_uso"])
+    if prefs.rating_tecnologia_conectividad is None: return random.choice(QUESTION_BANK["rating_tecnologia_conectividad"])
+    # Si todos los campos están llenos, devuelve una pregunta de fallback al azar.
+    return random.choice(QUESTION_BANK["fallback"])
 
 
+
+# def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> Dict:
+#     """
+#     Añade la pregunta de seguimiento correcta al historial.
+#     Prioriza el mensaje generado por el LLM si existe; si no, genera
+#     una pregunta de forma determinista como fallback.
+#     """
+#     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
+    
+#     preferencias = state.get("preferencias_usuario")
+#     mensaje_pendiente = state.get("pregunta_pendiente") 
+#     historial_actual = state.get("messages", [])
+    
+#     historial_nuevo = list(historial_actual)
+#     mensaje_a_enviar = None
+
+#     perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
+
+#     if not perfil_esta_completo:
+#         #logging.debug("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. Decidiendo qué preguntar...")
+#         logging.debug("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. Decidiendo qué preguntar...")
+        
+#         # --- ✅ LÓGICA SIMPLIFICADA Y ROBUSTA ---
+#         if mensaje_pendiente and mensaje_pendiente.strip():
+#             # Si el LLM ya generó un mensaje (sea el de bienvenida o una respuesta empática),
+#             # confiamos en él como la fuente principal de la verdad.
+#             logging.info("DEBUG (Preguntar Perfil) ► Usando mensaje pendiente generado por el LLM.")
+#             mensaje_a_enviar = mensaje_pendiente
+#         else:
+#             # Si el LLM no generó nada (por un error o porque no era su turno),
+#             # usamos nuestra lógica determinista como un fallback seguro.
+#             logging.warning("DEBUG (Preguntar Perfil) ► No hay mensaje del LLM. Generando pregunta con lógica interna.")
+#             try:
+#                  mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
+#                  logging.info(f"DEBUG (Preguntar Perfil) ► Pregunta de fallback generada: {mensaje_a_enviar}")
+#             except Exception as e_fallback:
+#                  logging.error(f"ERROR (Preguntar Perfil) ► Error generando pregunta fallback: {e_fallback}")
+#                  mensaje_a_enviar = "¿Podrías darme más detalles sobre tus preferencias?"
+        
+#     else: 
+#         # Si el perfil ya está completo, usamos el mensaje de confirmación del LLM.
+#         print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
+#         if mensaje_pendiente and mensaje_pendiente.strip():
+#              mensaje_a_enviar = mensaje_pendiente
+#         else:
+#              mensaje_a_enviar = "¡Perfecto! He recopilado todas tus preferencias. Ahora continuaré con el siguiente paso."
+
+#     # --- Añadir el mensaje al historial (sin cambios aquí) ---
+#     if mensaje_a_enviar and mensaje_a_enviar.strip():
+#         ai_msg = AIMessage(content=mensaje_a_enviar)
+#         if not historial_actual or historial_actual[-1].content != ai_msg.content:
+#             historial_nuevo.append(ai_msg)
+#             logging.info(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}")
+#         else:
+#              logging.warning("DEBUG (Preguntar Perfil) ► Mensaje final duplicado, no se añade.")
+#     else:
+#          logging.error("ERROR (Preguntar Perfil) ► No se determinó ningún mensaje a enviar.")
+#          ai_msg = AIMessage(content="No estoy seguro de qué preguntar ahora. ¿Puedes darme más detalles?")
+#          historial_nuevo.append(ai_msg)
+
+#     # Devolver estado
+#     return {
+#         **state,
+#         "messages": historial_nuevo,
+#         "pregunta_pendiente": None 
+#     }
 
 def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> Dict:
     """
-    Añade la pregunta de seguimiento correcta al historial.
-    Prioriza el mensaje generado por el LLM si existe; si no, genera
-    una pregunta de forma determinista como fallback.
+    Formula la siguiente pregunta para el perfil de usuario.
+
+    Esta función actúa como el "compositor" final de la respuesta del agente.
+    Combina la posible respuesta empática generada por el LLM (en caso de un
+    meta-comentario) con la pregunta lógicamente correcta y formateada
+    que se obtiene del QUESTION_BANK.
     """
     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
     
+    # 1. Obtenemos todas las piezas necesarias del estado al principio
     preferencias = state.get("preferencias_usuario")
     mensaje_pendiente = state.get("pregunta_pendiente") 
     historial_actual = state.get("messages", [])
     
-    historial_nuevo = list(historial_actual)
     mensaje_a_enviar = None
 
-    perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
-
-    if not perfil_esta_completo:
-        #logging.debug("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. Decidiendo qué preguntar...")
-        logging.debug("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. Decidiendo qué preguntar...")
+    # 2. Verificamos si el perfil ya está completo
+    if not check_perfil_usuario_completeness(preferencias):
+        # --- CASO A: El perfil está INCOMPLETO, debemos formular una pregunta ---
+        logging.info("DEBUG (Preguntar Perfil) ► Perfil incompleto. Construyendo la siguiente pregunta.")
         
-        # --- ✅ LÓGICA SIMPLIFICADA Y ROBUSTA ---
-        if mensaje_pendiente and mensaje_pendiente.strip():
-            # Si el LLM ya generó un mensaje (sea el de bienvenida o una respuesta empática),
-            # confiamos en él como la fuente principal de la verdad.
-            logging.info("DEBUG (Preguntar Perfil) ► Usando mensaje pendiente generado por el LLM.")
-            mensaje_a_enviar = mensaje_pendiente
-        else:
-            # Si el LLM no generó nada (por un error o porque no era su turno),
-            # usamos nuestra lógica determinista como un fallback seguro.
-            logging.warning("DEBUG (Preguntar Perfil) ► No hay mensaje del LLM. Generando pregunta con lógica interna.")
-            try:
-                 mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
-                 logging.info(f"DEBUG (Preguntar Perfil) ► Pregunta de fallback generada: {mensaje_a_enviar}")
-            except Exception as e_fallback:
-                 logging.error(f"ERROR (Preguntar Perfil) ► Error generando pregunta fallback: {e_fallback}")
-                 mensaje_a_enviar = "¿Podrías darme más detalles sobre tus preferencias?"
+        # Obtenemos la posible frase empática o de bienvenida que generó el LLM.
+        # Si no hay nada, es un string vacío.
+        frase_contextual = mensaje_pendiente.strip() if (mensaje_pendiente and mensaje_pendiente.strip()) else ""
+        
+        # Generamos la pregunta correcta y formateada desde nuestra lógica determinista.
+        try:
+             pregunta_logica = _obtener_siguiente_pregunta_perfil(preferencias)
+             logging.info(f"DEBUG (Preguntar Perfil) ► Pregunta generada desde QUESTION_BANK: {pregunta_logica}")
+        except Exception as e_fallback:
+             logging.error(f"ERROR (Preguntar Perfil) ► Error generando pregunta: {e_fallback}")
+             pregunta_logica = "¿Podrías darme más detalles sobre tus preferencias?"
+
+        # Combinamos ambas partes. El .strip() final elimina dobles espacios.
+        # Si frase_contextual está vacía, el resultado es solo la pregunta_logica.
+        mensaje_a_enviar = f"{frase_contextual} {pregunta_logica}".strip()
         
     else: 
-        # Si el perfil ya está completo, usamos el mensaje de confirmación del LLM.
-        print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
+        # --- CASO B: El perfil está COMPLETO ---
+        logging.info("DEBUG (Preguntar Perfil) ► Perfil COMPLETO. Preparando mensaje de transición.")
+        # Usamos el mensaje de confirmación que ya debería haber generado el LLM.
         if mensaje_pendiente and mensaje_pendiente.strip():
              mensaje_a_enviar = mensaje_pendiente
         else:
-             mensaje_a_enviar = "¡Perfecto! He recopilado todas tus preferencias. Ahora continuaré con el siguiente paso."
+             # Si no hay mensaje, usamos uno genérico como fallback.
+             mensaje_a_enviar = "¡Perfecto! He recopilado todas tus preferencias. Continuemos."
 
-    # --- Añadir el mensaje al historial (sin cambios aquí) ---
+    # --- 3. Añadimos el mensaje final al historial ---
+    historial_nuevo = list(historial_actual)
     if mensaje_a_enviar and mensaje_a_enviar.strip():
         ai_msg = AIMessage(content=mensaje_a_enviar)
+        # Evitamos añadir mensajes duplicados
         if not historial_actual or historial_actual[-1].content != ai_msg.content:
             historial_nuevo.append(ai_msg)
             logging.info(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}")
@@ -533,241 +524,91 @@ def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> Dict:
          ai_msg = AIMessage(content="No estoy seguro de qué preguntar ahora. ¿Puedes darme más detalles?")
          historial_nuevo.append(ai_msg)
 
-    # Devolver estado
+    # Devolvemos el estado actualizado
     return {
         **state,
         "messages": historial_nuevo,
-        "pregunta_pendiente": None 
+        "pregunta_pendiente": None # Limpiamos la pregunta pendiente una vez usada
     }
 
-
-#Version funcional
-# def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Añade la pregunta de seguimiento correcta al historial.
-#     Si el perfil no está completo, SIEMPRE prioriza la pregunta generada por la lógica
-#     interna para asegurar el flujo correcto de preguntas anidadas.
-#     """
-#     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
-#     preferencias = state.get("preferencias_usuario")
-#     historial_actual = state.get("messages", [])
-#     historial_nuevo = list(historial_actual) 
-    
-#     mensaje_a_enviar = None 
-
-#     perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
-
-#     # --- LÓGICA CORREGIDA ---
-#     if not perfil_esta_completo:
-#         # Si el perfil está incompleto, nuestra lógica determinista tiene el control total
-#         # para asegurar que no se salten preguntas anidadas.
-#         print("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. La lógica interna tiene prioridad.")
-#         try:
-#             mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
-#             print(f"DEBUG (Preguntar Perfil) ► Pregunta correcta generada y seleccionada: {mensaje_a_enviar}")
-#         except Exception as e:
-#             print(f"ERROR (Preguntar Perfil) ► Error generando pregunta: {e}")
-#             mensaje_a_enviar = "¿Podrías darme más detalles sobre tus preferencias?"
-            
-#     else: # El perfil SÍ está completo
-#         # Si el perfil ya está completo, podemos usar el mensaje de confirmación del LLM.
-#         print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
-#         mensaje_pendiente = state.get("pregunta_pendiente")
-#         if mensaje_pendiente and mensaje_pendiente.strip():
-#              print(f"DEBUG (Preguntar Perfil) ► Usando mensaje de confirmación pendiente: {mensaje_pendiente}")
-#              mensaje_a_enviar = mensaje_pendiente
-#         else:
-#              print("WARN (Preguntar Perfil) ► Perfil completo pero no había mensaje pendiente. Usando confirmación genérica.")
-#              mensaje_a_enviar = "¡Perfecto! He recopilado todas tus preferencias. Ahora continuaré con el siguiente paso."
-
-#     # Añadir el mensaje decidido al historial (esta parte no cambia)
-#     if mensaje_a_enviar and mensaje_a_enviar.strip():
-#         ai_msg = AIMessage(content=mensaje_a_enviar)
-#         if not historial_actual or historial_actual[-1].content != ai_msg.content:
-#             historial_nuevo.append(ai_msg)
-#             print(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}") 
-#         else:
-#              print("DEBUG (Preguntar Perfil) ► Mensaje final duplicado, no se añade.")
-#     else:
-#          print("ERROR (Preguntar Perfil) ► No se determinó ningún mensaje a enviar.")
-#          ai_msg = AIMessage(content="No estoy seguro de qué preguntar ahora. ¿Puedes darme más detalles?")
-#          historial_nuevo.append(ai_msg)
-
-#     # Devolver estado
-#     return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
-
-
-# def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Añade la pregunta de seguimiento correcta al historial.
-#     Verifica si el perfil está realmente completo ANTES de añadir un mensaje 
-#     de confirmación/transición. Si no lo está, asegura que se añada una pregunta real.
-#     """
-#     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
-#     mensaje_pendiente = state.get("pregunta_pendiente") 
-#     preferencias = state.get("preferencias_usuario")
-#     historial_actual = state.get("messages", [])
-#     historial_nuevo = list(historial_actual) 
-    
-#     mensaje_a_enviar = None 
-
-#     # 1. Comprobar si el perfil está REALMENTE completo AHORA
-#     perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
-
-#     if not perfil_esta_completo:
-#         print("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO según checker.")
-#         pregunta_generada_fallback = None 
-
-#         # Generar la pregunta específica AHORA por si la necesitamos
-#         try:
-#              pregunta_generada_fallback = _obtener_siguiente_pregunta_perfil(preferencias)
-#              print(f"DEBUG (Preguntar Perfil) ► Pregunta fallback generada: {pregunta_generada_fallback}")
-#         except Exception as e_fallback:
-#              print(f"ERROR (Preguntar Perfil) ► Error generando pregunta fallback: {e_fallback}")
-#              pregunta_generada_fallback = "¿Podrías darme más detalles sobre tus preferencias?" 
-
-#         # ¿Tenemos un mensaje pendiente del LLM?
-#         if mensaje_pendiente and mensaje_pendiente.strip():
-#             # Comprobar si el mensaje pendiente PARECE una confirmación
-#             es_confirmacion = (
-#                 mensaje_pendiente.startswith("¡Perfecto!") or 
-#                 mensaje_pendiente.startswith("¡Genial!") or 
-#                 mensaje_pendiente.startswith("¡Estupendo!") or 
-#                 mensaje_pendiente.startswith("Ok,") or 
-#                 "¿Pasamos a" in mensaje_pendiente
-#             )
-
-#             if es_confirmacion:
-#                 # IGNORAR la confirmación errónea y USAR el fallback
-#                 print(f"WARN (Preguntar Perfil) ► Mensaje pendiente ('{mensaje_pendiente}') parece confirmación, pero perfil incompleto. IGNORANDO y usando fallback.")
-#                 mensaje_a_enviar = pregunta_generada_fallback
-#             else:
-#                 # El mensaje pendiente parece una pregunta válida, la usamos.
-#                  print(f"DEBUG (Preguntar Perfil) ► Usando mensaje pendiente (pregunta LLM): {mensaje_pendiente}")
-#                  mensaje_a_enviar = mensaje_pendiente
-#         else:
-#             # No había mensaje pendiente válido, usamos la fallback generada.
-#             print("WARN (Preguntar Perfil) ► Nodo ejecutado para preguntar, pero no había mensaje pendiente válido. Generando pregunta fallback.")
-#             mensaje_a_enviar = pregunta_generada_fallback
-            
-#     else: # El perfil SÍ está completo
-#         print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
-#         # Usamos el mensaje pendiente (que debería ser de confirmación)
-#         if mensaje_pendiente and mensaje_pendiente.strip():
-#              print(f"DEBUG (Preguntar Perfil) ► Usando mensaje de confirmación pendiente: {mensaje_pendiente}")
-#              mensaje_a_enviar = mensaje_pendiente
-#         else:
-#              print("WARN (Preguntar Perfil) ► Perfil completo pero no había mensaje pendiente. Usando confirmación genérica.")
-#              mensaje_a_enviar = "¡Entendido! Ya tenemos tu perfil completo." # Mensaje simple
-
-#     # Añadir el mensaje decidido al historial
-#     if mensaje_a_enviar and mensaje_a_enviar.strip():
-#         ai_msg = AIMessage(content=mensaje_a_enviar)
-#         if not historial_actual or historial_actual[-1].content != ai_msg.content:
-#             historial_nuevo.append(ai_msg)
-#             print(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}") 
-#         else:
-#              print("DEBUG (Preguntar Perfil) ► Mensaje final duplicado, no se añade.")
-#     else:
-#          print("ERROR (Preguntar Perfil) ► No se determinó ningún mensaje a enviar.")
-#          ai_msg = AIMessage(content="No estoy seguro de qué preguntar ahora. ¿Puedes darme más detalles?")
-#          historial_nuevo.append(ai_msg)
-
-#     # Devolver estado
-#     return {**state, "messages": historial_nuevo, "pregunta_pendiente": None}
-
-
 # --- NUEVA ETAPA: PASAJEROS ---
-
 def recopilar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Llama a llm_pasajeros para extraer/actualizar InfoPasajeros siguiendo el nuevo flujo.
-    Realiza inferencias adicionales (ej: frecuencia='nunca' si no lleva acompañantes).
-    Guarda la información y el mensaje/pregunta del LLM en el estado.
+    Llama a llm_pasajeros y FUSIONA la nueva información con el estado existente
+    de InfoPasajeros para evitar la pérdida de datos.
     """
     logger.debug("--- Ejecutando Nodo: recopilar_info_pasajeros_node ---")
     
     historial = state.get("messages", [])
-    info_pasajeros_actual_obj = state.get("info_pasajeros") 
-    
-    # Si no hay objeto InfoPasajeros en el estado, inicializar uno nuevo.Esto es importante para que el LLM tenga un objeto base sobre el cual trabajar y para que el prompt que le pide rellenar campos null funcione correctamente.
-    if info_pasajeros_actual_obj is None:
-        info_pasajeros_actual_obj = InfoPasajeros()
-        logger.debug("DEBUG (Pasajeros) ► InfoPasajeros no existía en el estado, inicializando uno nuevo.")
+    info_pasajeros_actual_obj = state.get("info_pasajeros") or InfoPasajeros()
 
-    # Si el último mensaje es un AIMessage (del propio agente), no llamar al LLM de nuevo. Esto evita bucles si el nodo se re-ejecuta sin nueva entrada del usuario.
     if historial and isinstance(historial[-1], AIMessage):
-        logger.debug("DEBUG (Pasajeros) ► Último mensaje es AIMessage, omitiendo llamada a llm_pasajeros.")
-        return {"pregunta_pendiente": state.get("pregunta_pendiente")} # Propagar pregunta_pendiente si existe
+        logger.debug("DEBUG (Pasajeros) ► Último mensaje es AIMessage, omitiendo llamada.")
+        return {"pregunta_pendiente": state.get("pregunta_pendiente")}
 
     logger.debug("DEBUG (Pasajeros) ► Llamando a llm_pasajeros...")
     
-    # Variables para la salida del nodo
-    info_pasajeros_para_actualizar_estado = info_pasajeros_actual_obj # Default: mantener las actuales si todo falla
-    mensaje_para_pregunta_pendiente = "Lo siento, tuve un problema técnico al procesar la información de pasajeros." # Default
+    info_pasajeros_final = info_pasajeros_actual_obj
+    mensaje_para_siguiente_nodo = "Lo siento, tuve un problema técnico."
 
     try:
-        # El LLM ahora recibe el objeto info_pasajeros actual como parte del contexto (implícito en el historial o explícito en el prompt) y debe devolver un objeto InfoPasajeros completo o parcialmente relleno.
-        # El prompt system_prompt_pasajeros debe guiarlo.
         response: ResultadoPasajeros = llm_pasajeros.invoke(
-            [system_prompt_pasajeros, *historial], # Pasar el prompt y el historial
+            [system_prompt_pasajeros, *historial],
             config={"configurable": {"tags": ["llm_pasajeros"]}} 
         )
         logger.debug(f"DEBUG (Pasajeros) ► Respuesta llm_pasajeros: {response}")
 
         info_pasajeros_del_llm = response.info_pasajeros 
-        mensaje_para_pregunta_pendiente = response.contenido_mensaje
+        mensaje_para_siguiente_nodo = response.contenido_mensaje
         
+        # --- ✅ INICIO DE LA LÓGICA DE FUSIÓN INTELIGENTE ---
         if info_pasajeros_del_llm:
-            # --- LÓGICA DE INFERENCIA ADICIONAL BASADA EN EL NUEVO FLUJO ---
-            if info_pasajeros_del_llm.suele_llevar_acompanantes is False:
-                logger.debug("DEBUG (Pasajeros) ► Usuario NO suele llevar acompañantes. Estableciendo defaults.")
-                info_pasajeros_del_llm.frecuencia = "nunca"
-                info_pasajeros_del_llm.num_ninos_silla = 0
-                info_pasajeros_del_llm.num_otros_pasajeros = 0
-                info_pasajeros_del_llm.frecuencia_viaje_con_acompanantes = None # Limpiar si se había puesto
-                info_pasajeros_del_llm.composicion_pasajeros_texto = None # Limpiar
-            elif info_pasajeros_del_llm.suele_llevar_acompanantes is True:
-                if info_pasajeros_del_llm.frecuencia_viaje_con_acompanantes:
-                    info_pasajeros_del_llm.frecuencia = info_pasajeros_del_llm.frecuencia_viaje_con_acompanantes
-                    logger.debug(f"DEBUG (Pasajeros) ► Frecuencia general establecida a: {info_pasajeros_del_llm.frecuencia} desde frecuencia_viaje.")
-                # NO establecer num_ninos_silla y num_otros_pasajeros a 0 por defecto aquí.
-                # Deben permanecer None si el LLM no los infirió, para que se pregunten.
-                # El LLM es responsable de rellenarlos o dejarlos None si aún no tiene la info.
-                if info_pasajeros_del_llm.num_ninos_silla is None:
-                    logger.debug("DEBUG (Pasajeros) ► num_ninos_silla es None (esperando pregunta de composición/sillas).")
-                if info_pasajeros_del_llm.num_otros_pasajeros is None:
-                    logger.debug("DEBUG (Pasajeros) ► num_otros_pasajeros es None (esperando pregunta de composición).")
+            # 1. Creamos una copia del estado actual para trabajar sobre ella.
+            info_pasajeros_actualizado = info_pasajeros_actual_obj.model_copy(deep=True)
+
+            # 2. Convertimos la respuesta del LLM en un diccionario solo con los
+            #    campos que el LLM ha rellenado activamente.
+            nuevos_datos = info_pasajeros_del_llm.model_dump(exclude_unset=True)
             
-            info_pasajeros_para_actualizar_estado = info_pasajeros_del_llm # Usar el objeto del LLM (con inferencias)
+            if nuevos_datos:
+                logging.info(f"DEBUG (Pasajeros) ► Fusionando nuevos datos del LLM: {nuevos_datos}")
+                # 3. Fusionamos los nuevos datos en nuestro objeto de estado.
+                info_pasajeros_consolidado = info_pasajeros_actualizado.model_copy(update=nuevos_datos)
+            else:
+                logging.info("DEBUG (Pasajeros) ► El LLM no aportó nuevos datos, se mantiene el estado actual.")
+                info_pasajeros_consolidado = info_pasajeros_actualizado
+
+            # 4. Aplicamos la lógica de inferencia sobre el objeto ya fusionado y completo.
+            if info_pasajeros_consolidado.suele_llevar_acompanantes is False:
+                info_pasajeros_consolidado.frecuencia = "nunca"
+                info_pasajeros_consolidado.num_ninos_silla = 0
+                info_pasajeros_consolidado.num_otros_pasajeros = 0
+            elif info_pasajeros_consolidado.suele_llevar_acompanantes is True:
+                if info_pasajeros_consolidado.frecuencia_viaje_con_acompanantes:
+                    info_pasajeros_consolidado.frecuencia = info_pasajeros_consolidado.frecuencia_viaje_con_acompanantes
+            
+            info_pasajeros_final = info_pasajeros_consolidado
         else:
-            logger.warning("WARN (Pasajeros) ► llm_pasajeros devolvió info_pasajeros como None.")
-            info_pasajeros_para_actualizar_estado = info_pasajeros_actual_obj 
+            logger.warning("WARN (Pasajeros) ► El LLM no devolvió un objeto InfoPasajeros.")
+            info_pasajeros_final = info_pasajeros_actual_obj
+        # --- FIN DE LA LÓGICA DE FUSIÓN ---
 
     except ValidationError as e_val:
-        logger.error(f"ERROR (Pasajeros) ► Error de Validación Pydantic en llm_pasajeros: {e_val.errors()}")
-        # Aquí podrías añadir lógica para construir un mensaje de error amigable si el error es sobre un campo específico de InfoPasajeros.
-        error_msg_detalle = e_val.errors()[0]['msg'] if e_val.errors() else 'Error desconocido'
-        mensaje_para_pregunta_pendiente = f"Hubo un problema al entender la información de los pasajeros (formato inválido). ¿Podrías reformular? Detalle: {error_msg_detalle}"
-        #info_pasajeros_para_actualizar_estado = info_pasajeros_actual_obj # Revertir
+        logger.error(f"ERROR (Pasajeros) ► Error de Validación Pydantic: {e_val.errors()}")
+        mensaje_para_siguiente_nodo = f"Hubo un problema al procesar la info de pasajeros: {e_val.errors()[0]['msg']}"
+        info_pasajeros_final = info_pasajeros_actual_obj
 
     except Exception as e_general:
-        logger.error(f"ERROR (Pasajeros) ► Fallo general al invocar llm_pasajeros: {e_general}", exc_info=True)
-        mensaje_para_pregunta_pendiente = "Lo siento, tuve un problema técnico al procesar la información de pasajeros. ¿Podríamos intentarlo de nuevo?"
-        #info_pasajeros_para_actualizar_estado = info_pasajeros_actual_obj # Revertir
+        logger.error(f"ERROR (Pasajeros) ► Fallo general: {e_general}", exc_info=True)
+        mensaje_para_siguiente_nodo = "Lo siento, tuve un problema técnico."
+        info_pasajeros_final = info_pasajeros_actual_obj
 
-    # Asegurar que pregunta_pendiente tenga un valor si no se estableció
-    if not mensaje_para_pregunta_pendiente or not mensaje_para_pregunta_pendiente.strip():
-        logger.debug(f"DEBUG (Pasajeros) ► No hay mensaje específico para pregunta_pendiente, se limpiará o usará fallback.")
-        mensaje_para_pregunta_pendiente = None
-
-    logger.debug(f"DEBUG (Pasajeros) ► Estado info_pasajeros a actualizar: {info_pasajeros_para_actualizar_estado.model_dump_json(indent=2) if hasattr(info_pasajeros_para_actualizar_estado, 'model_dump_json') else None}")
-    logger.debug(f"DEBUG (Pasajeros) ► Guardando mensaje para pregunta_pendiente: {mensaje_para_pregunta_pendiente}")
+    logger.debug(f"DEBUG (Pasajeros) ► Estado info_pasajeros a actualizar: {info_pasajeros_final.model_dump_json(indent=2)}")
         
     return {
-        **state,  # Mantener el estado original
-        "info_pasajeros": info_pasajeros_para_actualizar_estado,
-        "pregunta_pendiente": mensaje_para_pregunta_pendiente
+        **state,
+        "info_pasajeros": info_pasajeros_final,
+        "pregunta_pendiente": mensaje_para_siguiente_nodo
     }
 
 
@@ -1275,6 +1116,12 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     flag_bonus_awd_montana = False
     flag_logica_reductoras_aventura = False
     flag_bonus_awd_clima_adverso = False
+    flag_bonus_seguridad_critico = False
+    flag_bonus_seguridad_fuerte= False
+    flag_bonus_fiab_dur_critico = False
+    flag_bonus_fiab_dur_fuerte= False
+    flag_bonus_costes_critico = False
+
      
     # Verificar que preferencias_obj exista para acceder a sus atributos
     if not preferencias_obj:
@@ -1310,7 +1157,14 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "flag_bonus_awd_nieve" : flag_bonus_awd_nieve,
             "flag_bonus_awd_montana" : flag_bonus_awd_montana,
             "flag_logica_reductoras_aventura" : flag_logica_reductoras_aventura,
-            "flag_bonus_awd_clima_adverso" : flag_bonus_awd_clima_adverso
+            "flag_bonus_awd_clima_adverso" : flag_bonus_awd_clima_adverso,
+            "flag_bonus_seguridad_critico": flag_bonus_seguridad_critico,
+            "flag_bonus_seguridad_fuerte": flag_bonus_seguridad_fuerte,
+            'flag_bonus_fiab_dur_critico': flag_bonus_fiab_dur_critico,
+            'flag_bonus_fiab_dur_fuerte': flag_bonus_fiab_dur_fuerte,
+            "flag_bonus_costes_critico": flag_bonus_costes_critico
+
+     
         }
     # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
     # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
@@ -1399,43 +1253,71 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     
     
     # ---  LÓGICA PARA FLAG DE REDUCTORAS Y AVENTURA ---
-    aventura_val = preferencias_obj.aventura
-    if aventura_val == NivelAventura.extrema.value:
-        flag_logica_reductoras_aventura = True
-        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'extrema'. Activando bonus alto para Reductoras.")
-        # --- FIN LÓGICA ---
-            
+    if aventura_val == NivelAventura.ocasional.value:
+        # Si la aventura es ocasional, establecemos el flag para el bonus moderado.
+        flag_logica_reductoras_aventura = "FAVORECER_OCASIONAL"
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'ocasional'. Activando flag para bonus moderado en Reductoras.")
+
+    elif aventura_val == NivelAventura.extrema.value:
+        # Si la aventura es extrema, establecemos el flag para el bonus alto.
+        flag_logica_reductoras_aventura = "FAVORECER_EXTREMA"
+        logging.info("DEBUG (CalcFlags) ► Nivel Aventura 'extrema'. Activando flag para bonus alto en Reductoras.")
+                
     # Regla 7: Objetos Especiales
     if is_yes(preferencias_obj.necesita_espacio_objetos_especiales) :
         flag_aplicar_logica_objetos_especiales = True
         logging.info(f"DEBUG (CalcFlags) ► necesita_espacio_objetos_especiales=True. Activando lógica de carrocería para objetos especiales.")
-
+    
+    # RATINGS--------------------:
     # Regla 8: Alta Comodidad
     rating_comodidad_val = preferencias_obj.rating_comodidad
-    if rating_comodidad_val is not None and rating_comodidad_val >= UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA:
+    if rating_comodidad_val is not None and rating_comodidad_val > UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA:
         flag_fav_carroceria_confort = True
-        logging.info(f"DEBUG (CalcFlags) ► Rating Comodidad ({rating_comodidad_val}) >= {UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA}. Activando flag para favorecer carrocerías confortables.")
+        logging.info(f"DEBUG (CalcFlags) ► Rating Comodidad ({rating_comodidad_val}) > {UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA}. Activando flag para favorecer carrocerías confortables.")
         
     
     # Lógica para Flags de Penalización por Comodidad
     if preferencias_obj.rating_comodidad is not None:
-        if preferencias_obj.rating_comodidad >= UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS:
+        if preferencias_obj.rating_comodidad > UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS:
             flag_penalizar_lc_comod = True
             flag_penalizar_dep_comod = True
             logging.debug(f"DEBUG (CalcFlags) ► Rating Comodidad ({preferencias_obj.rating_comodidad}). Activando flags penalización comodidad flag penalizar depor comod y flag penalizar lowcost comod")
 
     # Lógica para Flag de Penalización por Antigüedad y Tecnología
     if preferencias_obj.rating_tecnologia_conectividad is not None:
-        if preferencias_obj.rating_tecnologia_conectividad >= UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG:
+        if preferencias_obj.rating_tecnologia_conectividad > UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG:
             flag_penalizar_ant_tec = True
             logging.debug(f"DEBUG (CalcFlags) ► Rating Tecnología ({preferencias_obj.rating_tecnologia_conectividad}). Activando flag penalización antigüedad.")
 
     # Lógica para Flag de Distintivo Ambiental (basado en rating_impacto_ambiental)
     if preferencias_obj.rating_impacto_ambiental is not None:
-        if preferencias_obj.rating_impacto_ambiental >= UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG:
+        if preferencias_obj.rating_impacto_ambiental > UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG:
             flag_aplicar_dist_amb = True
             logging.debug(f"DEBUG (CalcFlags) ► Rating Impacto Ambiental ({preferencias_obj.rating_impacto_ambiental}). Activando lógica de distintivo ambiental.")
-
+    
+    if preferencias_obj.rating_seguridad is not None:
+        if preferencias_obj.rating_seguridad >=9:   
+            flag_bonus_seguridad_critico = True
+            logging.info("Flags: Rating de seguridad CRÍTICO. Activando bonus x1.5.")
+        elif preferencias_obj.rating_seguridad >= 7:
+            flag_bonus_seguridad_fuerte = True
+            logging.info("Flags: Rating de seguridad FUERTE. Activando bonus x1.2.")
+    
+    # ✅ NUEVA LÓGICA PARA FIABILIDAD/DURABILIDAD
+    if preferencias_obj.rating_fiabilidad_durabilidad is not None:
+        if preferencias_obj.rating_fiabilidad_durabilidad >= 9:
+            flag_bonus_fiab_dur_critico = True
+            logging.info("Flags: Rating de Fiabilidad/Durabilidad CRÍTICO. Activando bonus.")
+        elif preferencias_obj.rating_fiabilidad_durabilidad >= 7:
+            flag_bonus_fiab_dur_fuerte = True
+            logging.info("Flags: Rating de Fiabilidad/Durabilidad FUERTE. Activando bonus.")
+            
+       # ✅ NUEVA LÓGICA PARA COSTES DE USO
+    if preferencias_obj.rating_costes_uso is not None:
+        if preferencias_obj.rating_costes_uso >= 7:
+            flag_bonus_costes_critico = True
+            logging.info("Flags: Rating de Costes de Uso CRÍTICO. Activando bonus.")
+    #-------------------------
     # Lógica para Flag ZBE (basado en info_clima_obj)
     if info_clima_obj and hasattr(info_clima_obj, 'cp_valido_encontrado') and info_clima_obj.cp_valido_encontrado and \
        hasattr(info_clima_obj, 'MUNICIPIO_ZBE') and info_clima_obj.MUNICIPIO_ZBE is True:
@@ -1518,8 +1400,16 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_bonus_awd_montana": flag_bonus_awd_montana,
         "flag_logica_reductoras_aventura": flag_logica_reductoras_aventura,
         "flag_bonus_awd_clima_adverso" : flag_bonus_awd_clima_adverso,
-        "es_municipio_zbe": flag_es_zbe,       
+        "flag_bonus_seguridad_critico": flag_bonus_seguridad_critico,
+        "flag_bonus_seguridad_fuerte": flag_bonus_seguridad_fuerte,
+        "flag_bonus_fiab_dur_critico": flag_bonus_fiab_dur_critico,
+        "flag_bonus_fiab_dur_fuerte": flag_bonus_fiab_dur_fuerte,
+        "flag_bonus_costes_critico": flag_bonus_costes_critico,
+         "es_municipio_zbe": flag_es_zbe       
     }
+    
+
+
     
 def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
     """
@@ -1682,7 +1572,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     """
     print("--- Ejecutando Nodo: buscar_coches_finales_node ---")
     logging.debug(f"DEBUG (Buscar BQ Init) ► Estado completo recibido: {state}") 
-    k_coches = 10 
+    k_coches = 12
     historial = state.get("messages", [])
     tabla_resumen_criterios_md = state.get("tabla_resumen_criterios", "No se pudo generar el resumen de criterios.")
     preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario
@@ -1719,6 +1609,11 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     flag_bonus_montana_val = state.get("flag_bonus_awd_montana", False)
     flag_reductoras_aventura_val = state.get("flag_logica_reductoras_aventura")
     flag_bonus_awd_clima_adverso = state.get("flag_bonus_awd_clima_adverso")
+    flag_bonus_seguridad_critico = state.get("flag_bonus_seguridad_critico")
+    flag_bonus_seguridad_fuerte = state.get("flag_bonus_seguridad_fuerte")
+    flag_bonus_fiab_dur_critico = state.get("flag_bonus_fiab_dur_critico")
+    flag_bonus_fiab_dur_fuerte = state.get("flag_bonus_fiab_dur_fuerte")
+    flag_bonus_costes_critico = state.get("flag_bonus_costes_critico")
     km_anuales_val = state.get("km_anuales_estimados")
 
     
@@ -1728,10 +1623,6 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     thread_id = configurable_config.get("thread_id", "unknown_thread_in_node") # Fallback por si acaso
 
     logging.info(f"INFO (Buscar BQ) ► Ejecutando búsqueda para thread_id: {thread_id}")
-    # thread_id = "unknown_thread"
-    # if state.get("config") and isinstance(state["config"], dict) and \
-    #    state["config"].get("configurable") and isinstance(state["config"]["configurable"], dict):
-    #     thread_id = state["config"]["configurable"].get("thread_id", "unknown_thread")
     
     coches_encontrados_raw = [] 
     coches_encontrados = []
@@ -1783,6 +1674,11 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         filtros_para_bq['flag_bonus_montana_val'] = flag_bonus_montana_val
         filtros_para_bq['flag_logica_reductoras_aventura'] = flag_reductoras_aventura_val
         filtros_para_bq['flag_bonus_awd_clima_adverso'] = flag_bonus_awd_clima_adverso
+        filtros_para_bq['flag_bonus_seguridad_critico'] = flag_bonus_seguridad_critico
+        filtros_para_bq['flag_bonus_seguridad_fuerte'] = flag_bonus_seguridad_fuerte
+        filtros_para_bq['flag_bonus_fiab_dur_critico'] = flag_bonus_fiab_dur_critico
+        filtros_para_bq['flag_bonus_fiab_dur_fuerte'] = flag_bonus_fiab_dur_fuerte
+        filtros_para_bq['flag_bonus_costes_critico'] = flag_bonus_costes_critico
         filtros_para_bq['km_anuales_estimados'] = km_anuales_val
         
         logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
@@ -1877,6 +1773,9 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
                     # --- 1. Preparamos los datos de cada coche ---
                     nombre = coche.get('nombre', 'Coche Desconocido')
                     url_foto = coche.get('foto')
+                    tipo_mecanica = coche.get('tipo_mecanica')
+                    anyo_unidad = coche.get('ano_unidad')
+                    traccion = coche.get('traccion')
                     
                     # Formateamos el precio y el score para mostrarlos
                     precio_str = "N/A"
@@ -1900,6 +1799,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
                     # --- 3. Construimos el mensaje en Markdown para este coche ---
                     mensaje_coches += f"\n---\n" # Separador horizontal
                     mensaje_coches += f"### {i+1}. {nombre}\n" # Título del coche
+                    mensaje_coches += f"> {tipo_mecanica} | {anyo_unidad} | {traccion}  "
                     
                     # Añadimos la imagen si la URL existe
                     if url_foto and url_foto.strip():
@@ -1987,7 +1887,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         pass # Placeholder
 
     # --- CONSTRUIR MENSAJE FINAL COMBINADO ---
-    mensaje_final_completo = f"{tabla_resumen_criterios_md}\n\n---\n\n{mensaje_coches}"
+    mensaje_final_completo = f"{mensaje_coches}" #f"{tabla_resumen_criterios_md}\n\n---\n\n{mensaje_coches}"
     
     final_ai_msg = AIMessage(content=mensaje_final_completo)
     historial_final = list(historial) 
@@ -2037,7 +1937,13 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         'favorecer_awd_aventura_extrema' : favorecer_awd_extrema_val,
         'flag_logica_reductoras_aventura' :flag_reductoras_aventura_val,
         'flag_bonus_awd_clima_adverso' : flag_bonus_awd_clima_adverso,
-        "pregunta_pendiente": None, # Este nodo es final para el turno
+        'flag_bonus_seguridad_critico': flag_bonus_seguridad_critico,
+        'flag_bonus_seguridad_fuerte' : flag_bonus_seguridad_fuerte ,
+        'flag_bonus_fiab_dur_critico' : flag_bonus_fiab_dur_critico,
+        'flag_bonus_fiab_dur_fuerte' : flag_bonus_fiab_dur_fuerte ,
+        'flag_bonus_costes_critico' : flag_bonus_costes_critico,
+        "pregunta_pendiente": None # Este nodo es final para el turno
+        
     }
 
  

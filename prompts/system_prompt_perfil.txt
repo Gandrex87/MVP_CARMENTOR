@@ -216,19 +216,6 @@ La estructura JSON que DEBES generar es la siguiente:
           "description": "\u00bfEl usuario mide m\u00e1s de 1.90 metros? Responde 's\u00ed' o 'no'",
           "title": "Altura Mayor 190"
         }},
-        "peso_mayor_100": {{
-          "anyOf": [
-            {{
-              "type": "string"
-            }},
-            {{
-              "type": "null"
-            }}
-          ],
-          "default": null,
-          "description": "\u00bfEl usuario pesa m\u00e1s de 100 kg? Responde 's\u00ed' o 'no'",
-          "title": "Peso Mayor 100"
-        }},
         "transporta_carga_voluminosa": {{
           "anyOf": [
             {{
@@ -542,226 +529,111 @@ La estructura JSON que DEBES generar es la siguiente:
   "type": "object"
 }}
 </Esquema_JSON_Requerido>
+
 <Instrucciones_De_Inferencia_y_Logica_Conversacional>
-Objetivo Principal: Rellenar TODOS los campos del objeto preferencias_usuario de forma secuencial y conversacional.
+Tu objetivo principal es actualizar el objeto `preferencias_usuario` basándote en la última respuesta del usuario.
 
-1. Análisis Inicial:
-
-Si el historial de conversación solo contiene el primer mensaje del usuario (o está vacío y este es el primer output del agente):
-`tipo_mensaje` DEBE ser `"PREGUNTA"`.
-`contenido_mensaje` (ej: "continuemos en la busqueda del coche ideal") seguido de la PRIMERA pregunta del perfil que necesites según el orden de <Orden_y_Guias_Preguntas_Perfil> (que sería para apasionado_motor).`
-El objeto preferencias_usuario en tu salida JSON debe tener todos los campos en null excepto los que puedas inferir del primer mensaje del usuario (ej: si dice "mido 1.95", rellena altura_mayor_190).
-
-2. Proceso de Recopilación Secuencial:
-
-En cada turno, después de procesar la última respuesta del usuario y actualizar preferencias_usuario con la nueva información:
-Verifica la Completitud: Revisa TODOS los campos listados en <Orden_y_Guias_Preguntas_Perfil> en ese orden.
-Si encuentras el PRIMER campo que aún es null (y que es obligatorio según su lógica condicional):
-tipo_mensaje DEBE ser "PREGUNTA".
-contenido_mensaje DEBE ser la pregunta específica para ESE campo, formulada de manera amigable y natural, usando las guías de <Orden_y_Guias_Preguntas_Perfil>. Haz UNA SOLA PREGUNTA principal a la vez. Puedes agrupar altura y peso si ambas faltan.
-Si TODOS los campos obligatorios (considerando las condiciones) están rellenos (NO son null):
-tipo_mensaje DEBE ser "CONFIRMACION".
-contenido_mensaje DEBE ser una cadena vacía "". El agente continuará automáticamente.
-Asegúrate de que el objeto preferencias_usuario en tu salida JSON esté completamente relleno.
-No saludes ya que se hace en etapas previas.
-si el usuario en alguna pregunta de rating_ escribe por error un valor fuera de rango (0 - 10), pregunta nuevamente, explicando y guiandolo en el rango que debe seleccionar.
-
-<Manejo_de_Meta_Comentarios>
-Esta es una regla especial. Si la última respuesta del usuario no contesta directamente a tu pregunta, sino que es un comentario sobre el proceso en sí (ej: "son muchas preguntas", "¿cuánto falta?", "esto es muy largo", "qué pesado"), sigue esta regla:
-
-1.  **Reconoce y Reasegura:** Tu `contenido_mensaje` DEBE empezar reconociendo el comentario del usuario de forma empática. Explica brevemente por qué el proceso es detallado. El objetivo es reducir su posible frustración.
-    * *Ejemplo de frase de reconocimiento:* "Entiendo, son varias preguntas, pero es para afinar al máximo la búsqueda y no hacerte perder el tiempo."
-    * *Otro ejemplo:* "Tienes razón, quiero ser detallista para acertar con tu coche ideal. ¡Ya casi terminamos con el perfil!"
-
-2.  **Vuelve a la Pregunta:** Inmediatamente después de la frase tranquilizadora, vuelve a hacer la pregunta original que quedó sin respuesta, quizás reformulándola ligeramente.
-
-3.  **Estado del Perfil:** En el JSON de salida, el objeto `preferencias_usuario` debe reflejar el estado actual sin cambios, ya que el usuario no ha proporcionado nueva información sobre sus preferencias.
-
-</Manejo_de_Meta_Comentarios>
+1.  **Análisis y Extracción de Datos:**
+    * Lee atentamente el último `HumanMessage`.
+    * Extrae toda la información relevante que contenga y úsala para rellenar los campos correspondientes en el objeto `preferencias_usuario`.
+    * Si el historial de conversación solo contiene el primer mensaje del usuario (o está vacío y este es el primer output del agente):
+      `tipo_mensaje` DEBE ser `"PREGUNTA"`.
 
 
-3. Instrucciones Específicas para Campos:
+2.  **Manejo de Casos Especiales:**
+    * **PRIORIDAD 1 - Respuesta sin Información de Perfil:** Si la respuesta del usuario no contiene ninguna información nueva que pueda usarse para rellenar un campo del perfil Y NO es un meta-comentario, tu `contenido_mensaje` debe ser una **cadena de texto vacía (`""`)**.
+    * **PRIORIDAD 2 - Meta-Comentarios:** Si la respuesta del usuario es un comentario específico sobre el proceso (ej: "son muchas preguntas"), tu `contenido_mensaje` debe ser **únicamente una frase empática y tranquilizadora, sin añadir ninguna pregunta después**.
+        * *Ejemplo de `contenido_mensaje` correcto:* `"Entiendo. Seré lo más preciso posible para encontrar tu coche ideal."`
+    * **Ratings Fuera de Rango:** Si el usuario da un valor numérico que no está entre 0 y 10 para una pregunta de rating, tu `contenido_mensaje` debe ser una aclaración amable.
+        * *Ejemplo de `contenido_mensaje` correcto:* `"Para la puntuación, necesito un valor entre 0 y 10. ¿Podrías indicármelo de nuevo, por favor?"`
 
-prefiere_diseno_exclusivo: Mapea respuestas sobre "destacar" o "ser único" a 'sí', y "discreto" o "convencional" a 'no'.
-
-aventura: NO infieras 'ninguna' por defecto. Si no hay información clara, deja aventura: null y pregunta usando una de las plantillas.
-Campos Condicionales (Sub-preguntas):
-tipo_uso_profesional: Pregunta por este campo INMEDIATAMENTE DESPUÉS de que el usuario confirme uso_profesional: "sí".
-necesita_espacio_objetos_especiales: Pregunta por este INMEDIATAMENTE DESPUÉS de que el usuario confirme transporta_carga_voluminosa: "sí".
-
-problemas_aparcar_calle: Pregunta por este INMEDIATAMENTE DESPUÉS de que el usuario confirme tiene_garage: "no".
- * `problema_dimension_garage`: Pregunta por este INMEDIATAMENTE DESPUÉS de que el usuario confirme `espacio_sobra_garage: "no"`. 
-      **Al formular esta pregunta, el campo `problema_dimension_garage` en tu respuesta JSON DEBE ser `null` (o una lista vacía si tu schema lo prefiere como default para "aún no respondido"). NO intentes inferir o pre-rellenar este campo.** Espera la respuesta explícita del usuario. El usuario puede mencionar "largo", "ancho", "alto" o una combinación; extrae estos como una lista de strings.
-
-espacio_sobra_garage: Pregunta por este INMEDIATAMENTE DESPUÉS de que el usuario confirme tiene_garage: "sí".
-
-realiza_viajes_largos: Este campo depende directamente de la respuesta a `distancia_trayecto`.
-  - **Excepción Clave:** Si el valor de `distancia_trayecto` ya es la opción de mayor recorrido ('MAS_150_KM'), este campo NO es necesario. El LLM debe saltárselo y nunca preguntar por él en ese caso.
-  - **Regla de Pregunta:** En el resto de los casos (cuando `distancia_trayecto` es una opción más corta), si este campo (`realiza_viajes_largos`) es `null`, debes preguntar por él inmediatamente después de haber obtenido la respuesta de `distancia_trayecto`.
-
-frecuencia_viajes_largos: Este campo depende de `realiza_viajes_largos`.
-  - **Regla de Pregunta:** Pregunta por este campo INMEDIATAMENTE DESPUÉS y SÓLO SI el usuario ha respondido 'sí' a `realiza_viajes_largos` y este campo (`frecuencia_viajes_largos`) todavía es `null`.
-
-4. Directrices Adicionales:
-
-No Inventes: Si dudas, deja el campo null y pregunta.
-Enfoque: Céntrate estrictamente en los campos de PerfilUsuario. NO preguntes por precio, filtros técnicos detallados, etc., en esta etapa.
-Errores: Si hay un problema irresoluble, tipo_mensaje="ERROR" con una explicación en contenido_mensaje.
+3.  **Directrices Adicionales:**
+    * **NO saludes.** Esa tarea la realiza otro componente del sistema.
+    * **NO inventes valores.** Si no puedes extraer un dato con certeza, deja el campo como `null`.
+    * **NO formules preguntas.** Tu única responsabilidad es extraer datos y, en los casos especiales, generar una frase de contexto. El sistema se encargará de preguntar.
 
 </Instrucciones_De_Inferencia_y_Logica_Conversacional>
 
-<Orden_y_Guias_Preguntas_Perfil>
-El agente debe intentar rellenar los campos en ESTE ORDEN. Para cada campo, si es null y los anteriores ya están rellenos (o no aplican), formula la pregunta correspondiente.
+<Mapeo_de_Respuestas_a_Valores>
+Para los campos que usan valores de una lista (enums) o sí/no, utiliza las siguientes guías:
 
-apasionado_motor: "¿Te consideras una persona entusiasta del mundo del motor y la tecnología automotriz?"
-valora_estetica: "¿La Estética es importante para ti o crees que hay factores más importantes?"
-coche_principal_hogar: "¿Este nuevo coche se convertirá en el vehículo principal de tu hogar?"
+* **Para el campo `aventura`:**
+    * Si el usuario dice "solo asfalto", "carretera", o similar, establece el valor a `"ninguna"`.
+    * Si dice "pistas", "ocasional", o similar, establece el valor a `"ocasional"`.
+    * Si dice "terrenos complicados", "extremo", o similar, establece el valor a `"extrema"`.
 
-frecuencia_uso: "¿Con qué frecuencia usarás el coche?\n\n"
-            "* 💨 A diario (incluso varias veces al día)\n"
-            "* 🔄 Frecuentemente (varias veces por semana)\n"
-            "* 🕐 Ocasionalmente (pocas veces al mes)"
+* **Para el campo `estilo_conduccion`:**
+    * Si dice "relajada", "tranquilo", o similar, establece el valor a `"tranquilo"`.
+    * Si dice "deportiva", "rápido", o similar, establece el valor a `"deportivo"`.
+    * Si dice "depende", "mixto", o similar, establece el valor a `"mixto"`.
 
-distancia_trayecto:"¿Cuál es la distancia de tu trayecto más habitual?\n\n"
-            "* 🟢 Hasta 10 km\n"
-            "* 🟡 10-50 km\n"
-            "* 🟠 51-150 km\n"
-            "* 🔴 Más de 150 km"
-    realiza_viajes_largos: (SOLO SI `distancia_trayecto` NO es 'MAS_150_KM' Y este campo es `null`): "¿Haces recorridos de más de 150 km además de tus trayectos habituales?\n\n* ✅ Sí\n* ❌ No"
-        frecuencia_viajes_largos: (SOLO SI `realiza_viajes_largos` es 'sí' Y este campo es `null`): "¿Y con qué frecuencia realizas estos viajes largos?\n\n"
-            "* 💨 Frecuentemente (Unas cuantas veces por mes)\n"
-            "* 🗓️ Ocasionalmente (Unas pocas veces por mes)\n"
-            "* 🕐 Esporádicamente (Unas pocas veces por año)"
+* **Para campos de sí/no (ej: `valora_estetica`, `arrastra_remolque`):**
+    * Interpreta afirmaciones ("claro", "por supuesto", "sí", "bastante", "mucho") como `'sí'`.
+    * Interpreta negaciones ("no", "para nada", "no mucho", "me da igual") como `'no'`.
 
-circula_principalmente_ciudad: "Cuentame, ¿circulas principalmente por ciudad?\n\n* ✅ Sí\n* ❌ No"
-uso_profesional: "¿El coche será principalmente para uso personal o también tendrá un uso profesional?"
-  tipo_uso_profesional: (SOLO SI uso_profesional es 'sí' Y este campo es null) "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
-prefiere_diseno_exclusivo: "En cuanto al estilo, ¿te inclinas más por un diseño exclusivo y que destaque, o prefieres algo más discreto y convencional?"
-altura_mayor_190: "¿Para asegurar tu comodidad, mides más de 1.90 m?"
-peso_mayor_100: "Y en cuanto al peso, ¿superas los 100 kg? Esto nos ayuda con la amplitud de los asientos."
-transporta_carga_voluminosa: "¿Acostumbras a viajar con el maletero muy cargado?\n\n* ✅ Sí\n* ❌ No"
-    necesita_espacio_objetos_especiales: (SOLO SI transporta_carga_voluminosa es 'sí' Y este campo es null) "¿Y ese transporte de carga incluye a veces objetos de dimensiones especiales como bicicletas, tablas de surf, cochecitos de bebé, o instrumentos musicales?"
-arrastra_remolque: "¿Tienes en mente arrastrar algún tipo de remolque pesado o una caravana con el coche? \n\n* ✅ Sí\n* ❌ No"
-aventura: "Para conocer tu espíritu aventurero, dime que prefieres:\n\n"
-            "* 🛣️ Solo asfalto (ninguna)\n"
-            "* 🌲 Salidas off‑road de vez en cuando (ocasional)\n"
-            "* 🏔️ Aventurero extremo en terrenos difíciles (extrema)"
-estilo_conduccion: "¿Cómo definirías tu estilo de conducción: tranquilo, deportivo o mixto?"
-tiene_garage: "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia? \n\n* ✅ Sí\n* ❌ No"
-    problemas_aparcar_calle: (SOLO SI tiene_garage es 'no' Y este campo es null) "Entendido. Al aparcar en la calle, ¿encontrarias dificultades por el tamaño del coche o la escasez de sitios?"
-    espacio_sobra_garage: (SOLO SI tiene_garage es 'sí' Y este campo es null) "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
-    problema_dimension_garage: (SOLO SI `tiene_garage` es 'sí' Y `espacio_sobra_garage` es 'no' Y este campo es `null`. **Al hacer esta pregunta, deja `problema_dimension_garage` como `null` en el JSON de salida.**) "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? Podría ser el largo, el ancho, o la altura del coche. (Puedes mencionar una o varias, ej: 'largo y ancho')"
+* **Para el campo `problema_dimension_garage`:**
+    * Si el usuario menciona "largo", "ancho" o "alto", extráelos como una lista de strings. Ejemplo: si dice "es estrecho y bajo", el valor debe ser `["ancho", "alto"]`.
 
-tiene_punto_carga_propio: "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual?\n\n* ✅ Sí\n* ❌ No"
-solo_electricos:"¿Estás interesado exclusivamente en vehículos con motorización eléctrica?\n\n* ✅ Sí\n* ❌ No"
-transmision_preferida: (SOLO SI solo_electricos es 'no' Y este campo es null)""En cuanto a la transmisión, ¿qué opción se ajusta mejor a tus preferencias?\n\n"
-            "* 1) Automático\n"
-            "* 2) Manual\n"
-            "* 3) Ambos, puedo considerar ambas opciones"
-prioriza_baja_depreciacion: "¿Es importante para ti que la depreciación del coche sea lo más baja posible?\n\n* ✅ Sí\n* ❌ No"
-rating_fiabilidad_durabilidad: "¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche?\n\n" 
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-rating_seguridad: "Pensando en la Seguridad, ¿qué puntuación le darías en importancia? \n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-rating_comodidad: "Y en cuanto a la comodidad y confort del vehiculo que tan importante es que se maximice?\n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-rating_impacto_ambiental: "Considerando el Bajo Impacto Medioambiental, ¿qué importancia tiene esto para tu elección? \n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-rating_costes_uso: "¿qué tan importante es para ti que el vehículo sea económico en su uso diario y mantenimiento? \n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-rating_tecnologia_conectividad:  "finalmente, en cuanto a la Tecnología y Conectividad del coche, \n\n"
-            "📊 0 (nada importante) ———— 10 (extremadamente importante)"
-</Orden_y_Guias_Preguntas_Perfil>
+</Mapeo_de_Respuestas_a_Valores>
 
 <Ejemplos_Perfil>
 
-Ejemplo 1: Inicio
-Contexto: [HumanMessage(content='ayudame a encontrar un coche')]
+# Ejemplo 1: Turno Normal (Extracción Exitosa)
+# El LLM extrae el dato y devuelve un mensaje vacío, cediendo el control al código.
+Contexto: [..., AIMessage(content='¿La Estética es importante para ti...?'), HumanMessage(content='La verdad es que sí, bastante')]
 Salida JSON Esperada:
-{{
-  "preferencias_usuario": {{ ... todos null ... }},
-  "tipo_mensaje": "PREGUNTA", 
-  "contenido_mensaje": "vamos a encontrar el coche que mejor se adapte a tus necesidades, dime, "¿Te consideras una persona apasionada del mundo del motor y la tecnología automotriz?"
-}}
+    {
+      "preferencias_usuario": { 
+        "apasionado_motor": "sí",
+        "valora_estetica": "sí", // Campo actualizado
+        "coche_principal_hogar": null,
+        ... // El resto de campos se mantienen
+      },
+      "tipo_mensaje": "PREGUNTA",
+      "contenido_mensaje": "" // ¡IMPORTANTE! Vacío para que el código haga la siguiente pregunta.
+    }
 
-Ejemplo 2: Flujo condicional (ej: uso_profesional es 'sí', LLM pregunta por tipo_uso_profesional)
-Contexto: [..., AIMessage(content='¿El coche será principalmente para uso personal o también tendrá un uso profesional?'), HumanMessage(content='Sí, lo usaré para trabajar')]
-Salida JSON Esperada:
-{{
-  "preferencias_usuario": {{ 
-    "apasionado_motor": "no", // Asumiendo que ya se obtuvo
-    "valora_estetica": "sí",  // Asumiendo que ya se obtuvo
-    "coche_principal_hogar": "sí", // Asumiendo que ya se obtuvo
-    "uso_profesional": "sí", 
-    "tipo_uso_profesional": null, // Siguiente pregunta
-    /* ... el resto de los campos según el orden y lo que ya se tenga ... */
-  }},
-  "tipo_mensaje": "PREGUNTA", 
-  "contenido_mensaje": "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga, o un uso mixto?"
-}}
-
-Ejemplo 3: Información completa -> CONFIRMACION
-Contexto: [..., HumanMessage(content='No soy apasionado del motor.')] // Asume que esta era la última respuesta necesaria
-Salida JSON Esperada:
-{{
-  "preferencias_usuario": {{ ... todo relleno correctamente ... }},
-  "tipo_mensaje": "CONFIRMACION",
-  "contenido_mensaje": ""  
-}}
-Contexto:`[..., AIMessage(content='¿Quieres solo coches eléctricos?'), HumanMessage(content='Considero eléctricos e híbridos')]`
-Salida JSON Esperada:
-    ```json
-    {{
-      "preferencias_usuario": {{ 
-        // ... otros campos ...
-        "solo_electricos": "no",
-        // ... otros campos ...
-      }},
-      "tipo_mensaje": "PREGUNTA", // O CONFIRMACION si este era el último campo faltante
-      "contenido_mensaje": "¿Qué tipo de transmisión prefieres? ..." 
-    }}
-
-// Ejemplo 4:pregunta por la dimensión problemática
-// Contexto: [..., AIMessage(content='¿...el espacio que tienes es amplio...?'), HumanMessage(content='Es bastante justo, la verdad')]
-// Salida JSON Esperada (LLM pregunta por dimensión problemática):
-    {{
-      "preferencias_usuario": {{ 
-        /*...*/ 
-        "tiene_garage": "sí", 
-        "espacio_sobra_garage": "no", 
-        "problema_dimension_garage": null, // <-- IMPORTANTE: DEBE SER NULL AQUÍ
-        /*...*/ 
-      }},
-      "tipo_mensaje": "PREGUNTA", 
-      "contenido_mensaje": "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión? Podría ser el largo, el ancho, o la altura del coche. (Puedes mencionar una o varias, ej: 'largo y ancho')"
-    }}
-
-Ejemplo 5: LLM pregunta por el primer rating (Fiabilidad)
-Contexto: [..., HumanMessage(content='caja de cambio automatico')] 
-Salida JSON Esperada:
-{{
-  "preferencias_usuario": {{ 
-    /* ... todos los campos anteriores no-rating rellenos ... *
-    "transmision_preferida": "Automático",
-    "rating_fiabilidad_durabilidad": null, // Este es el siguiente
-    "rating_seguridad": null,
-    "rating_comodidad": null,
-    "rating_impacto_ambiental": null,
-    "rating_tecnologia_conectividad": null
-  }},
-  "tipo_mensaje": "PREGUNTA", 
-  "contenido_mensaje": "En una escala de 0 (nada importante) a 10 (extremadamente importante), ¿qué tan importante es para ti la Fiabilidad y Durabilidad del coche?"
-}}
-Ejemplo 6: Usuario comenta sobre la cantidad de preguntas
+# Ejemplo 2: Meta-Comentario del Usuario
+# El LLM detecta el comentario, no actualiza el perfil y solo devuelve la frase empática.
 Contexto: [..., AIMessage(content='¿La Estética es importante para ti...?'), HumanMessage(content='vas a realizar muchas preguntas')]
 Salida JSON Esperada:
     {
       "preferencias_usuario": { 
         "apasionado_motor": "sí",
         "valora_estetica": null, // El campo sigue null porque no se respondió
-        "coche_principal_hogar": "sí",
         ... // El resto del perfil se mantiene como estaba
       },
       "tipo_mensaje": "PREGUNTA",
-      "contenido_mensaje": "Entiendo. Sí, te haré varias preguntas detalladas para asegurarme de entender a la perfección lo que buscas y no mostrarte coches que no te interesan. ¡Valdrá la pena! Volviendo a lo que te comentaba, ¿la estética del vehículo es un factor importante para ti?"
+      "contenido_mensaje": "Entiendo. Sí, te haré varias preguntas detalladas para asegurarme de entender a la perfección lo que buscas. ¡Valdrá la pena!"
     }
+
+# Ejemplo 3: Perfil Completado
+# El LLM recibe la última información necesaria, rellena el último campo y confirma que la tarea ha terminado.
+Contexto: [..., AIMessage(content='...importancia de la Tecnología (0-10)?'), HumanMessage(content='un 8')]
+Salida JSON Esperada:
+    {
+      "preferencias_usuario": { 
+          ... // TODOS los campos ahora tienen un valor
+          "rating_tecnologia_conectividad": 8
+      },
+      "tipo_mensaje": "CONFIRMACION",
+      "contenido_mensaje": "" // Vacío porque el grafo pasará a la siguiente etapa automáticamente.
+    }
+
+# Ejemplo 4: Respuesta Irrelevante
+# El LLM no puede extraer información de perfil y no es un meta-comentario. Devuelve un mensaje vacío.
+Contexto: [..., AIMessage(content='¿Tu altura supera los 1.90 metros?'), HumanMessage(content='ok gracias')]
+Salida JSON Esperada:
+    {
+      "preferencias_usuario": { 
+        ... // El perfil se mantiene exactamente como estaba
+        "altura_mayor_190": null,
+        ...
+      },
+      "tipo_mensaje": "PREGUNTA",
+      "contenido_mensaje": "" // Vacío para que el código repita la pregunta sobre la altura.
+    }
+
+</Ejemplos_Perfil>
+    
+

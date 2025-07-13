@@ -14,7 +14,7 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     if prefs is None:
         return False
     campos_obligatorios = [
-        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "frecuencia_uso", "distancia_trayecto", "circula_principalmente_ciudad" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190", "peso_mayor_100",
+        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "frecuencia_uso", "distancia_trayecto", "circula_principalmente_ciudad" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190",
         "transporta_carga_voluminosa", "arrastra_remolque","aventura", "estilo_conduccion", "tiene_garage", "tiene_punto_carga_propio", "solo_electricos", "transmision_preferida", "prioriza_baja_depreciacion","rating_fiabilidad_durabilidad", 
         "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_costes_uso", "rating_tecnologia_conectividad", 
     ] # por ahora no va 
