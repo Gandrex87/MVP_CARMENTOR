@@ -73,18 +73,6 @@ def ruta_decision_perfil(state: EstadoAnalisisPerfil) -> str:
         # String que mapearemos al nuevo nodo preguntar_preferencias_node
         return "necesita_pregunta_perfil"
 
-# def ruta_decision_filtros(state: EstadoAnalisisPerfil) -> str:
-#     """Decide si los filtros están completos para pasar a economía o si necesita más información."""
-#     print("--- Evaluando Condición: ruta_decision_filtros ---")
-#     filtros = state.get("filtros_inferidos")
-#     if check_filtros_completos(filtros):
-#         print("DEBUG (Condición Filtros) ► Filtros COMPLETOS. Avanzando a economía.")
-#         return "pasar_a_economia" # Ruta hacia la siguiente etapa
-#     else:
-#         print("DEBUG (Condición Filtros) ► Filtros INCOMPLETOS. Volviendo a inferir filtros.")
-#         # Volvemos al nodo que procesa/pregunta por filtros
-#         return "necesita_pregunta_filtro"
-
 # En builder.py o condition.py
 
 def ruta_decision_economia(state: EstadoAnalisisPerfil) -> str:

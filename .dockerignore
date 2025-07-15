@@ -51,3 +51,5 @@ docker_guia.md
 *notebooks/
 *pruebas_conexion_cloud.ipynb
 *pruebas_nvo_llm.ipynb
+temp.py
+*temp.py

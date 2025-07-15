@@ -313,16 +313,16 @@ def compute_raw_weights(
     num_ninos_silla = pasajeros_info.get("num_ninos_silla", 0)
     num_otros_pasajeros = pasajeros_info.get("num_otros_pasajeros", 0)
     if frecuencia_pasajeros == "frecuente" and num_otros_pasajeros >= 2:
-        multiplicadores['ancho'] *= 6.0
-    elif frecuencia_pasajeros == "ocasional" and (num_ninos_silla + num_otros_pasajeros) >= 2:
         multiplicadores['ancho'] *= 3.0
+    elif frecuencia_pasajeros == "ocasional" and (num_ninos_silla + num_otros_pasajeros) >= 2:
+        multiplicadores['ancho'] *= 2.0
         
     if is_yes(preferencias.get("transporta_carga_voluminosa")):
-        multiplicadores['maletero_minimo_score'] *= 15.0
-        multiplicadores['maletero_maximo_score'] *= 10.0
+        multiplicadores['maletero_minimo_score'] *= 10.0 #15
+        multiplicadores['maletero_maximo_score'] *= 7.0 #10
         if is_yes(preferencias.get("necesita_espacio_objetos_especiales")):
-            multiplicadores['largo_vehiculo_score'] *= 10.0
-            multiplicadores['ancho'] *= 5.0
+            multiplicadores['largo_vehiculo_score'] *= 7.0 #10
+            multiplicadores['ancho'] *= 3.5 #5
 
     if is_yes(preferencias.get("circula_principalmente_ciudad")):
         multiplicadores['fav_menor_diametro_giro'] *= 3.0

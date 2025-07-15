@@ -6,13 +6,13 @@ import asyncio # Para ejecutar setup si es necesario desde un contexto síncrono
 from typing import Literal, Optional
 
 # Activar, descomentar estas tres lineas de codigo en caso de hacer pruebas en local y con memoria RAM del ordenador
-#======================================================================
+# #======================================================================
 from langgraph.checkpoint.memory import MemorySaver
 def get_memory():
     return MemorySaver()
-#======================================================================
+# #======================================================================
 
-# ## Activar, descomentar las lineas abajo en caso de hacer API y con memoria en SQLCLOUD:
+# # Activar, descomentar las lineas abajo en caso de hacer API y con memoria en SQLCLOUD:
 # from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver 
 
 # logger = logging.getLogger(__name__)

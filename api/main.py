@@ -262,7 +262,7 @@ class AgentMessageResponse(BaseModel):
 app = FastAPI(
     title="CarBlau Agent API",
     description="API para interactuar con el agente CarBlau y obtener recomendaciones de coches.",
-    version="0.1.2"
+    version="0.1.3"
 )
 
 # --- Middleware de CORS ---

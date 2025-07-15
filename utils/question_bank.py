@@ -58,26 +58,26 @@ QUESTION_BANK: Dict[str, List[str]] = {
     ],
     "distancia_trayecto": [
         ("¿Cuál es la distancia aproximada de tu trayecto más habitual?\n"
-         "* 🟢 Hasta 10 km\n"
-         "* 🟡 10-50 km\n"
-         "* 🟠 51-150 km\n"
-         "* 🔴 Más de 150 km"),
+        "* 🐌 Hasta 10 km\n"
+        "* 🚴‍♂️ 10-50 km\n"
+        "* 🚗  51-150 km\n"
+        "* 🚀 Más de 150 km"),
         ("¿Qué distancia recorres normalmente en tus trayectos más frecuentes?\n"
-         "* 🟢 Hasta 10 km\n"
+         "* 🟣 Hasta 10 km\n"
          "* 🟡 10-50 km\n"
          "* 🟠 51-150 km\n"
-         "* 🔴 Más de 150 km"),
+         "* 🔵 Más de 150 km"),
         ("¿Cuántos kilómetros haces, por lo general, en un trayecto típico?\n"
-         "* 🟢 Hasta 10 km\n"
+         "* 🟣 Hasta 10 km\n"
          "* 🟡 10-50 km\n"
          "* 🟠 51-150 km\n"
-         "* 🔴 Más de 150 km"),
+         "* 🔵 Más de 150 km"),
         ("¿Cuál es la media de kilómetros que sueles hacer por desplazamiento habitual?\n"
-         "* 🟢 Hasta 10 km\n"
-         "* 🟡 10-50 km\n"
-         "* 🟠 51-150 km\n"
-         "* 🔴 Más de 150 km")
-    ],
+        "* 🐌 Hasta 10 km\n"
+        "* 🚴‍♂️ 10-50 km\n"
+        "* 🚗  51-150 km\n"
+        "* 🚀 Más de 150 km")
+    ],    
     "realiza_viajes_largos": [
         "Además de tus trayectos habituales, ¿sueles hacer viajes largos de más de 150 km?\n* ✅ Sí\n* ❌ No",
         "Pensando en viajes más largos, ¿realizas recorridos de más de 150 km de vez en cuando?\n* ✅ Sí\n* ❌ No"
@@ -164,23 +164,22 @@ QUESTION_BANK: Dict[str, List[str]] = {
      "estilo_conduccion":[
             (
             "¿Conduces de forma relajada o prefieres sensaciones más deportivas?\n" 
-            "🚗 Relajada\n"  
-            "🏁 Deportiva\n"  
-            "⚖️ Depende del día, mixto" 
+            "* 🚗 Relajada\n"  
+            "* 🏁 Deportiva\n"  
+            "* ⚖️ Depende del día, mixto" 
         ),
             (
             "¿Qué estilo te define más al volante? \n" 
-            "🚗 Tranquilo\n"  
-            "🏁 Deportiva\n"  
-            "⚖️ Depende del día, mixto" 
+            "* 🚗 Tranquilo\n"  
+            "* 🏁 Deportiva\n"  
+            "* ⚖️ Depende del día, mixto" 
         ),
             (
-            "¿Qué tipo de conducción te resulta más natural?\n" 
-            "🚗 Tranquilo\n"  
-            "🏁 Deportiva\n"  
-            "⚖️ Depende del día, mixto" 
-        ),
-        
+    "¿Qué tipo de conducción te resulta más natural?\n"  # Doble salto de línea aquí
+    "* 🚗 Tranquilo\n"  # Asterisco y espacio al principio
+    "* 🏁 Deportiva\n"  # Asterisco y espacio al principio
+    "* ⚖️ Depende del día, mixto"  # Asterisco y espacio al principio
+    ),      
     ],
      "tiene_garage":[
          "Hablemos un poco de dónde aparcarás. ¿Tienes garaje o plaza de aparcamiento propia?\n* ✅ Sí\n* ❌ No",
@@ -204,10 +203,10 @@ QUESTION_BANK: Dict[str, List[str]] = {
          "¿Dirías que aparcar en la calle es una dificultad en tu día a día?\n* ✅ Sí\n* ❌ No"  
     ],
      "tiene_punto_carga_propio":[
-        "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual?\\n* ✅ Sí\n* ❌ No",
+        "¿cuentas con un punto de carga para vehículo eléctrico en tu domicilio o lugar de trabajo habitual?\n* ✅ Sí\n* ❌ No",
         "¿Tienes acceso habitual a un punto de carga para coche eléctrico en casa o en el trabajo?\n* ✅ Sí\n* ❌ No",
         "¿Dispones de algún enchufe o cargador para coches eléctricos en tu vivienda o trabajo?\n* ✅ Sí\n* ❌ No",
-        "¿Puedes cargar un coche eléctrico fácilmente desde casa o tu oficina?\\n* ✅ Sí\n* ❌ No",
+        "¿Puedes cargar un coche eléctrico fácilmente desde casa o tu oficina?\n* ✅ Sí\n* ❌ No",
         "¿Tienes instalada una toma de carga para vehículos eléctricos en alguno de tus espacios habituales?\n* ✅ Sí\n* ❌ No"       
     ],
      "solo_electricos":[
@@ -225,16 +224,10 @@ QUESTION_BANK: Dict[str, List[str]] = {
             "* Ambos, puedo considerar ambas opciones"
         ),
          (
-        "Hablemos de la transmisión, ¿cuál es tu estilo de conducción?\n"
-        "* **Automático:** Ideal para una conducción más cómoda y sencilla, sobre todo en ciudad.\n"
-        "* **Manual:** Para quienes buscan el máximo control y una experiencia más conectada con el coche.\n"
-        "* **Ambos:** No tienes una preferencia clara y valoras otras características por encima de esta."
-        ),
-         (
         "En cuanto a la transmisión, ¿qué prefieres? \n"
         "* ⚙️ **Automático**\n"
         "* 🕹️ **Manual**\n"
-        "* 🤔 **Indiferente** (estoy abierto/a a ambas)"
+        "* 🤔 **Ambos** (estoy abierto/a a ambas)"
         )
     ],
      

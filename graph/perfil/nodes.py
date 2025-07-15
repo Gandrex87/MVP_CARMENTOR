@@ -1,4 +1,4 @@
-
+from utils.explanation_generator import generar_explicacion_coche_mejorada # <-- NUEVO IMPORT
 from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from pydantic import ValidationError # Importar para manejo de errores si es necesario
 from .state import (EstadoAnalisisPerfil, 
@@ -26,7 +26,6 @@ import pandas as pd
 import json # Para construir el contexto del prompt
 from typing import Literal, Optional ,Dict, Any
 from config.settings import (MAPA_RATING_A_PREGUNTA_AMIGABLE, UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG, UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA)
-from utils.explanation_generator import generar_explicacion_coche_mejorada # <-- NUEVO IMPORT
 import random
 import logging
 
@@ -235,7 +234,7 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             [system_prompt_perfil, *historial],
             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
         )
-        
+        logging.info(f"DEBUG LLM EXTRACTION ► Respuesta COMPLETA del LLM: {response.model_dump_json(indent=2)}")
         preferencias_del_llm = response.preferencias_usuario
         mensaje_para_siguiente_nodo = response.contenido_mensaje
 
@@ -393,72 +392,6 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     return random.choice(QUESTION_BANK["fallback"])
 
 
-
-# def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> Dict:
-#     """
-#     Añade la pregunta de seguimiento correcta al historial.
-#     Prioriza el mensaje generado por el LLM si existe; si no, genera
-#     una pregunta de forma determinista como fallback.
-#     """
-#     print("--- Ejecutando Nodo: preguntar_preferencias_node ---")
-    
-#     preferencias = state.get("preferencias_usuario")
-#     mensaje_pendiente = state.get("pregunta_pendiente") 
-#     historial_actual = state.get("messages", [])
-    
-#     historial_nuevo = list(historial_actual)
-#     mensaje_a_enviar = None
-
-#     perfil_esta_completo = check_perfil_usuario_completeness(preferencias)
-
-#     if not perfil_esta_completo:
-#         #logging.debug("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. Decidiendo qué preguntar...")
-#         logging.debug("DEBUG (Preguntar Perfil) ► Perfil aún INCOMPLETO. Decidiendo qué preguntar...")
-        
-#         # --- ✅ LÓGICA SIMPLIFICADA Y ROBUSTA ---
-#         if mensaje_pendiente and mensaje_pendiente.strip():
-#             # Si el LLM ya generó un mensaje (sea el de bienvenida o una respuesta empática),
-#             # confiamos en él como la fuente principal de la verdad.
-#             logging.info("DEBUG (Preguntar Perfil) ► Usando mensaje pendiente generado por el LLM.")
-#             mensaje_a_enviar = mensaje_pendiente
-#         else:
-#             # Si el LLM no generó nada (por un error o porque no era su turno),
-#             # usamos nuestra lógica determinista como un fallback seguro.
-#             logging.warning("DEBUG (Preguntar Perfil) ► No hay mensaje del LLM. Generando pregunta con lógica interna.")
-#             try:
-#                  mensaje_a_enviar = _obtener_siguiente_pregunta_perfil(preferencias)
-#                  logging.info(f"DEBUG (Preguntar Perfil) ► Pregunta de fallback generada: {mensaje_a_enviar}")
-#             except Exception as e_fallback:
-#                  logging.error(f"ERROR (Preguntar Perfil) ► Error generando pregunta fallback: {e_fallback}")
-#                  mensaje_a_enviar = "¿Podrías darme más detalles sobre tus preferencias?"
-        
-#     else: 
-#         # Si el perfil ya está completo, usamos el mensaje de confirmación del LLM.
-#         print("DEBUG (Preguntar Perfil) ► Perfil COMPLETO según checker.")
-#         if mensaje_pendiente and mensaje_pendiente.strip():
-#              mensaje_a_enviar = mensaje_pendiente
-#         else:
-#              mensaje_a_enviar = "¡Perfecto! He recopilado todas tus preferencias. Ahora continuaré con el siguiente paso."
-
-#     # --- Añadir el mensaje al historial (sin cambios aquí) ---
-#     if mensaje_a_enviar and mensaje_a_enviar.strip():
-#         ai_msg = AIMessage(content=mensaje_a_enviar)
-#         if not historial_actual or historial_actual[-1].content != ai_msg.content:
-#             historial_nuevo.append(ai_msg)
-#             logging.info(f"DEBUG (Preguntar Perfil) ► Mensaje final añadido: {mensaje_a_enviar}")
-#         else:
-#              logging.warning("DEBUG (Preguntar Perfil) ► Mensaje final duplicado, no se añade.")
-#     else:
-#          logging.error("ERROR (Preguntar Perfil) ► No se determinó ningún mensaje a enviar.")
-#          ai_msg = AIMessage(content="No estoy seguro de qué preguntar ahora. ¿Puedes darme más detalles?")
-#          historial_nuevo.append(ai_msg)
-
-#     # Devolver estado
-#     return {
-#         **state,
-#         "messages": historial_nuevo,
-#         "pregunta_pendiente": None 
-#     }
 
 def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> Dict:
     """
@@ -851,22 +784,6 @@ def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
         "filtros_inferidos": filtros_finales
     }
 
-# def validar_filtros_node(state: EstadoAnalisisPerfil) -> dict:
-#     """
-#     Comprueba si los FiltrosInferidos en el estado están completos 
-#     (según los criterios definidos en la función de utilidad `check_filtros_completos`).
-#     """
-#     print("--- Ejecutando Nodo: validar_filtros_node ---")
-#     filtros = state.get("filtros_inferidos")
-    
-#     # Usar una función de utilidad para verificar la completitud SOLO de los filtros
-#     # ¡Asegúrate de que esta función exista en utils.validation!
-#     if check_filtros_completos(filtros):
-#         print("DEBUG (Filtros) ► Validación: FiltrosInferidos considerados COMPLETOS.")
-#     else:
-#         print("DEBUG (Filtros) ► Validación: FiltrosInferidos considerados INCOMPLETOS.")
-        
-#     return {**state}
 # --- Fin Etapa 2 ---
 
 
@@ -1162,9 +1079,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "flag_bonus_seguridad_fuerte": flag_bonus_seguridad_fuerte,
             'flag_bonus_fiab_dur_critico': flag_bonus_fiab_dur_critico,
             'flag_bonus_fiab_dur_fuerte': flag_bonus_fiab_dur_fuerte,
-            "flag_bonus_costes_critico": flag_bonus_costes_critico
-
-     
+            "flag_bonus_costes_critico": flag_bonus_costes_critico 
         }
     # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
     # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
@@ -1409,8 +1324,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     }
     
 
-
-    
+   
 def calcular_pesos_finales_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Calcula los pesos crudos y normalizados finales basados en todas las
@@ -1797,17 +1711,21 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
                     explicacion_coche = "Análisis detallado de la recomendación pendiente de desarrollo."
 
                     # --- 3. Construimos el mensaje en Markdown para este coche ---
-                    mensaje_coches += f"\n---\n" # Separador horizontal
-                    mensaje_coches += f"### {i+1}. {nombre}\n" # Título del coche
-                    mensaje_coches += f"> {tipo_mecanica} | {anyo_unidad} | {traccion}  "
-                    
+                    mensaje_coches += f"\n---\n"  # Separador horizontal
+                    mensaje_coches += f"### {i+1}. {nombre}\n"  # Título del coche
+
+                    # ✅ CORREGIDO: Añadido un salto de línea '\n' al final de esta línea.
+                    # Esto asegura que la imagen aparezca en una nueva línea.
+                    mensaje_coches += f"> {tipo_mecanica} | {anyo_unidad} | {traccion}\n"
+
                     # Añadimos la imagen si la URL existe
                     if url_foto and url_foto.strip():
-                        mensaje_coches += f"![Foto de {nombre}]({url_foto})\n\n"
-                    
+                        mensaje_coches += f"![Foto de {nombre}]({url_foto})\n"
+
                     # Añadimos los detalles clave y la explicación
-                    mensaje_coches += f"**Precio:** {precio_str} | **Puntuación:** {score_str}\n\n"
-                    mensaje_coches += f"*{explicacion_coche}*"
+                    # Se usa un solo '\n' para que no haya un espacio excesivo con la explicación.
+                    mensaje_coches += f"**Precio:** {precio_str} | **Puntuación:** {score_str}\n"
+                    mensaje_coches += f"*{explicacion_coche}*\n"
                 
                 mensaje_coches += "\n\n---\n\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles?"
                 # --- ✅ FIN DE LA NUEVA LÓGICA DE PRESENTACIÓN ---

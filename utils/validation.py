@@ -1,7 +1,7 @@
-# En utils/validation.py (o donde prefieras)
+# En utils/validation.py
 from typing import Optional
 from pydantic import ValidationError
-from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario, InfoPasajeros,DistanciaTrayecto
+from graph.perfil.state import PerfilUsuario, EconomiaUsuario, InfoPasajeros,DistanciaTrayecto
 from utils.conversion import is_yes
 import logging
 logger = logging.getLogger(__name__)
@@ -67,39 +67,6 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     print("DEBUG (Validation Perfil) ► Todos los campos obligatorios del perfil están presentes.")
     return True
 
-# # --- Función de Validación de Filtros ---
-# def check_filtros_completos(filtros: Optional[FiltrosInferidos]) -> bool:
-#     """
-#     Verifica si un objeto FiltrosInferidos tiene los campos esenciales 
-#     (principalmente tipo_mecanica) para proceder a la etapa de economía.
-#     """
-#     if filtros is None:
-#         print("DEBUG (Validation Filtros) ► Objeto FiltrosInferidos es None.")
-#         return False # No hay objeto de filtros, no está completo
-
-#     # Define qué filtros consideras OBLIGATORIOS para pasar a economía.
-#     # Por ahora, el más crítico es tipo_mecanica.
-#     campos_obligatorios = ["tipo_mecanica"] 
-
-#     for campo in campos_obligatorios:
-#         valor = getattr(filtros, campo, None)
-        
-#         # Validación específica para tipo_mecanica (lista)
-#         if campo == "tipo_mecanica":
-#             # Consideramos incompleto si es None O si es una lista vacía []
-#             if valor is None or not valor: # not valor cubre el caso de lista vacía
-#                  print(f"DEBUG (Validation Filtros) ► Campo '{campo}' es None o lista vacía.")
-#                  return False # Filtro obligatorio ausente o vacío
-        
-#         # Validación para otros campos si los añades a campos_obligatorios
-#         # elif campo == "otro_campo_obligatorio":
-#         #    if valor is None or (isinstance(valor, str) and not valor.strip()):
-#         #         print(f"DEBUG (Validation Filtros) ► Campo '{campo}' está vacío/None.")
-#         #         return False 
-
-#     # Si todos los campos obligatorios revisados están bien:
-#     print("DEBUG (Validation Filtros) ► Todos los campos obligatorios de filtros ('tipo_mecanica') están presentes y válidos.")
-#     return True
 
 # --- función de Validación de Economía ---
 
