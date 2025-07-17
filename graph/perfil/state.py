@@ -37,7 +37,7 @@ class PerfilUsuario(BaseModel):
     tipo_uso_profesional: Optional[TipoUsoProfesional] = Field(default=None, description="Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'")
     prefiere_diseno_exclusivo: Optional[str] = Field(default=None,description="¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?")
     altura_mayor_190: Optional[str] = Field(default=None, description="¿El usuario mide más de 1.90 metros? Responde 'sí' o 'no'")
-    transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'") #acostumbra a viajar con mucho equipaje
+    transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Necesita maletero amplio? Responde 'sí' o 'no'") #acostumbra a viajar con mucho equipaje
     necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="¿Vas a transportar objetos voluminosos como bicicletas, tablas de surf, cochecitos, instrumentos musicales o similares? Responde 'sí' o 'no'")    
     arrastra_remolque: Optional[str] = Field(default=None, description="¿Va a arrastrar remolque pesado o caravana? Responde 'sí' o 'no'" )
      # --- NUEVOS CAMPOS PARA GARAJE/APARCAMIENTO ---
@@ -223,9 +223,14 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_bonus_seguridad_fuerte: Optional[bool]
     flag_bonus_fiab_dur_critico: Optional[bool]
     flag_bonus_fiab_dur_fuerte: Optional[bool]
-    flag_bonus_costes_critico: Optional[bool] 
+    flag_bonus_costes_critico: Optional[bool]
+    flag_penalizar_tamano_no_compacto: Optional[bool]
+    flag_bonus_singularidad_lifestyle: Optional[bool]
+    flag_deportividad_lifestyle: Optional[bool]
+    flag_ajuste_maletero_personal: Optional[bool]
     km_anuales_estimados: Optional[int]
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
+
 
 
 

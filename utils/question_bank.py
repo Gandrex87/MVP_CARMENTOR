@@ -138,7 +138,6 @@ QUESTION_BANK: Dict[str, List[str]] = {
         "¿Vas a transportar objetos voluminosos como bicicletas, tablas de surf, cochecitos, instrumentos musicales o similares?",
         "¿Necesitas espacio para cargar cosas grandes como bicis, tablas, sillas infantiles o instrumentos?",
         "¿Sueles llevar en el coche objetos de tamaño especial (bicicletas, cochecitos, equipamiento deportivo…)?",
-        "¿El vehículo deberá permitir transportar cosas voluminosas?",
         "¿Cuentas con equipamiento grande que necesites llevar contigo (como una silla de ruedas, una tabla de surf o una bici)?"   
     ],
      "arrastra_remolque":[

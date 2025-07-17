@@ -6,7 +6,9 @@ from google.cloud import bigquery
 from config.settings import ( 
     MIN_MAX_RANGES,PENALTY_PUERTAS_BAJAS,PENALTY_LOW_COST_POR_COMODIDAD, PENALTY_DEPORTIVIDAD_POR_COMODIDAD, PENALTY_ANTIGUEDAD_7_A_10_ANOS, PENALTY_ANTIGUEDAD_10_A_15_ANOS, PENALTY_ANTIGUEDAD_MAS_15_ANOS, PENALTY_ANTIGUEDAD_5_A_7_ANOS, BONUS_DISTINTIVO_ECO_CERO_C, PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,  PENALTY_BEV_REEV_AVENTURA_OCASIONAL,PENALTY_PHEV_AVENTURA_OCASIONAL, PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA,BONUS_CARROCERIA_MONTANA, BONUS_CARROCERIA_COMERCIAL,BONUS_CARROCERIA_PASAJEROS_PRO, PENALTY_CARROCERIA_NO_AVENTURA , BONUS_SUV_AVENTURA_OCASIONAL, BONUS_TODOTERRENO_AVENTURA_EXTREMA, BONUS_PICKUP_AVENTURA_EXTREMA, BONUS_CARROCERIA_OBJETOS_ESPECIALES, PENALTY_CARROCERIA_OBJETOS_ESPECIALES,  BONUS_CARROCERIA_CONFORT, FACTOR_CONVERSION_PRECIO_CUOTA,
     BONUS_OCASION_POR_USO_OCASIONAL, PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL, BONUS_BEV_REEV_USO_DEFINIDO,PENALTY_PHEV_USO_INTENSIVO_LARGO, BONUS_MOTOR_POCO_KM, PENALTY_OCASION_POCO_KM, PENALTY_OCASION_MEDIO_KM, BONUS_MOTOR_MUCHO_KM, PENALTY_OCASION_MUCHO_KM, PENALTY_OCASION_MUY_ALTO_KM_V2 ,BONUS_BEV_MUY_ALTO_KM , BONUS_REEV_MUY_ALTO_KM , BONUS_DIESEL_HEVD_MUY_ALTO_KM, BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM, BONUS_PUNTO_CARGA_PROPIO, PENALTY_AWD_NINGUNA_AVENTURA,  BONUS_AWD_AVENTURA_OCASIONAL, BONUS_AWD_AVENTURA_EXTREMA, BONUS_AWD_ZONA_NIEVE, BONUS_AWD_ZONA_MONTA, BONUS_REDUCTORAS_AVENTURA_EXTREMA , PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA, PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B , BONUS_ZBE_DISTINTIVO_FAVORABLE_C , BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO, 
-    BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO, PENALTY_DIESEL_CIUDAD , BONUS_DIESEL_CIUDAD_OCASIONAL, FACTOR_ESCALA_BASE, PENALTY_OCASION_KILOMETRAJE_EXTREMO, FACTOR_BONUS_RATING_CRITICO,FACTOR_BONUS_RATING_FUERTE, FACTOR_BONUS_FIABILIDAD_POR_IMPACTO, FACTOR_BONUS_DURABILIDAD_POR_IMPACTO, BONUS_REDUCTORAS_AVENTURA_OCASIONAL, FACTOR_BONUS_FIAB_DUR_CRITICO , FACTOR_BONUS_FIAB_DUR_FUERTE,FACTOR_BONUS_COSTES_CRITICO, PENALTY_ANO_PRE_1990 ,PENALTY_ANO_1991_1995, PENALTY_ANO_1996_2000 ,PENALTY_DIESEL_2001_2006  )
+    BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO, PENALTY_DIESEL_CIUDAD , BONUS_DIESEL_CIUDAD_OCASIONAL, FACTOR_ESCALA_BASE, PENALTY_OCASION_KILOMETRAJE_EXTREMO, FACTOR_BONUS_RATING_CRITICO,FACTOR_BONUS_RATING_FUERTE, FACTOR_BONUS_FIABILIDAD_POR_IMPACTO, FACTOR_BONUS_DURABILIDAD_POR_IMPACTO, BONUS_REDUCTORAS_AVENTURA_OCASIONAL, FACTOR_BONUS_FIAB_DUR_CRITICO , FACTOR_BONUS_FIAB_DUR_FUERTE,FACTOR_BONUS_COSTES_CRITICO, PENALTY_ANO_PRE_1990 ,PENALTY_ANO_1991_1995, PENALTY_ANO_1996_2000 ,PENALTY_DIESEL_2001_2006, PENALTY_TAMANO_NO_COMPACTO, BONUS_CARROCERIA_COUPE_SINGULAR, BONUS_CARROCERIA_DESCAPOTABLE_SINGULAR,
+    BONUS_CARROCERIA_COUPE_DEPORTIVO, BONUS_CARROCERIA_DESCAPOTABLE_DEPORTIVO, PENALTY_CARROCERIA_COMERCIAL_DEPORTIVO, PENALTY_CARROCERIA_FURGONETA_DEPORTIVO, PENALTY_MALETERO_INSUFICIENTE , PENALTY_COMERCIAL_USO_PERSONAL
+    )
 # --- Configuración de Logging ---
 logger = logging.getLogger(__name__) 
 
@@ -190,6 +192,11 @@ def buscar_coches_bq(
     flag_bonus_fiab_dur_critico_val = bool(filtros.get("flag_bonus_fiab_dur_critico", False))
     flag_bonus_fiab_dur_fuerte_val =  bool(filtros.get("flag_bonus_fiab_dur_fuerte", False))
     flag_bonus_costes_critico = bool(filtros.get("flag_bonus_costes_critico", False))
+    flag_penalizar_tamano_val = bool(filtros.get("flag_penalizar_tamano_no_compacto", False))
+    flag_bonus_singularidad_lifestyle = bool(filtros.get("flag_penalizar_tamano_no_compacto", False))
+    flag_deportividad_lifestyle = bool(filtros.get("flag_deportividad_lifestyle", False))
+    flag_ajuste_maletero_personal = bool(filtros.get("flag_ajuste_maletero_personal", False))
+    
     
     m = MIN_MAX_RANGES
     min_est, max_est = m["estetica"]; min_prem, max_prem = m["premium"]; min_sing, max_sing = m["singular"]
@@ -222,7 +229,6 @@ def buscar_coches_bq(
         bigquery.ScalarQueryParameter("peso_rating_durabilidad", "FLOAT64", pesos_completos["rating_durabilidad"]),
         bigquery.ScalarQueryParameter("peso_rating_fiabilidad", "FLOAT64", pesos_completos["rating_fiabilidad"]),
         bigquery.ScalarQueryParameter("peso_rating_seguridad", "FLOAT64", pesos_completos["rating_seguridad"]),
-        #bigquery.ScalarQueryParameter("peso_rating_comodidad", "FLOAT64", pesos_completos["rating_comodidad"]),
         bigquery.ScalarQueryParameter("peso_rating_impacto_ambiental", "FLOAT64", pesos_completos["rating_impacto_ambiental"]),
         bigquery.ScalarQueryParameter("peso_fav_bajo_coste_uso_directo", "FLOAT64", pesos_completos["fav_bajo_coste_uso_directo"]),
         bigquery.ScalarQueryParameter("peso_fav_bajo_coste_mantenimiento_directo", "FLOAT64", pesos_completos["fav_bajo_coste_mantenimiento_directo"]),
@@ -286,6 +292,10 @@ def buscar_coches_bq(
         bigquery.ScalarQueryParameter("flag_bonus_fiab_dur_fuerte", "BOOL", flag_bonus_fiab_dur_fuerte_val),
         bigquery.ScalarQueryParameter("flag_bonus_costes_critico", "BOOL", flag_bonus_costes_critico),
         bigquery.ScalarQueryParameter("km_anuales_estimados", "INT64", km_anuales_estimados_val),
+        bigquery.ScalarQueryParameter("flag_penalizar_tamano_no_compacto", "BOOL", flag_penalizar_tamano_val),
+        bigquery.ScalarQueryParameter("flag_bonus_singularidad_lifestyle", "BOOL", flag_bonus_singularidad_lifestyle),
+        bigquery.ScalarQueryParameter("flag_deportividad_lifestyle", "BOOL", flag_deportividad_lifestyle),
+        bigquery.ScalarQueryParameter("flag_ajuste_maletero_personal", "BOOL", flag_ajuste_maletero_personal),
         bigquery.ScalarQueryParameter("k", "INT64", k)
     ]
     
@@ -397,20 +407,12 @@ def buscar_coches_bq(
             (sd.batalla_scaled * @peso_batalla * {FACTOR_ESCALA_BASE}) AS dbg_score_batalla,
             (sd.indice_altura_scaled * @peso_indice_altura * {FACTOR_ESCALA_BASE}) AS dbg_score_altura_interior,
             (sd.ancho_scaled * @peso_ancho_general_score * {FACTOR_ESCALA_BASE}) AS dbg_score_ancho,
-            --(sd.fiabilidad_scaled  * @peso_rating_fiabilidad * {FACTOR_ESCALA_BASE}) AS dbg_score_fiabilidad,
-            --(sd.durabilidad_scaled * @peso_rating_durabilidad * {FACTOR_ESCALA_BASE}) AS dbg_score_durabilidad,
-            --(sd.seguridad_scaled * @peso_rating_seguridad * {FACTOR_ESCALA_BASE}) AS dbg_score_seguridad,
-            --(sd.comodidad_scaled * @peso_rating_comodidad * {FACTOR_ESCALA_BASE}) AS dbg_score_comodidad,
-            --(sd.tecnologia_scaled * @peso_rating_tecnologia_conectividad * {FACTOR_ESCALA_BASE}) AS dbg_score_tecnologia,
             (sd.devaluacion_scaled * @peso_devaluacion * {FACTOR_ESCALA_BASE}) AS dbg_score_devaluacion,
             (sd.maletero_minimo_scaled * @peso_maletero_minimo_score * {FACTOR_ESCALA_BASE}) AS dbg_score_maletero_min,
             (sd.maletero_maximo_scaled * @peso_maletero_maximo_score * {FACTOR_ESCALA_BASE}) AS dbg_score_maletero_max,
             (sd.largo_scaled * @peso_largo_vehiculo_score * {FACTOR_ESCALA_BASE}) AS dbg_score_largo,
             (sd.autonomia_uso_maxima_scaled * @peso_autonomia_vehiculo * {FACTOR_ESCALA_BASE}) AS dbg_score_autonomia_max,
             (sd.bajo_peso_scaled * @peso_fav_bajo_peso * {FACTOR_ESCALA_BASE}) AS dbg_score_bajo_peso,
-            -- (sd.bajo_consumo_scaled * @peso_fav_bajo_consumo * {FACTOR_ESCALA_BASE}) AS dbg_score_bajo_consumo,
-            -- (sd.costes_de_uso_bajo_scaled * @peso_fav_bajo_coste_uso_directo * {FACTOR_ESCALA_BASE}) AS dbg_score_bajo_coste_uso,
-            --(sd.costes_mantenimiento_bajo_scaled * @peso_fav_bajo_coste_mantenimiento_directo * {FACTOR_ESCALA_BASE}) AS dbg_score_bajo_coste_mantenimiento,
             (sd.par_scaled * @peso_par_motor_remolque_score * {FACTOR_ESCALA_BASE}) AS dbg_score_par_remolque,
             (sd.cap_remolque_cf_scaled * @peso_cap_remolque_cf_score * {FACTOR_ESCALA_BASE}) AS dbg_score_remolque_cf,
             (sd.cap_remolque_sf_scaled * @peso_cap_remolque_sf_score * {FACTOR_ESCALA_BASE}) AS dbg_score_remolque_sf,
@@ -482,6 +484,38 @@ def buscar_coches_bq(
             (CASE WHEN @flag_bonus_awd_montana = TRUE AND sd.traccion = 'ALL' THEN {BONUS_AWD_ZONA_MONTA} ELSE 0.0 END) as dbg_bonus_awd_montana,
             (CASE WHEN @flag_logica_reductoras_aventura = 'FAVORECER_OCASIONAL' AND COALESCE(sd.reductoras, FALSE) = TRUE THEN {BONUS_REDUCTORAS_AVENTURA_OCASIONAL} WHEN @flag_logica_reductoras_aventura = 'FAVORECER_EXTREMA' AND COALESCE(sd.reductoras, FALSE) = TRUE THEN {BONUS_REDUCTORAS_AVENTURA_EXTREMA} ELSE 0.0 END) as dbg_bonus_reductoras,
             (CASE WHEN @flag_logica_diesel_ciudad = 'PENALIZAR' AND sd.tipo_mecanica IN ('DIESEL', 'HEVD', 'MHEVD') THEN {PENALTY_DIESEL_CIUDAD} WHEN @flag_logica_diesel_ciudad = 'BONIFICAR' AND sd.tipo_mecanica IN ('DIESEL', 'HEVD', 'MHEVD') THEN {BONUS_DIESEL_CIUDAD_OCASIONAL} ELSE 0.0 END) as dbg_ajuste_diesel_ciudad,
+            (CASE 
+                WHEN @flag_penalizar_tamano_no_compacto = TRUE AND sd.largo >= 4200 
+                THEN {PENALTY_TAMANO_NO_COMPACTO} 
+                ELSE 0.0 
+            END) as dbg_pen_tamano_no_compacto,
+             (CASE 
+                WHEN @flag_bonus_singularidad_lifestyle = TRUE AND sd.tipo_carroceria = 'COUPE' THEN {BONUS_CARROCERIA_COUPE_SINGULAR}
+                WHEN @flag_bonus_singularidad_lifestyle = TRUE AND sd.tipo_carroceria = 'DESCAPOTABLE' THEN {BONUS_CARROCERIA_DESCAPOTABLE_SINGULAR}
+                ELSE 0.0 
+            END) as dbg_bonus_lifestyle,
+            (CASE
+                WHEN @flag_deportividad_lifestyle = TRUE AND sd.tipo_carroceria = 'COUPE' THEN {BONUS_CARROCERIA_COUPE_DEPORTIVO}
+                WHEN @flag_deportividad_lifestyle = TRUE AND sd.tipo_carroceria = 'DESCAPOTABLE' THEN {BONUS_CARROCERIA_DESCAPOTABLE_DEPORTIVO}
+                WHEN @flag_deportividad_lifestyle = TRUE AND sd.tipo_carroceria = 'COMERCIAL' THEN {PENALTY_CARROCERIA_COMERCIAL_DEPORTIVO}
+                WHEN @flag_deportividad_lifestyle = TRUE AND sd.tipo_carroceria = 'FURGONETA' THEN {PENALTY_CARROCERIA_FURGONETA_DEPORTIVO}
+                ELSE 0.0
+            END) as dbg_ajuste_deportividad_lifestyle,
+            (CASE
+                WHEN @flag_ajuste_maletero_personal = TRUE THEN
+                    -- Sumamos las tres penalizaciones posibles
+                    (CASE 
+                        WHEN sd.plazas <= 3 AND sd.maletero_minimo < 450 THEN {PENALTY_MALETERO_INSUFICIENTE}
+                        WHEN sd.plazas > 3 AND sd.maletero_minimo < 550 THEN {PENALTY_MALETERO_INSUFICIENTE}
+                        ELSE 0.0
+                    END)
+                    +
+                    (CASE
+                        WHEN sd.tipo_carroceria = 'COMERCIAL' THEN {PENALTY_COMERCIAL_USO_PERSONAL}
+                        ELSE 0.0
+                    END)
+                ELSE 0.0 
+            END) as dbg_ajuste_maletero_personal,
             (CASE WHEN @km_anuales_estimados > 0 AND @km_anuales_estimados < 10000 THEN (CASE WHEN sd.tipo_mecanica IN ('GASOLINA', 'MHEVG', 'HEVG') THEN {BONUS_MOTOR_POCO_KM} ELSE 0 END) + (CASE WHEN COALESCE(sd.km_ocasion, 0) > 250000 THEN {PENALTY_OCASION_POCO_KM} ELSE 0 END) WHEN @km_anuales_estimados >= 10000 AND @km_anuales_estimados < 30000 THEN (CASE WHEN COALESCE(sd.km_ocasion, 0) > 120000 THEN {PENALTY_OCASION_MEDIO_KM} ELSE 0 END) WHEN @km_anuales_estimados >= 30000 AND @km_anuales_estimados < 60000 THEN (CASE WHEN sd.tipo_mecanica IN ('DIESEL', 'MHEVD', 'HEVD', 'GLP', 'GNV') THEN {BONUS_MOTOR_MUCHO_KM} ELSE 0 END) + (CASE WHEN COALESCE(sd.km_ocasion, 0) > 80000 THEN {PENALTY_OCASION_MUCHO_KM} ELSE 0 END) WHEN @km_anuales_estimados >= 60000 THEN (CASE sd.tipo_mecanica WHEN 'BEV' THEN {BONUS_BEV_MUY_ALTO_KM} WHEN 'REEV' THEN {BONUS_REEV_MUY_ALTO_KM} WHEN 'HEVD' THEN {BONUS_DIESEL_HEVD_MUY_ALTO_KM} WHEN 'DIESEL' THEN {BONUS_DIESEL_HEVD_MUY_ALTO_KM} WHEN 'MHEVD' THEN {BONUS_DIESEL_HEVD_MUY_ALTO_KM} WHEN 'PHEVD' THEN {BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM} WHEN 'GLP' THEN {BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM} WHEN 'GNV' THEN {BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM} ELSE 0.0 END) + (CASE WHEN COALESCE(sd.km_ocasion, 0) > 20000 THEN {PENALTY_OCASION_MUY_ALTO_KM_V2} ELSE 0 END) ELSE 0.0 END) as dbg_ajuste_km_anuales
         FROM ScaledData sd
         WHERE 1=1 {sql_where_clauses_str}
@@ -511,7 +545,8 @@ def buscar_coches_bq(
                 dbg_bonus_punto_carga + dbg_ajuste_awd_aventura + dbg_bonus_awd_nieve + dbg_bonus_awd_montana +
                 dbg_bonus_reductoras + dbg_ajuste_diesel_ciudad + dbg_ajuste_km_anuales + dbg_bonus_seguridad  +
                 dbg_bonus_fiabilidad + dbg_bonus_durabilidad + dbg_bonus_bajo_consumo + dbg_bonus_coste_uso +
-                dbg_bonus_coste_mantenimiento + dbg_pen_antiguedad_general
+                dbg_bonus_coste_mantenimiento + dbg_pen_antiguedad_general + dbg_pen_tamano_no_compacto + dbg_bonus_lifestyle + 
+                dbg_ajuste_deportividad_lifestyle + dbg_ajuste_maletero_personal
             ) AS ajustes_experto
         FROM DebugScores
     ),

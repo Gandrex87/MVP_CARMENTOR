@@ -108,6 +108,11 @@ MIN_MAX_RANGES = {
 
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 #⚖️ Nivel 1: Ajuste Ligero (de +2 a +5 puntos)
+
+# --- PENALIZACIÓN POR TAMAÑO PARA USO INDIVIDUAL/OCASIONAL ---
+# Penalización para coches grandes si el usuario no suele llevar pasajeros.
+PENALTY_TAMANO_NO_COMPACTO = -8 #-5
+
 # Bonus por tipo de motor
 BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM = 3
 BONUS_BEV_MUY_ALTO_KM = 5
@@ -249,7 +254,18 @@ FACTOR_BONUS_FIAB_DUR_FUERTE = 1.2  # Para ratings >= 7 (aumenta un 30%)
 # --- FACTORES DE BONUS POR RATING DE COSTES DE USO ---
 FACTOR_BONUS_COSTES_CRITICO = 4.0
 
+# --- BONUS POR SINGULARIDAD Y ESTILO DE VIDA ---
+BONUS_CARROCERIA_COUPE_SINGULAR = 3
+BONUS_CARROCERIA_DESCAPOTABLE_SINGULAR = 2
 
+BONUS_CARROCERIA_COUPE_DEPORTIVO = 4
+BONUS_CARROCERIA_DESCAPOTABLE_DEPORTIVO = 3
+PENALTY_CARROCERIA_COMERCIAL_DEPORTIVO = -10
+PENALTY_CARROCERIA_FURGONETA_DEPORTIVO = -7
+
+# --- PENALIZACIONES PARA LA REGLA DE "MALETERO PERSONAL" ---
+PENALTY_MALETERO_INSUFICIENTE = -5
+PENALTY_COMERCIAL_USO_PERSONAL = -10
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- UMBRALES PARA ACTIVAR FLAGS EN PYTHON (`graph/perfil/nodes.py` - `finalizar_y_presentar_node`) ---
 

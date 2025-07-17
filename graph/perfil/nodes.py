@@ -23,6 +23,7 @@ from utils.question_bank import QUESTION_BANK
 import traceback
 from langchain_core.runnables import RunnableConfig
 import pandas as pd
+from utils.enums import EstiloConduccion
 import json # Para construir el contexto del prompt
 from typing import Literal, Optional ,Dict, Any
 from config.settings import (MAPA_RATING_A_PREGUNTA_AMIGABLE, UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS, UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG, UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG, UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA)
@@ -209,6 +210,113 @@ def buscar_info_clima_node(state: EstadoAnalisisPerfil) -> dict:
 
 # --- Etapa 1: Recopilación de Preferencias del Usuario ---
 
+
+
+# def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Procesa entrada humana, llama a llm_solo_perfil, actualiza preferencias_usuario,
+#     y guarda el contenido del mensaje devuelto en 'pregunta_pendiente'.
+#     Maneja errores de validación de Pydantic para ratings fuera de rango.
+#     """
+#     print("--- Ejecutando Nodo: recopilar_preferencias_node ---")
+#     logging.debug("--- Ejecutando Nodo: recopilar_preferencias_node ---")
+    
+#     historial = state.get("messages", [])
+#     # Obtener el estado actual de preferencias. Si no existe, inicializar uno nuevo.
+#     preferencias_actuales_obj = state.get("preferencias_usuario") or PerfilUsuario()
+
+#     # Si el último mensaje es de la IA, no llamar al LLM de nuevo.
+#     if historial and isinstance(historial[-1], AIMessage):
+#         logging.debug("(Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
+#         return {"pregunta_pendiente": state.get("pregunta_pendiente")}
+
+#     logging.debug("(Perfil) ► Último mensaje es HumanMessage o historial vacío, llamando a llm_solo_perfil...")
+    
+#     # Inicializar variables para la salida del nodo
+#     preferencias_para_actualizar_estado = preferencias_actuales_obj # Default: mantener las actuales si todo falla
+#     mensaje_para_pregunta_pendiente = "Lo siento, tuve un problema técnico al procesar tus preferencias." # Default
+
+#     try:
+#         response: ResultadoSoloPerfil = llm_solo_perfil.invoke(
+#             [system_prompt_perfil, *historial],
+#             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
+#         )
+#         logging.debug(f"DEBUG (Perfil) ► Respuesta llm_solo_perfil: {response}")
+#         # --- FIN DEL BLOQUE DE DEPURACIÓN ---
+        
+#         preferencias_del_llm = response.preferencias_usuario # Objeto PerfilUsuario del LLM
+#         mensaje_para_pregunta_pendiente = response.contenido_mensaje # Mensaje del LLM
+
+#         # Aplicar post-procesamiento a las preferencias obtenidas del LLM
+#         if preferencias_del_llm is None: # Si el LLM no devolvió un objeto de preferencias
+#             logging.warning("WARN (Perfil) ► llm_solo_perfil devolvió preferencias_usuario como None.")
+#             preferencias_del_llm = PerfilUsuario() # Usar uno vacío para el post-procesador
+
+#         preferencias_post_proc = aplicar_postprocesamiento_perfil(preferencias_del_llm)
+        
+#         if preferencias_post_proc is not None:
+#             preferencias_para_actualizar_estado = preferencias_post_proc
+#             logging.debug(f"DEBUG (Perfil) ► Preferencias TRAS post-procesamiento: {preferencias_para_actualizar_estado.model_dump_json(indent=2) if hasattr(preferencias_para_actualizar_estado, 'model_dump_json') else preferencias_para_actualizar_estado}")
+#         else:
+#             logging.warning("WARN (Perfil) ► aplicar_postprocesamiento_perfil devolvió None. Usando preferencias del LLM sin post-procesar (o las actuales si LLM falló).")
+#             preferencias_para_actualizar_estado = preferencias_del_llm if preferencias_del_llm else preferencias_actuales_obj
+
+#     except ValidationError as e_val:
+#         logging.error(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val.errors()}")
+        
+#         custom_error_message = None
+#         campo_rating_erroneo_para_reset = None
+#         preferencias_para_reset = preferencias_actuales_obj.model_copy(deep=True) # Trabajar sobre una copia de las actuales
+
+#         for error in e_val.errors():
+#             loc = error.get('loc', ())
+#             # El error de Pydantic v2 para modelos anidados puede tener 'preferencias_usuario' como primer elemento de 'loc'
+#             if len(loc) > 0 and str(loc[0]) == 'preferencias_usuario' and len(loc) > 1 and str(loc[1]).startswith('rating_'):
+#                 campo_rating = str(loc[1])
+#                 tipo_error_pydantic = error.get('type')
+#                 valor_input = error.get('input')
+
+#                 if tipo_error_pydantic in ['less_than_equal', 'greater_than_equal', 'less_than', 'greater_than', 'finite_number', 'int_parsing']: # Añadir int_parsing
+#                     nombre_amigable = MAPA_RATING_A_PREGUNTA_AMIGABLE.get(campo_rating, f"el campo '{campo_rating}'")
+#                     custom_error_message = (
+#                         f"Para {nombre_amigable}, necesito una puntuación entre 0 y 10. "
+#                         f"Parece que ingresaste '{valor_input}'. ¿Podrías darme un valor en la escala de 0 a 10, por favor?"
+#                     )
+#                     campo_rating_erroneo_para_reset = campo_rating
+#                     break 
+        
+#         if custom_error_message:
+#             mensaje_para_pregunta_pendiente = custom_error_message
+#             if campo_rating_erroneo_para_reset and hasattr(preferencias_para_reset, campo_rating_erroneo_para_reset):
+#                 setattr(preferencias_para_reset, campo_rating_erroneo_para_reset, None)
+#                 logging.debug(f"DEBUG (Perfil) ► Campo erróneo '{campo_rating_erroneo_para_reset}' reseteado a None.")
+#             preferencias_para_actualizar_estado = preferencias_para_reset # Usar la versión con el campo reseteado
+#         else:
+#             error_msg_detalle = e_val.errors()[0]['msg'] if e_val.errors() else 'Error desconocido'
+#             mensaje_para_pregunta_pendiente = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {error_msg_detalle}"
+#             preferencias_para_actualizar_estado = preferencias_actuales_obj # Revertir a las preferencias antes de la llamada LLM
+
+#     except Exception as e_general:
+#         logging.error(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil o en post-procesamiento: {e_general}", exc_info=True)
+#         mensaje_para_pregunta_pendiente = "Lo siento, tuve un problema técnico al procesar tus preferencias. ¿Podríamos intentarlo de nuevo con la última pregunta?"
+#         preferencias_para_actualizar_estado = preferencias_actuales_obj # Revertir a las preferencias antes de la llamada LLM
+
+#     # Asegurar que pregunta_pendiente tenga un valor si no se estableció
+#     if not mensaje_para_pregunta_pendiente or not mensaje_para_pregunta_pendiente.strip():
+#         # Esto podría pasar si el LLM devuelve tipo_mensaje=CONFIRMACION y contenido_mensaje=""
+#         # pero el perfil aún no está completo según check_perfil_usuario_completeness.
+#         # En ese caso, el nodo preguntar_preferencias_node usará su fallback.
+#         logging.debug(f"DEBUG (Perfil) ► No hay mensaje específico para pregunta_pendiente, se limpiará o usará fallback.")
+#         mensaje_para_pregunta_pendiente = None
+#     logging.debug(f"DEBUG (Perfil) ► Estado preferencias_usuario a actualizar: {preferencias_para_actualizar_estado.model_dump_json(indent=2) if hasattr(preferencias_para_actualizar_estado, 'model_dump_json') else None}")
+#     logging.debug(f"DEBUG (Perfil) ► Guardando mensaje para pregunta_pendiente: {mensaje_para_pregunta_pendiente}")
+        
+#     return {
+#         "preferencias_usuario": preferencias_para_actualizar_estado,
+#         "pregunta_pendiente": mensaje_para_pregunta_pendiente
+#     }
+
+
 def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Procesa la entrada del usuario, llama al LLM para extraer nueva información,
@@ -219,10 +327,28 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     historial = state.get("messages", [])
     # Obtenemos el perfil completo que ya tenemos guardado.
     preferencias_actuales_obj = state.get("preferencias_usuario") or PerfilUsuario()
-
+    
+    # 🔍 DEBUGGING: Log del estado inicial
+    logging.info(f"DEBUG (Perfil) ► Estado inicial del perfil: {preferencias_actuales_obj.model_dump_json(indent=2) if preferencias_actuales_obj else 'None'}")
+    logging.info(f"DEBUG (Perfil) ► Historial tiene {len(historial)} mensajes")
+    
+    # 🚨 CAMBIO CRÍTICO: Condición más específica para evitar pérdida de estado
     if historial and isinstance(historial[-1], AIMessage):
         logging.debug("(Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
-        return {"pregunta_pendiente": state.get("pregunta_pendiente")}
+        # ✅ IMPORTANTE: Siempre retornar el perfil actual para evitar pérdida de estado
+        return {
+            "preferencias_usuario": preferencias_actuales_obj,
+            "pregunta_pendiente": state.get("pregunta_pendiente")
+        }
+
+    # 🔍 Verificación adicional: ¿hay un mensaje del usuario para procesar?
+    mensajes_usuario = [msg for msg in historial if isinstance(msg, HumanMessage)]
+    if not mensajes_usuario:
+        logging.warning("WARN (Perfil) ► No hay mensajes del usuario para procesar.")
+        return {
+            "preferencias_usuario": preferencias_actuales_obj,
+            "pregunta_pendiente": state.get("pregunta_pendiente")
+        }
 
     logging.debug("(Perfil) ► Llamando a llm_solo_perfil...")
     
@@ -234,7 +360,7 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             [system_prompt_perfil, *historial],
             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
         )
-        logging.info(f"DEBUG LLM EXTRACTION ► Respuesta COMPLETA del LLM: {response.model_dump_json(indent=2)}")
+        
         preferencias_del_llm = response.preferencias_usuario
         mensaje_para_siguiente_nodo = response.contenido_mensaje
 
@@ -244,15 +370,34 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             perfil_actualizado = preferencias_actuales_obj.model_copy(deep=True)
 
             # 2. Convertimos la respuesta del LLM en un diccionario, pero SOLO
-            #    con los campos que el LLM realmente ha rellenado (excluye los None o no establecidos).
+            #    con los campos que el LLM realmente ha rellenado (excluye los no establecidos).
             #    exclude_unset=True es crucial aquí.
             nuevos_datos = preferencias_del_llm.model_dump(exclude_unset=True)
             
             if nuevos_datos:
                 logging.info(f"DEBUG (Perfil) ► Fusionando nuevos datos del LLM: {nuevos_datos}")
+                
+                # 🔍 DEBUGGING: Comparación antes y después
+                datos_antes = perfil_actualizado.model_dump()
+                logging.info(f"DEBUG (Perfil) ► Datos ANTES de fusión: {datos_antes}")
+                
                 # 3. Usamos .model_copy(update=...) para fusionar los nuevos datos en el perfil existente.
                 #    Esto actualiza los campos nuevos sin borrar los antiguos.
                 perfil_consolidado = perfil_actualizado.model_copy(update=nuevos_datos)
+                
+                # 🔍 DEBUGGING: Verificación post-fusión
+                datos_despues = perfil_consolidado.model_dump()
+                logging.info(f"DEBUG (Perfil) ► Datos DESPUÉS de fusión: {datos_despues}")
+                
+                # 🔍 Verificación de que no se perdieron datos
+                campos_perdidos = []
+                for campo, valor in datos_antes.items():
+                    if valor is not None and datos_despues.get(campo) is None:
+                        campos_perdidos.append(campo)
+                
+                if campos_perdidos:
+                    logging.warning(f"WARN (Perfil) ► Posibles campos perdidos en fusión: {campos_perdidos}")
+                    
             else:
                 # Si el LLM se ejecutó pero no extrajo datos (ej. por un meta-comentario),
                 # mantenemos el perfil tal como estaba.
@@ -261,50 +406,30 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             
             # 4. Aplicamos el post-procesamiento sobre el perfil ya fusionado y completo.
             perfil_final_a_guardar = aplicar_postprocesamiento_perfil(perfil_consolidado)
+            
+            # 🔍 DEBUGGING: Verificación post-procesamiento
+            if perfil_final_a_guardar:
+                logging.info(f"DEBUG (Perfil) ► Perfil después del post-procesamiento: {perfil_final_a_guardar.model_dump_json(indent=2)}")
+            
         else:
             logging.warning("WARN (Perfil) ► El LLM no devolvió un objeto de preferencias. Se mantiene el perfil actual.")
             perfil_final_a_guardar = preferencias_actuales_obj
         # --- FIN DE LA LÓGICA DE FUSIÓN ---
-    except ValidationError as e_val:
-        logging.error(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val.errors()}")
-        
-        custom_error_message = None
-        campo_rating_erroneo_para_reset = None
-        preferencias_para_reset = preferencias_actuales_obj.model_copy(deep=True)
-
-        for error in e_val.errors():
-            loc = error.get('loc', ())
-            if len(loc) > 1 and str(loc[0]) == 'preferencias_usuario' and str(loc[1]).startswith('rating_'):
-                campo_rating = str(loc[1])
-                tipo_error_pydantic = error.get('type')
-                valor_input = error.get('input')
-
-                if tipo_error_pydantic in ['less_than_equal', 'greater_than_equal', 'less_than', 'greater_than', 'finite_number', 'int_parsing']:
-                    nombre_amigable = MAPA_RATING_A_PREGUNTA_AMIGABLE.get(campo_rating, f"el campo '{campo_rating}'")
-                    custom_error_message = (
-                        f"Para {nombre_amigable}, necesito una puntuación entre 0 y 10. "
-                        f"Parece que ingresaste '{valor_input}'. ¿Podrías darme un valor en la escala de 0 a 10, por favor?"
-                    )
-                    campo_rating_erroneo_para_reset = campo_rating
-                    break 
-        
-        if custom_error_message:
-            mensaje_para_siguiente_nodo = custom_error_message
-            if campo_rating_erroneo_para_reset and hasattr(preferencias_para_reset, campo_rating_erroneo_para_reset):
-                setattr(preferencias_para_reset, campo_rating_erroneo_para_reset, None)
-            perfil_final_a_guardar = preferencias_para_reset
-        else:
-            error_msg_detalle = e_val.errors()[0]['msg'] if e_val.errors() else 'Error desconocido'
-            mensaje_para_siguiente_nodo = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {error_msg_detalle}"
-            perfil_final_a_guardar = preferencias_actuales_obj
 
     except Exception as e_general:
         logging.error(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil o en post-procesamiento: {e_general}", exc_info=True)
         mensaje_para_siguiente_nodo = "Lo siento, tuve un problema técnico. ¿Podríamos intentarlo de nuevo?"
+        # 🚨 IMPORTANTE: En caso de error, mantener el perfil actual
         perfil_final_a_guardar = preferencias_actuales_obj
 
-    logging.debug(f"DEBUG (Perfil) ► Estado final de 'preferencias_usuario' a guardar: {perfil_final_a_guardar.model_dump_json(indent=2) if perfil_final_a_guardar else 'None'}")
-    logging.debug(f"DEBUG (Perfil) ► Guardando 'pregunta_pendiente': {mensaje_para_siguiente_nodo}")
+    # 🔍 DEBUGGING: Estado final antes de retornar
+    logging.info(f"DEBUG (Perfil) ► Estado final de 'preferencias_usuario' a guardar: {perfil_final_a_guardar.model_dump_json(indent=2) if perfil_final_a_guardar else 'None'}")
+    logging.info(f"DEBUG (Perfil) ► Guardando 'pregunta_pendiente': {mensaje_para_siguiente_nodo}")
+    
+    # 🚨 VERIFICACIÓN FINAL: Asegurarse de que no retornamos None
+    if perfil_final_a_guardar is None:
+        logging.error("ERROR (Perfil) ► perfil_final_a_guardar es None! Usando perfil actual como fallback.")
+        perfil_final_a_guardar = preferencias_actuales_obj
         
     return {
         "preferencias_usuario": perfil_final_a_guardar,
@@ -741,7 +866,7 @@ def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
 # --- Fin Etapa 1 ---
 
 # --- Etapa 2: Inferencia y Validación de Filtros Técnicos ---
-def inferir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
+def construir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Construye y refina los filtros de búsqueda de forma determinista
     llamando a la función de post-procesamiento. No utiliza LLM.
@@ -1038,6 +1163,10 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     flag_bonus_fiab_dur_critico = False
     flag_bonus_fiab_dur_fuerte= False
     flag_bonus_costes_critico = False
+    flag_penalizar_tamano_no_compacto = False
+    flag_bonus_singularidad_lifestyle = False
+    flag_deportividad_lifestyle = False
+    flag_ajuste_maletero_personal = False
 
      
     # Verificar que preferencias_obj exista para acceder a sus atributos
@@ -1079,7 +1208,11 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "flag_bonus_seguridad_fuerte": flag_bonus_seguridad_fuerte,
             'flag_bonus_fiab_dur_critico': flag_bonus_fiab_dur_critico,
             'flag_bonus_fiab_dur_fuerte': flag_bonus_fiab_dur_fuerte,
-            "flag_bonus_costes_critico": flag_bonus_costes_critico 
+            "flag_bonus_costes_critico": flag_bonus_costes_critico,
+            "flag_penalizar_tamano_no_compacto" : flag_penalizar_tamano_no_compacto,
+            "flag_bonus_singularidad_lifestyle": flag_bonus_singularidad_lifestyle,
+            "flag_deportividad_lifestyle": flag_deportividad_lifestyle,
+            "flag_ajuste_maletero_personal" : flag_ajuste_maletero_personal
         }
     # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
     # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
@@ -1233,6 +1366,19 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             flag_bonus_costes_critico = True
             logging.info("Flags: Rating de Costes de Uso CRÍTICO. Activando bonus.")
     #-------------------------
+    # Primero, comprobamos si el usuario NO suele llevar acompañantes.
+    # Usamos getattr para evitar errores si el atributo no existiera.
+    if getattr(info_pasajeros_obj, 'suele_llevar_acompanantes', True) is False:
+        flag_penalizar_tamano_no_compacto = True
+        logging.info("Flags: Usuario no suele llevar acompañantes. Activando penalización para coches grandes.")
+    
+    # Si sí lleva acompañantes, comprobamos la frecuencia.
+    elif getattr(info_pasajeros_obj, 'frecuencia_viaje_con_acompanantes', 'frecuente') == "ocasional":
+        flag_penalizar_tamano_no_compacto = True
+        logging.info("Flags: Frecuencia de pasajeros es 'ocasional'. Activando penalización para coches grandes.")
+
+    # --- FIN DE LA LÓGICA CORREGIDA ---
+    
     # Lógica para Flag ZBE (basado en info_clima_obj)
     if info_clima_obj and hasattr(info_clima_obj, 'cp_valido_encontrado') and info_clima_obj.cp_valido_encontrado and \
        hasattr(info_clima_obj, 'MUNICIPIO_ZBE') and info_clima_obj.MUNICIPIO_ZBE is True:
@@ -1285,6 +1431,45 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     
     logging.debug(f"DEBUG (CalcFlags) ► Flags calculados: lowcost_comodidad={flag_penalizar_lc_comod}, deportividad_comodidad={flag_penalizar_dep_comod}, antiguo_por_tecnolog={flag_penalizar_ant_tec}, distint_ambiental={flag_aplicar_dist_amb}, zbe={flag_es_zbe}, penali_bev_reev_aventura_ocasional= {flag_pen_bev_reev_avent_ocas}...")
 
+    # --- ✅ NUEVA LÓGICA PARA FLAG DE SINGULARIDAD/LIFESTYLE ---
+    if info_pasajeros_obj and preferencias_obj:
+        # Condición 1: El usuario valora un diseño exclusivo
+        quiere_diseno_exclusivo = is_yes(preferencias_obj.prefiere_diseno_exclusivo)
+        
+        # Condición 2: El usuario no suele llevar muchos pasajeros
+        frecuencia_pasajeros = info_pasajeros_obj.frecuencia_viaje_con_acompanantes
+        uso_poco_acompaniado = frecuencia_pasajeros in ["nunca", "ocasional"]
+
+        # Si ambas condiciones se cumplen, activamos el flag
+        if quiere_diseno_exclusivo and uso_poco_acompaniado:
+            flag_bonus_singularidad_lifestyle = True
+            logging.info(f"Flags: Perfil 'Lifestyle' detectado. Activando bonus para Coupés y Descapotables.")
+            
+    # Condición 1: El estilo de conducción debe ser DEPORTIVO
+    es_estilo_deportivo = getattr(preferencias_obj, 'estilo_conduccion', None) == EstiloConduccion.DEPORTIVO.value
+    # Condición 2: El usuario no suele llevar muchos pasajeros
+    # Usamos 'frecuencia' como el campo consolidado que ya tienes.
+    frecuencia_pasajeros = info_pasajeros_obj.frecuencia_viaje_con_acompanantes
+    uso_poco_acompaniado = frecuencia_pasajeros in ["nunca", "ocasional"]
+
+    # Si ambas condiciones se cumplen, activamos el flag
+    if es_estilo_deportivo and uso_poco_acompaniado:
+        flag_deportividad_lifestyle = True
+        logging.info(f"Flags: Perfil 'Deportividad Lifestyle' detectado. Activando ajustes de carrocería para Coupés, etc.")
+    # --- FIN NUEVA LÓGICA ---
+    
+    if preferencias_obj:
+        # Condición 1: El uso NO es profesional
+        uso_no_profesional = not is_yes(preferencias_obj.uso_profesional)
+        
+        # Condición 2: El usuario SÍ transporta carga voluminosa
+        transporta_carga = is_yes(preferencias_obj.transporta_carga_voluminosa)
+
+        # Si ambas condiciones se cumplen, activamos el flag
+        if uso_no_profesional and transporta_carga:
+            flag_ajuste_maletero_personal = True
+            logging.info(f"Flags: Perfil 'Transportista Personal' detectado. Activando ajustes de maletero y carrocería.")
+    
     return {
         "penalizar_puertas_bajas": penalizar_puertas_bajas_actual, # Propagar
        # "priorizar_ancho": priorizar_ancho_actual, # Propagar
@@ -1320,7 +1505,11 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_bonus_fiab_dur_critico": flag_bonus_fiab_dur_critico,
         "flag_bonus_fiab_dur_fuerte": flag_bonus_fiab_dur_fuerte,
         "flag_bonus_costes_critico": flag_bonus_costes_critico,
-         "es_municipio_zbe": flag_es_zbe       
+        "flag_penalizar_tamano_no_compacto": flag_penalizar_tamano_no_compacto,
+        "flag_bonus_singularidad_lifestyle": flag_bonus_singularidad_lifestyle,
+        "flag_deportividad_lifestyle": flag_deportividad_lifestyle,
+        "flag_ajuste_maletero_personal" : flag_ajuste_maletero_personal,
+        "es_municipio_zbe": flag_es_zbe       
     }
     
 
@@ -1486,7 +1675,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     """
     print("--- Ejecutando Nodo: buscar_coches_finales_node ---")
     logging.debug(f"DEBUG (Buscar BQ Init) ► Estado completo recibido: {state}") 
-    k_coches = 12
+    k_coches = 5
     historial = state.get("messages", [])
     tabla_resumen_criterios_md = state.get("tabla_resumen_criterios", "No se pudo generar el resumen de criterios.")
     preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario
@@ -1528,9 +1717,12 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     flag_bonus_fiab_dur_critico = state.get("flag_bonus_fiab_dur_critico")
     flag_bonus_fiab_dur_fuerte = state.get("flag_bonus_fiab_dur_fuerte")
     flag_bonus_costes_critico = state.get("flag_bonus_costes_critico")
+    flag_penalizar_tamano_no_compacto = state.get("flag_penalizar_tamano_no_compacto")
+    flag_bonus_singularidad_lifestyle = state.get("flag_bonus_singularidad_lifestyle")
+    flag_deportividad_lifestyle = state.get("flag_deportividad_lifestyle")
+    flag_ajuste_maletero_personal = state.get("flag_ajuste_maletero_personal")
     km_anuales_val = state.get("km_anuales_estimados")
 
-    
     # 2. Obtén el thread_id directamente del objeto 'config'
     # Esta es la forma correcta y segura de accederlo.
     configurable_config = config.get("configurable", {})
@@ -1593,6 +1785,10 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         filtros_para_bq['flag_bonus_fiab_dur_critico'] = flag_bonus_fiab_dur_critico
         filtros_para_bq['flag_bonus_fiab_dur_fuerte'] = flag_bonus_fiab_dur_fuerte
         filtros_para_bq['flag_bonus_costes_critico'] = flag_bonus_costes_critico
+        filtros_para_bq['flag_penalizar_tamano_no_compacto'] = flag_penalizar_tamano_no_compacto
+        filtros_para_bq['flag_bonus_singularidad_lifestyle'] = flag_bonus_singularidad_lifestyle
+        filtros_para_bq['flag_deportividad_lifestyle'] = flag_deportividad_lifestyle
+        filtros_para_bq['flag_ajuste_maletero_personal'] = flag_ajuste_maletero_personal
         filtros_para_bq['km_anuales_estimados'] = km_anuales_val
         
         logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
@@ -1860,6 +2056,10 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         'flag_bonus_fiab_dur_critico' : flag_bonus_fiab_dur_critico,
         'flag_bonus_fiab_dur_fuerte' : flag_bonus_fiab_dur_fuerte ,
         'flag_bonus_costes_critico' : flag_bonus_costes_critico,
+        "flag_penalizar_tamano_no_compacto": flag_penalizar_tamano_no_compacto,
+        "flag_bonus_singularidad_lifestyle" : flag_bonus_singularidad_lifestyle,
+        "flag_deportividad_lifestyle": flag_deportividad_lifestyle,
+        "flag_ajuste_maletero_personal": flag_ajuste_maletero_personal,
         "pregunta_pendiente": None # Este nodo es final para el turno
         
     }

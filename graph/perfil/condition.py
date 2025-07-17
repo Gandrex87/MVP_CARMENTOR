@@ -142,3 +142,6 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
     else: # Conversación completa y coches ya buscados, reiniciar para una nueva consulta
         print("DEBUG Router: Decisión -> Conversación Completa con coches. Reiniciando (recopilar_cp).")
         return "recopilar_cp"
+    
+
+

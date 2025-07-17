@@ -12,7 +12,7 @@ def get_memory():
     return MemorySaver()
 # #======================================================================
 
-# # Activar, descomentar las lineas abajo en caso de hacer API y con memoria en SQLCLOUD:
+# # # Activar, descomentar las lineas abajo en caso de hacer API y con memoria en SQLCLOUD:
 # from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver 
 
 # logger = logging.getLogger(__name__)

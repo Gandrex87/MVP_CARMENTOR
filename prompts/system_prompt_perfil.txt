@@ -19,8 +19,8 @@ La estructura JSON que DEBES generar es la siguiente:
     "DistanciaTrayecto": {{
       "enum": [
         "no supera los 10 km",
-        "est\u00e1 entre 10 y 50 km",
-        "est\u00e1 entre 51 y 150 km",
+        "está entre 10 y 50 km",
+        "está entre 51 y 150 km",
         "supera los 150 km"
       ],
       "title": "DistanciaTrayecto",
@@ -48,7 +48,7 @@ La estructura JSON que DEBES generar es la siguiente:
       "enum": [
         "frecuentemente",
         "ocasionalmente",
-        "espor\u00e1dicamente"
+        "esporádicamente"
       ],
       "title": "FrecuenciaViajesLargos",
       "type": "string"
@@ -74,7 +74,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfEres un apasionado/a del motor y/o la movilidad? Responde 's\u00ed' o 'no'",
+          "description": "¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'",
           "title": "Apasionado Motor"
         }},
         "valora_estetica": {{
@@ -87,7 +87,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfValora la est\u00e9tica del coche? Responde 's\u00ed' o 'no'",
+          "description": "¿Valora la estética del coche? Responde 'sí' o 'no'",
           "title": "Valora Estetica"
         }},
         "coche_principal_hogar": {{
@@ -100,7 +100,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfSer\u00e1 el coche principal del hogar? Responde 's\u00ed' o 'no'",
+          "description": "¿Será el coche principal del hogar? Responde 'sí' o 'no'",
           "title": "Coche Principal Hogar"
         }},
         "frecuencia_uso": {{
@@ -113,7 +113,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Frecuencia con la que el usuario usar\u00e1 el coche semanalmente."
+          "description": "Frecuencia con la que el usuario usará el coche semanalmente."
         }},
         "distancia_trayecto": {{
           "anyOf": [
@@ -125,7 +125,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Distancia del trayecto m\u00e1s frecuente o habitual en kil\u00f3metros."
+          "description": "Distancia del trayecto más frecuente o habitual en kilómetros."
         }},
         "realiza_viajes_largos": {{
           "anyOf": [
@@ -137,7 +137,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfEl usuario realiza viajes largos (>150km) adem\u00e1s de su trayecto habitual? Responde 's\u00ed' o 'no'",
+          "description": "¿El usuario realiza viajes largos (>150km) además de su trayecto habitual? Responde 'sí' o 'no'",
           "title": "Realiza Viajes Largos"
         }},
         "frecuencia_viajes_largos": {{
@@ -150,7 +150,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Si realiza viajes largos, \u00bfcon qu\u00e9 frecuencia lo hace?"
+          "description": "Si realiza viajes largos, ¿con qué frecuencia lo hace?"
         }},
         "circula_principalmente_ciudad": {{
           "anyOf": [
@@ -162,7 +162,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfEl usuario circula principalmente por ciudad? Responde 's\u00ed' o 'no'",
+          "description": "¿El usuario circula principalmente por ciudad? Responde 'sí' o 'no'",
           "title": "Circula Principalmente Ciudad"
         }},
         "uso_profesional": {{
@@ -175,7 +175,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfUsar\u00e1 el coche para trabajo? Responde 's\u00ed' o 'no'",
+          "description": "¿Usará el coche para trabajo? Responde 'sí' o 'no'",
           "title": "Uso Profesional"
         }},
         "tipo_uso_profesional": {{
@@ -188,7 +188,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Si el uso profesional es 's\u00ed', especifica si es para 'pasajeros', 'carga' o 'mixto'"
+          "description": "Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'"
         }},
         "prefiere_diseno_exclusivo": {{
           "anyOf": [
@@ -200,7 +200,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfPrefiere un dise\u00f1o exclusivo/diferenciador ('s\u00ed') o algo m\u00e1s discreto ('no')?",
+          "description": "¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?",
           "title": "Prefiere Diseno Exclusivo"
         }},
         "altura_mayor_190": {{
@@ -213,7 +213,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfEl usuario mide m\u00e1s de 1.90 metros? Responde 's\u00ed' o 'no'",
+          "description": "¿El usuario mide más de 1.90 metros? Responde 'sí' o 'no'",
           "title": "Altura Mayor 190"
         }},
         "transporta_carga_voluminosa": {{
@@ -226,7 +226,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfTransporta con frecuencia equipaje o carga voluminosa? Responde 's\u00ed' o 'no'",
+          "description": "¿Necesita maletero amplio? Responde 'sí' o 'no'",
           "title": "Transporta Carga Voluminosa"
         }},
         "necesita_espacio_objetos_especiales": {{
@@ -239,7 +239,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Si transporta carga, \u00bfnecesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 's\u00ed' o 'no'",
+          "description": "¿Vas a transportar objetos voluminosos como bicicletas, tablas de surf, cochecitos, instrumentos musicales o similares? Responde 'sí' o 'no'",
           "title": "Necesita Espacio Objetos Especiales"
         }},
         "arrastra_remolque": {{
@@ -252,7 +252,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfVa a arrastrar remolque pesado o caravana? Responde 's\u00ed' o 'no'",
+          "description": "¿Va a arrastrar remolque pesado o caravana? Responde 'sí' o 'no'",
           "title": "Arrastra Remolque"
         }},
         "tiene_garage": {{
@@ -265,7 +265,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfTiene garaje o plaza de aparcamiento propia? Responde 's\u00ed' o 'no'",
+          "description": "¿Tiene garaje o plaza de aparcamiento propia? Responde 'sí' o 'no'",
           "title": "Tiene Garage"
         }},
         "problemas_aparcar_calle": {{
@@ -278,7 +278,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Si no tiene garaje, \u00bfsuele tener problemas para aparcar en la calle? Responde 's\u00ed' o 'no'",
+          "description": "Si no tiene garaje, ¿suele tener problemas para aparcar en la calle? Responde 'sí' o 'no'",
           "title": "Problemas Aparcar Calle"
         }},
         "espacio_sobra_garage": {{
@@ -291,7 +291,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Si tiene garaje, \u00bftiene espacio de sobra? Responde 's\u00ed' o 'no'",
+          "description": "Si tiene garaje, ¿tiene espacio de sobra? Responde 'sí' o 'no'",
           "title": "Espacio Sobra Garage"
         }},
         "problema_dimension_garage": {{
@@ -307,7 +307,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Si no tiene espacio de sobra en garaje, \u00bfcu\u00e1l es la dimensi\u00f3n problem\u00e1tica principal (largo, ancho, alto)? Puede ser una lista.",
+          "description": "Si no tiene espacio de sobra en garaje, ¿cuál es la dimensión problemática principal (largo, ancho, alto)? Puede ser una lista.",
           "title": "Problema Dimension Garage"
         }},
         "tiene_punto_carga_propio": {{
@@ -320,7 +320,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfEl usuario tiene un punto de carga para veh\u00edculo el\u00e9ctrico en propiedad? Responde 's\u00ed' o 'no'",
+          "description": "¿El usuario tiene un punto de carga para vehículo eléctrico en propiedad? Responde 'sí' o 'no'",
           "title": "Tiene Punto Carga Propio"
         }},
         "aventura": {{
@@ -333,7 +333,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfQu\u00e9 nivel de aventura buscas con tu veh\u00edculo: 'ninguna', 'ocasional' o 'extrema'?"
+          "description": "¿Qué nivel de aventura buscas con tu vehículo: 'ninguna', 'ocasional' o 'extrema'?"
         }},
         "estilo_conduccion": {{
           "anyOf": [
@@ -345,7 +345,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Estilo de conducci\u00f3n preferido: tranquilo, deportivo o mixto."
+          "description": "Estilo de conducción preferido: tranquilo, deportivo o mixto."
         }},
         "solo_electricos": {{
           "anyOf": [
@@ -357,7 +357,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfQuiere solo coches el\u00e9ctricos? Responde 's\u00ed' o 'no'",
+          "description": "¿Quiere solo coches eléctricos? Responde 'sí' o 'no'",
           "title": "Solo Electricos"
         }},
         "prioriza_baja_depreciacion": {{
@@ -370,7 +370,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfEs importante que la depreciaci\u00f3n del coche sea lo m\u00e1s baja posible? Responde 's\u00ed' o 'no'",
+          "description": "¿Es importante que la depreciación del coche sea lo más baja posible? Responde 'sí' o 'no'",
           "title": "Prioriza Baja Depreciacion"
         }},
         "transmision_preferida": {{
@@ -383,7 +383,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "\u00bfQu\u00e9 transmisi\u00f3n prefieres: autom\u00e1tico, manual o ambos?"
+          "description": "¿Qué transmisión prefieres: automático, manual o ambos?"
         }},
         "rating_fiabilidad_durabilidad": {{
           "anyOf": [
@@ -457,7 +457,7 @@ La estructura JSON que DEBES generar es la siguiente:
             }}
           ],
           "default": null,
-          "description": "Importancia de la Tecnolog\u00eda y Conectividad (0-10).",
+          "description": "Importancia de la Tecnología y Conectividad (0-10).",
           "title": "Rating Tecnologia Conectividad"
         }},
         "rating_costes_uso": {{
@@ -490,7 +490,7 @@ La estructura JSON que DEBES generar es la siguiente:
     }},
     "Transmision": {{
       "enum": [
-        "autom\u00e1tico",
+        "automático",
         "manual",
         "ambos"
       ],
@@ -505,7 +505,7 @@ La estructura JSON que DEBES generar es la siguiente:
       "description": "Objeto con las preferencias del usuario actualizadas o inferidas."
     }},
     "tipo_mensaje": {{
-      "description": "Clasificaci\u00f3n del mensaje: 'PREGUNTA' si se necesita m\u00e1s info de perfil, 'CONFIRMACION' si el perfil parece completo o se confirma un dato, 'ERROR' si hubo un problema irresoluble.",
+      "description": "Clasificación del mensaje: 'PREGUNTA' si se necesita más info de perfil, 'CONFIRMACION' si el perfil parece completo o se confirma un dato, 'ERROR' si hubo un problema irresoluble.",
       "enum": [
         "PREGUNTA",
         "CONFIRMACION",
@@ -515,7 +515,7 @@ La estructura JSON que DEBES generar es la siguiente:
       "type": "string"
     }},
     "contenido_mensaje": {{
-      "description": "El texto real del mensaje: la pregunta espec\u00edfica, la confirmaci\u00f3n, o el detalle del error.",
+      "description": "El texto real del mensaje: la pregunta específica, la confirmación, o el detalle del error.",
       "title": "Contenido Mensaje",
       "type": "string"
     }}
@@ -558,7 +558,7 @@ Tu objetivo principal es actualizar el objeto `preferencias_usuario` basándote 
 Para los campos que usan valores de una lista (enums) o sí/no, utiliza las siguientes guías:
 
 * **Para el campo `aventura`:**
-    * Si el usuario dice "solo asfalto", "carretera", o similar, establece el valor a `"ninguna"`.
+    * Si el usuario dice "solo asfalto", "por carretera", o similar, establece el valor a `"ninguna"`.
     * Si dice "pistas", "ocasional", o similar, establece el valor a `"ocasional"`.
     * Si dice "terrenos complicados", "extremo", o similar, establece el valor a `"extrema"`.
 
@@ -632,6 +632,23 @@ Salida JSON Esperada:
       },
       "tipo_mensaje": "PREGUNTA",
       "contenido_mensaje": "" // Vacío para que el código repita la pregunta sobre la altura.
+    }
+
+Ejemplo 5: Mapeo de Respuesta para el campo `aventura`
+# El LLM interpreta "solo asfalto" y lo mapea al valor 'ninguna' del enum,
+# basándose en las instrucciones de <Mapeo_de_Respuestas_a_Valores>.
+Contexto: [..., AIMessage(content='¿Por qué tipo de vías piensas circular...?'), HumanMessage(content='Principalmente por carretera, solo asfalto')]
+Salida JSON Esperada:
+    {
+      "preferencias_usuario": {
+        ... // El resto del perfil se mantiene como estaba
+        "arrastra_remolque": "no",
+        "aventura": "ninguna", // Campo actualizado correctamente
+        "estilo_conduccion": null,
+        ...
+      },
+      "tipo_mensaje": "PREGUNTA",
+      "contenido_mensaje": "" // Vacío para que el código formule la siguiente pregunta (sobre estilo_conduccion)
     }
 
 </Ejemplos_Perfil>
