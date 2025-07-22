@@ -327,28 +327,10 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     historial = state.get("messages", [])
     # Obtenemos el perfil completo que ya tenemos guardado.
     preferencias_actuales_obj = state.get("preferencias_usuario") or PerfilUsuario()
-    
-    # 🔍 DEBUGGING: Log del estado inicial
-    logging.info(f"DEBUG (Perfil) ► Estado inicial del perfil: {preferencias_actuales_obj.model_dump_json(indent=2) if preferencias_actuales_obj else 'None'}")
-    logging.info(f"DEBUG (Perfil) ► Historial tiene {len(historial)} mensajes")
-    
-    # 🚨 CAMBIO CRÍTICO: Condición más específica para evitar pérdida de estado
+
     if historial and isinstance(historial[-1], AIMessage):
         logging.debug("(Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
-        # ✅ IMPORTANTE: Siempre retornar el perfil actual para evitar pérdida de estado
-        return {
-            "preferencias_usuario": preferencias_actuales_obj,
-            "pregunta_pendiente": state.get("pregunta_pendiente")
-        }
-
-    # 🔍 Verificación adicional: ¿hay un mensaje del usuario para procesar?
-    mensajes_usuario = [msg for msg in historial if isinstance(msg, HumanMessage)]
-    if not mensajes_usuario:
-        logging.warning("WARN (Perfil) ► No hay mensajes del usuario para procesar.")
-        return {
-            "preferencias_usuario": preferencias_actuales_obj,
-            "pregunta_pendiente": state.get("pregunta_pendiente")
-        }
+        return {"pregunta_pendiente": state.get("pregunta_pendiente")}
 
     logging.debug("(Perfil) ► Llamando a llm_solo_perfil...")
     
@@ -370,34 +352,15 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             perfil_actualizado = preferencias_actuales_obj.model_copy(deep=True)
 
             # 2. Convertimos la respuesta del LLM en un diccionario, pero SOLO
-            #    con los campos que el LLM realmente ha rellenado (excluye los no establecidos).
+            #    con los campos que el LLM realmente ha rellenado (excluye los None o no establecidos).
             #    exclude_unset=True es crucial aquí.
             nuevos_datos = preferencias_del_llm.model_dump(exclude_unset=True)
             
             if nuevos_datos:
                 logging.info(f"DEBUG (Perfil) ► Fusionando nuevos datos del LLM: {nuevos_datos}")
-                
-                # 🔍 DEBUGGING: Comparación antes y después
-                datos_antes = perfil_actualizado.model_dump()
-                logging.info(f"DEBUG (Perfil) ► Datos ANTES de fusión: {datos_antes}")
-                
                 # 3. Usamos .model_copy(update=...) para fusionar los nuevos datos en el perfil existente.
                 #    Esto actualiza los campos nuevos sin borrar los antiguos.
                 perfil_consolidado = perfil_actualizado.model_copy(update=nuevos_datos)
-                
-                # 🔍 DEBUGGING: Verificación post-fusión
-                datos_despues = perfil_consolidado.model_dump()
-                logging.info(f"DEBUG (Perfil) ► Datos DESPUÉS de fusión: {datos_despues}")
-                
-                # 🔍 Verificación de que no se perdieron datos
-                campos_perdidos = []
-                for campo, valor in datos_antes.items():
-                    if valor is not None and datos_despues.get(campo) is None:
-                        campos_perdidos.append(campo)
-                
-                if campos_perdidos:
-                    logging.warning(f"WARN (Perfil) ► Posibles campos perdidos en fusión: {campos_perdidos}")
-                    
             else:
                 # Si el LLM se ejecutó pero no extrajo datos (ej. por un meta-comentario),
                 # mantenemos el perfil tal como estaba.
@@ -406,30 +369,50 @@ def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
             
             # 4. Aplicamos el post-procesamiento sobre el perfil ya fusionado y completo.
             perfil_final_a_guardar = aplicar_postprocesamiento_perfil(perfil_consolidado)
-            
-            # 🔍 DEBUGGING: Verificación post-procesamiento
-            if perfil_final_a_guardar:
-                logging.info(f"DEBUG (Perfil) ► Perfil después del post-procesamiento: {perfil_final_a_guardar.model_dump_json(indent=2)}")
-            
         else:
             logging.warning("WARN (Perfil) ► El LLM no devolvió un objeto de preferencias. Se mantiene el perfil actual.")
             perfil_final_a_guardar = preferencias_actuales_obj
         # --- FIN DE LA LÓGICA DE FUSIÓN ---
+    except ValidationError as e_val:
+        logging.error(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val.errors()}")
+        
+        custom_error_message = None
+        campo_rating_erroneo_para_reset = None
+        preferencias_para_reset = preferencias_actuales_obj.model_copy(deep=True)
+
+        for error in e_val.errors():
+            loc = error.get('loc', ())
+            if len(loc) > 1 and str(loc[0]) == 'preferencias_usuario' and str(loc[1]).startswith('rating_'):
+                campo_rating = str(loc[1])
+                tipo_error_pydantic = error.get('type')
+                valor_input = error.get('input')
+
+                if tipo_error_pydantic in ['less_than_equal', 'greater_than_equal', 'less_than', 'greater_than', 'finite_number', 'int_parsing']:
+                    nombre_amigable = MAPA_RATING_A_PREGUNTA_AMIGABLE.get(campo_rating, f"el campo '{campo_rating}'")
+                    custom_error_message = (
+                        f"Para {nombre_amigable}, necesito una puntuación entre 0 y 10. "
+                        f"Parece que ingresaste '{valor_input}'. ¿Podrías darme un valor en la escala de 0 a 10, por favor?"
+                    )
+                    campo_rating_erroneo_para_reset = campo_rating
+                    break 
+        
+        if custom_error_message:
+            mensaje_para_siguiente_nodo = custom_error_message
+            if campo_rating_erroneo_para_reset and hasattr(preferencias_para_reset, campo_rating_erroneo_para_reset):
+                setattr(preferencias_para_reset, campo_rating_erroneo_para_reset, None)
+            perfil_final_a_guardar = preferencias_para_reset
+        else:
+            error_msg_detalle = e_val.errors()[0]['msg'] if e_val.errors() else 'Error desconocido'
+            mensaje_para_siguiente_nodo = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {error_msg_detalle}"
+            perfil_final_a_guardar = preferencias_actuales_obj
 
     except Exception as e_general:
         logging.error(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil o en post-procesamiento: {e_general}", exc_info=True)
         mensaje_para_siguiente_nodo = "Lo siento, tuve un problema técnico. ¿Podríamos intentarlo de nuevo?"
-        # 🚨 IMPORTANTE: En caso de error, mantener el perfil actual
         perfil_final_a_guardar = preferencias_actuales_obj
 
-    # 🔍 DEBUGGING: Estado final antes de retornar
-    logging.info(f"DEBUG (Perfil) ► Estado final de 'preferencias_usuario' a guardar: {perfil_final_a_guardar.model_dump_json(indent=2) if perfil_final_a_guardar else 'None'}")
-    logging.info(f"DEBUG (Perfil) ► Guardando 'pregunta_pendiente': {mensaje_para_siguiente_nodo}")
-    
-    # 🚨 VERIFICACIÓN FINAL: Asegurarse de que no retornamos None
-    if perfil_final_a_guardar is None:
-        logging.error("ERROR (Perfil) ► perfil_final_a_guardar es None! Usando perfil actual como fallback.")
-        perfil_final_a_guardar = preferencias_actuales_obj
+    logging.debug(f"DEBUG (Perfil) ► Estado final de 'preferencias_usuario' a guardar: {perfil_final_a_guardar.model_dump_json(indent=2) if perfil_final_a_guardar else 'None'}")
+    logging.debug(f"DEBUG (Perfil) ► Guardando 'pregunta_pendiente': {mensaje_para_siguiente_nodo}")
         
     return {
         "preferencias_usuario": perfil_final_a_guardar,
@@ -457,23 +440,89 @@ def validar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     # se definirá en la arista condicional que salga de este nodo.
     return {**state} 
 
+# def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
+#     """Genera una pregunta específica basada en el primer campo obligatorio que falta."""
+#     if prefs is None:  
+#         return "¿Podrías contarme un poco sobre qué buscas o para qué usarás el coche?"
+#     # Revisa los campos en orden de prioridad deseado para preguntar
+#     if prefs.apasionado_motor is None: return random.choice(QUESTION_BANK["apasionado_motor"])
+#     if prefs.valora_estetica is None: return random.choice(QUESTION_BANK["valora_estetica"])
+#     if prefs.coche_principal_hogar is None: return random.choice(QUESTION_BANK["coche_principal_hogar"])
+#     if prefs.frecuencia_uso is None: return random.choice(QUESTION_BANK["frecuencia_uso"])
+#     if prefs.distancia_trayecto is None: return random.choice(QUESTION_BANK["distancia_trayecto"])
+#     # Lógica anidada para viajes largos
+#     if (prefs.distancia_trayecto is not None and
+#             prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value and
+#             prefs.realiza_viajes_largos is None):
+#         return random.choice(QUESTION_BANK["realiza_viajes_largos"])    
+#     if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
+#         return random.choice(QUESTION_BANK["frecuencia_viajes_largos"])
+#     if prefs.circula_principalmente_ciudad is None: return random.choice(QUESTION_BANK["circula_principalmente_ciudad"])
+#     if prefs.uso_profesional is None: return random.choice(QUESTION_BANK["uso_profesional"])
+#     if is_yes(prefs.uso_profesional) and prefs.tipo_uso_profesional is None:
+#         return random.choice(QUESTION_BANK["tipo_uso_profesional"])
+#     if prefs.prefiere_diseno_exclusivo is None: return random.choice(QUESTION_BANK["prefiere_diseno_exclusivo"])
+#     if prefs.altura_mayor_190 is None: return random.choice(QUESTION_BANK["altura_mayor_190"])
+#     if prefs.transporta_carga_voluminosa is None: return random.choice(QUESTION_BANK["transporta_carga_voluminosa"])
+#     if is_yes(prefs.transporta_carga_voluminosa) and prefs.necesita_espacio_objetos_especiales is None:
+#         return random.choice(QUESTION_BANK["necesita_espacio_objetos_especiales"])
+#     if prefs.arrastra_remolque is None: return random.choice(QUESTION_BANK["arrastra_remolque"])
+#     if prefs.aventura is None: return random.choice(QUESTION_BANK["aventura"])
+#     if prefs.estilo_conduccion is None: return random.choice(QUESTION_BANK["estilo_conduccion"])
+#         # --- ✅ LÓGICA DE GARAJE REFACTORIZADA ---
+#     if prefs.tiene_garage is None:
+#         return random.choice(QUESTION_BANK["tiene_garage"]) 
+#     else:
+#         # Si ya sabemos si tiene garaje, entramos en las sub-preguntas
+#         if is_yes(prefs.tiene_garage): # --- CASO SÍ TIENE GARAJE ---
+#             if prefs.espacio_sobra_garage is None:
+#                 return "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
+#             # Esta sub-pregunta solo se hace si el espacio NO sobra
+#             elif not is_yes(prefs.espacio_sobra_garage) and not prefs.problema_dimension_garage:
+#                 return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión?\n ↔️ Ancho\n ↕️ Alto\n ⬅️➡️ Largo"
+#         else: # --- CASO NO TIENE GARAJE ---
+#             if prefs.problemas_aparcar_calle is None:
+#                 return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?\n\n* ✅ Sí\n* ❌ No",
+#     # --- FIN NUEVA LÓGICA DE PREGUNTAS ---
+#     # --- FIN DE LA REFACTORIZACIÓN ---
+#     if prefs.tiene_punto_carga_propio is None: return random.choice(QUESTION_BANK["tiene_punto_carga_propio"])
+#     if prefs.solo_electricos is None: return random.choice(QUESTION_BANK["solo_electricos"])
+#     if prefs.transmision_preferida is None: return random.choice(QUESTION_BANK["transmision_preferida"])
+#     if prefs.prioriza_baja_depreciacion is None: return random.choice(QUESTION_BANK["prioriza_baja_depreciacion"])
+#     # Ratings en el orden correcto para coincidir con la validación
+#     if prefs.rating_fiabilidad_durabilidad is None: return random.choice(QUESTION_BANK["rating_fiabilidad_durabilidad"])
+#     if prefs.rating_seguridad is None: return random.choice(QUESTION_BANK["rating_seguridad"])
+#     if prefs.rating_comodidad is None: return random.choice(QUESTION_BANK["rating_comodidad"])
+#     if prefs.rating_impacto_ambiental is None: return random.choice(QUESTION_BANK["rating_impacto_ambiental"])
+#     if prefs.rating_costes_uso is None: return random.choice(QUESTION_BANK["rating_costes_uso"])
+#     if prefs.rating_tecnologia_conectividad is None: return random.choice(QUESTION_BANK["rating_tecnologia_conectividad"])
+#     # Si todos los campos están llenos, devuelve una pregunta de fallback al azar.
+#     return random.choice(QUESTION_BANK["fallback"])
+
 def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
-    """Genera una pregunta específica basada en el primer campo obligatorio que falta."""
-    if prefs is None:  
+    """
+    Genera una pregunta específica y variada basada en el primer campo 
+    obligatorio que falta en el perfil del usuario, siguiendo un orden secuencial estricto.
+    """
+    if prefs is None: 
         return "¿Podrías contarme un poco sobre qué buscas o para qué usarás el coche?"
-    # Revisa los campos en orden de prioridad deseado para preguntar
+
+    # --- La función ahora es una secuencia de comprobaciones "planas" ---
     if prefs.apasionado_motor is None: return random.choice(QUESTION_BANK["apasionado_motor"])
     if prefs.valora_estetica is None: return random.choice(QUESTION_BANK["valora_estetica"])
     if prefs.coche_principal_hogar is None: return random.choice(QUESTION_BANK["coche_principal_hogar"])
     if prefs.frecuencia_uso is None: return random.choice(QUESTION_BANK["frecuencia_uso"])
     if prefs.distancia_trayecto is None: return random.choice(QUESTION_BANK["distancia_trayecto"])
+    
     # Lógica anidada para viajes largos
     if (prefs.distancia_trayecto is not None and
             prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value and
             prefs.realiza_viajes_largos is None):
-        return random.choice(QUESTION_BANK["realiza_viajes_largos"])    
+        return random.choice(QUESTION_BANK["realiza_viajes_largos"])
+    
     if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
         return random.choice(QUESTION_BANK["frecuencia_viajes_largos"])
+
     if prefs.circula_principalmente_ciudad is None: return random.choice(QUESTION_BANK["circula_principalmente_ciudad"])
     if prefs.uso_profesional is None: return random.choice(QUESTION_BANK["uso_profesional"])
     if is_yes(prefs.uso_profesional) and prefs.tipo_uso_profesional is None:
@@ -486,37 +535,43 @@ def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     if prefs.arrastra_remolque is None: return random.choice(QUESTION_BANK["arrastra_remolque"])
     if prefs.aventura is None: return random.choice(QUESTION_BANK["aventura"])
     if prefs.estilo_conduccion is None: return random.choice(QUESTION_BANK["estilo_conduccion"])
-        # --- ✅ LÓGICA DE GARAJE REFACTORIZADA ---
+    
+    # --- ✅ LÓGICA DE GARAJE REFACTORIZADA ---
+    # Cada pregunta ahora es una comprobación independiente en el flujo.
     if prefs.tiene_garage is None:
-        return random.choice(QUESTION_BANK["tiene_garage"]) 
-    else:
-        # Si ya sabemos si tiene garaje, entramos en las sub-preguntas
-        if is_yes(prefs.tiene_garage): # --- CASO SÍ TIENE GARAJE ---
-            if prefs.espacio_sobra_garage is None:
-                return "¡Genial lo del garaje/plaza! Y dime, ¿el espacio que tienes es amplio y te permite aparcar un coche de cualquier tamaño con comodidad?"
-            # Esta sub-pregunta solo se hace si el espacio NO sobra
-            elif not is_yes(prefs.espacio_sobra_garage) and not prefs.problema_dimension_garage:
-                return "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión?\n ↔️ Ancho\n ↕️ Alto\n ⬅️➡️ Largo"
-        else: # --- CASO NO TIENE GARAJE ---
-            if prefs.problemas_aparcar_calle is None:
-                return "Entendido. En ese caso, al aparcar en la calle, ¿sueles encontrar dificultades por el tamaño del coche o la disponibilidad de sitios?\n\n* ✅ Sí\n* ❌ No",
-    # --- FIN NUEVA LÓGICA DE PREGUNTAS ---
+        return random.choice(QUESTION_BANK["tiene_garage"])
+    
+    # Estas preguntas solo se evalúan si la anterior ya tiene respuesta.
+    if is_yes(prefs.tiene_garage) and prefs.espacio_sobra_garage is None:
+        return random.choice(QUESTION_BANK["espacio_sobra_garage"])
+    
+    if is_yes(prefs.tiene_garage) and not is_yes(prefs.espacio_sobra_garage) and not prefs.problema_dimension_garage:
+        return random.choice(QUESTION_BANK["problema_dimension_garage"])
+        
+    if not is_yes(prefs.tiene_garage) and prefs.problemas_aparcar_calle is None:
+        return random.choice(QUESTION_BANK["problemas_aparcar_calle"])
+
     # --- FIN DE LA REFACTORIZACIÓN ---
+
     if prefs.tiene_punto_carga_propio is None: return random.choice(QUESTION_BANK["tiene_punto_carga_propio"])
     if prefs.solo_electricos is None: return random.choice(QUESTION_BANK["solo_electricos"])
-    if prefs.transmision_preferida is None: return random.choice(QUESTION_BANK["transmision_preferida"])
+    
+    # Pregunta de transmisión solo si no quiere exclusivamente eléctricos
+    if not is_yes(prefs.solo_electricos) and prefs.transmision_preferida is None:
+        return random.choice(QUESTION_BANK["transmision_preferida"])
+        
     if prefs.prioriza_baja_depreciacion is None: return random.choice(QUESTION_BANK["prioriza_baja_depreciacion"])
-    # Ratings en el orden correcto para coincidir con la validación
+     
+    # Ratings en el orden correcto
     if prefs.rating_fiabilidad_durabilidad is None: return random.choice(QUESTION_BANK["rating_fiabilidad_durabilidad"])
     if prefs.rating_seguridad is None: return random.choice(QUESTION_BANK["rating_seguridad"])
     if prefs.rating_comodidad is None: return random.choice(QUESTION_BANK["rating_comodidad"])
     if prefs.rating_impacto_ambiental is None: return random.choice(QUESTION_BANK["rating_impacto_ambiental"])
     if prefs.rating_costes_uso is None: return random.choice(QUESTION_BANK["rating_costes_uso"])
     if prefs.rating_tecnologia_conectividad is None: return random.choice(QUESTION_BANK["rating_tecnologia_conectividad"])
+    
     # Si todos los campos están llenos, devuelve una pregunta de fallback al azar.
     return random.choice(QUESTION_BANK["fallback"])
-
-
 
 def preguntar_preferencias_node(state: EstadoAnalisisPerfil) -> Dict:
     """
@@ -1034,7 +1089,7 @@ def validar_economia_node(state: EstadoAnalisisPerfil) -> dict:
 # --- Fin Etapa 3 ---
 
 
-# --- Etapa 4: Finalización y Presentación ---
+# --- Etapa 4: nodo economia ---
 def calcular_recomendacion_economia_modo1_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Calcula la recomendación económica (modo_adquisicion_recomendado, 
@@ -1061,36 +1116,36 @@ def calcular_recomendacion_economia_modo1_node(state: EstadoAnalisisPerfil) -> d
         try:
             ingresos = economia_obj.ingresos
             ahorro = economia_obj.ahorro
-            anos_posesion = economia_obj.anos_posesion
+            anos_posesion_usuario = economia_obj.anos_posesion
             
-            if ingresos is not None and ahorro is not None and anos_posesion is not None:
-                t = min(anos_posesion, 8) # años para cálculo de ahorro, max 8
-                ahorro_utilizable = ahorro * 0.75 # Usar el 75% del ahorro
-                
-                # Estimación de capacidad de ahorro mensual dedicada al coche (ej: 10% de ingresos netos mensuales)
-                # Si 'ingresos' son anuales, dividir por 12. Asumamos que 'ingresos' son anuales.
-                capacidad_ahorro_mensual_coche = (ingresos / 12) * 0.10 
-                
-                # Potencial de ahorro total durante el plazo de posesión
-                potencial_ahorro_total_plazo = capacidad_ahorro_mensual_coche * 12 * t
-                
-                # Decisión Contado vs. Financiado para Modo 1
-                # Si el ahorro utilizable cubre una buena parte o todo el potencial de gasto vía cuotas
-                # o si el potencial de gasto es bajo, podría sugerir contado.
-                # Esta lógica puede necesitar refinamiento según tus criterios de "inteligencia financiera".
-                # Ejemplo simple: si el ahorro cubre al menos la mitad del gasto potencial total
-                modo_adq_rec = "Financiado" # Default
-                precio_max_rec = None
-                cuota_max_calc = capacidad_ahorro_mensual_coche # La cuota máxima sería su capacidad de ahorro mensual
+            if ingresos is not None and ahorro is not None and anos_posesion_usuario is not None:
+                t = 8 
+                logging.info(f"DEBUG (CalcEconModo1) ► 'anos_posesion_usuario' del usuario ignorado. Usando valor fijo t = {t} años para el cálculo.")
 
-                if ahorro_utilizable >= (potencial_ahorro_total_plazo * 0.5) and potencial_ahorro_total_plazo <= 30000 : # Umbral ejemplo para "bajo gasto"
+                ahorro_utilizable = ahorro * 0.75
+                
+                # La capacidad de ahorro mensual se sigue calculando para el caso de financiación
+                capacidad_ahorro_mensual_coche = (ingresos * 0.10) / 12 
+                
+                # Por defecto, se recomienda financiar
+                modo_adq_rec = "Financiado"
+                precio_max_rec = None
+                cuota_max_calc = capacidad_ahorro_mensual_coche
+
+                # --- LÓGICA PARA DECIDIR "CONTADO" ---
+                gasto_potencial_total = ingresos * 0.095 * t
+                ahorro_disponible_para_gasto = ahorro_utilizable * 0.75
+
+                if gasto_potencial_total <= ahorro_disponible_para_gasto:
                     modo_adq_rec = "Contado"
-                    # Si es contado, el precio máximo podría ser el ahorro utilizable más lo que ahorraría en 1-2 años
-                    precio_max_rec = ahorro_utilizable + (capacidad_ahorro_mensual_coche * 12 * 2) 
+                    # ✅ CORRECCIÓN: El precio máximo recomendado ahora es el gasto potencial total.
+                    # Esto asegura que la recomendación de precio sea coherente con el modelo financiero.
+                    precio_max_rec = gasto_potencial_total
                     cuota_max_calc = None # No hay cuota si es contado
+                # --- FIN DE LA LÓGICA ---
                 
                 logging.debug(f"DEBUG (CalcEconModo1) ► Modo Adq Rec: {modo_adq_rec}, Precio Max Rec: {precio_max_rec}, Cuota Max Calc: {cuota_max_calc}")
-
+                
                 update_dict = {
                     "modo_adquisicion_recomendado": modo_adq_rec,
                     "precio_max_contado_recomendado": precio_max_rec,
@@ -1167,6 +1222,8 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     flag_bonus_singularidad_lifestyle = False
     flag_deportividad_lifestyle = False
     flag_ajuste_maletero_personal = False
+    flag_coche_ciudad_perfil = False
+    flag_coche_ciudad_2_perfil = False
 
      
     # Verificar que preferencias_obj exista para acceder a sus atributos
@@ -1212,7 +1269,9 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "flag_penalizar_tamano_no_compacto" : flag_penalizar_tamano_no_compacto,
             "flag_bonus_singularidad_lifestyle": flag_bonus_singularidad_lifestyle,
             "flag_deportividad_lifestyle": flag_deportividad_lifestyle,
-            "flag_ajuste_maletero_personal" : flag_ajuste_maletero_personal
+            "flag_ajuste_maletero_personal" : flag_ajuste_maletero_personal,
+            "flag_coche_ciudad_perfil" :  flag_coche_ciudad_perfil,
+            "flag_coche_ciudad_2_perfil" : flag_coche_ciudad_2_perfil
         }
     # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
     # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
@@ -1432,43 +1491,114 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     logging.debug(f"DEBUG (CalcFlags) ► Flags calculados: lowcost_comodidad={flag_penalizar_lc_comod}, deportividad_comodidad={flag_penalizar_dep_comod}, antiguo_por_tecnolog={flag_penalizar_ant_tec}, distint_ambiental={flag_aplicar_dist_amb}, zbe={flag_es_zbe}, penali_bev_reev_aventura_ocasional= {flag_pen_bev_reev_avent_ocas}...")
 
     # --- ✅ NUEVA LÓGICA PARA FLAG DE SINGULARIDAD/LIFESTYLE ---
-    if info_pasajeros_obj and preferencias_obj:
-        # Condición 1: El usuario valora un diseño exclusivo
-        quiere_diseno_exclusivo = is_yes(preferencias_obj.prefiere_diseno_exclusivo)
+    # Condición 1: El usuario valora un diseño exclusivo
+    quiere_diseno_exclusivo = is_yes(getattr(preferencias_obj, 'prefiere_diseno_exclusivo', 'no'))
+    # Condición 2: El uso con acompañantes es bajo o nulo
+    uso_poco_acompaniado = False # Inicializamos como Falso por seguridad
+    # Obtenemos los datos de pasajeros de forma segura
+    suele_llevar_pasajeros = getattr(info_pasajeros_obj, 'suele_llevar_acompanantes', False)
+    frecuencia_viajes = getattr(info_pasajeros_obj, 'frecuencia_viaje_con_acompanantes', None)
+    num_otros_pasajeros = getattr(info_pasajeros_obj, 'num_otros_pasajeros', 0)
+    # Evaluamos la condición de pasajeros de forma explícita
+    if not suele_llevar_pasajeros:
+        # Si nunca lleva pasajeros (equivale a frecuencia "nunca"), la condición se cumple.
+        uso_poco_acompaniado = True
+    elif frecuencia_viajes == "ocasional":
+        # Si es ocasional, aplicamos la sub-condición del número de pasajeros.
+        if num_otros_pasajeros <= 3:
+            uso_poco_acompaniado = True
+            logging.info(f"Flags: Frecuencia 'ocasional' con Z={num_otros_pasajeros} <= 3. Condición de pasajeros cumplida.")
+        else:
+            logging.info(f"Flags: Frecuencia 'ocasional' pero con Z={num_otros_pasajeros} > 3. Condición NO cumplida.")
+    
+    # Si ambas condiciones principales se cumplen, activamos el flag
+    if quiere_diseno_exclusivo and uso_poco_acompaniado:
+        flag_bonus_singularidad_lifestyle = True
+        razon_pasajeros = "nunca" if not suele_llevar_pasajeros else "ocasional"
+        logging.info(f"Flags: Perfil 'Singularidad Lifestyle' detectado (Diseño Exclusivo, Pasajeros: {razon_pasajeros}). Activando bonus.")
         
-        # Condición 2: El usuario no suele llevar muchos pasajeros
-        frecuencia_pasajeros = info_pasajeros_obj.frecuencia_viaje_con_acompanantes
-        uso_poco_acompaniado = frecuencia_pasajeros in ["nunca", "ocasional"]
-
-        # Si ambas condiciones se cumplen, activamos el flag
-        if quiere_diseno_exclusivo and uso_poco_acompaniado:
-            flag_bonus_singularidad_lifestyle = True
-            logging.info(f"Flags: Perfil 'Lifestyle' detectado. Activando bonus para Coupés y Descapotables.")
             
-    # Condición 1: El estilo de conducción debe ser DEPORTIVO
+    # --- ✅ NUEVA LÓGICA PARA flag_deportividad_lifestyle ---
+     # Condición 1: El estilo de conducción debe ser DEPORTIVO
     es_estilo_deportivo = getattr(preferencias_obj, 'estilo_conduccion', None) == EstiloConduccion.DEPORTIVO.value
-    # Condición 2: El usuario no suele llevar muchos pasajeros
-    # Usamos 'frecuencia' como el campo consolidado que ya tienes.
-    frecuencia_pasajeros = info_pasajeros_obj.frecuencia_viaje_con_acompanantes
-    uso_poco_acompaniado = frecuencia_pasajeros in ["nunca", "ocasional"]
+    # Condición 2: El uso con acompañantes debe ser bajo o moderado
+    uso_poco_acompaniado = False # Inicializamos como Falso por seguridad
+    # Obtenemos los datos de pasajeros de forma segura
+    suele_llevar_pasajeros = getattr(info_pasajeros_obj, 'suele_llevar_acompanantes', False)
+    frecuencia_viajes = getattr(info_pasajeros_obj, 'frecuencia_viaje_con_acompanantes', None)
+    num_otros_pasajeros = getattr(info_pasajeros_obj, 'num_otros_pasajeros', 0)
+    # Evaluamos la condición de pasajeros de forma más explícita
+    if not suele_llevar_pasajeros:
+        # Si nunca lleva pasajeros (equivale a frecuencia "nunca"), la condición se cumple.
+        uso_poco_acompaniado = True
+    elif frecuencia_viajes == "ocasional":
+        # Si es ocasional, aplicamos la sub-condición del número de pasajeros.
+        if num_otros_pasajeros <= 3:
+            uso_poco_acompaniado = True
+            logging.info(f"Flags: Frecuencia 'ocasional' con Z={num_otros_pasajeros} <= 3. Condición de pasajeros cumplida.")
+        else:
+            logging.info(f"Flags: Frecuencia 'ocasional' pero con Z={num_otros_pasajeros} > 3. Condición NO cumplida.")
+    # Si la frecuencia es 'frecuente', uso_poco_acompaniado se mantiene en False, que es el comportamiento correcto.
 
-    # Si ambas condiciones se cumplen, activamos el flag
+    # Si ambas condiciones principales se cumplen, activamos el flag
     if es_estilo_deportivo and uso_poco_acompaniado:
         flag_deportividad_lifestyle = True
-        logging.info(f"Flags: Perfil 'Deportividad Lifestyle' detectado. Activando ajustes de carrocería para Coupés, etc.")
-    # --- FIN NUEVA LÓGICA ---
+        # Construimos un log más detallado para entender por qué se activó
+        razon_pasajeros = "nunca" if not suele_llevar_pasajeros else f"ocasional con Z={num_otros_pasajeros}"
+        logging.info(f"Flags: Perfil 'Deportividad Lifestyle' detectado (Estilo: Deportivo, Pasajeros: {razon_pasajeros}). Activando ajustes.")
+    # --- FIN DE LA NUEVA LÓGICA ---
     
     if preferencias_obj:
         # Condición 1: El uso NO es profesional
-        uso_no_profesional = not is_yes(preferencias_obj.uso_profesional)
-        
+        uso_no_profesional = not is_yes(preferencias_obj.uso_profesional) 
         # Condición 2: El usuario SÍ transporta carga voluminosa
         transporta_carga = is_yes(preferencias_obj.transporta_carga_voluminosa)
-
         # Si ambas condiciones se cumplen, activamos el flag
         if uso_no_profesional and transporta_carga:
             flag_ajuste_maletero_personal = True
             logging.info(f"Flags: Perfil 'Transportista Personal' detectado. Activando ajustes de maletero y carrocería.")
+    
+    # --- ✅ NUEVA LÓGICA PARA FLAG DE "COCHE DE CIUDAD" ---
+    # Desglosamos las 6 condiciones para mayor claridad
+    cond_1 = getattr(info_pasajeros_obj, 'suele_llevar_acompanantes', False) is True
+    cond_2 = getattr(info_pasajeros_obj, 'frecuencia_viaje_con_acompanantes', None) in ["ocasional", "frecuente"]
+    cond_3 = is_yes(getattr(preferencias_obj, 'circula_principalmente_ciudad', 'no'))
+    cond_4 = not is_yes(getattr(preferencias_obj, 'transporta_carga_voluminosa', 'si'))
+    distancia = getattr(preferencias_obj, 'distancia_trayecto', None)
+    cond_5 = distancia in [DistanciaTrayecto.MENOS_10_KM.value, DistanciaTrayecto.ENTRE_10_Y_50_KM.value]
+    cond_6 = not is_yes(getattr(preferencias_obj, 'realiza_viajes_largos', 'si'))
+
+    # Si TODAS las condiciones se cumplen, activamos el flag
+    if all([cond_1, cond_2, cond_3, cond_4, cond_5, cond_6]):
+        flag_coche_ciudad_perfil = True
+        logging.info(f"Flags: Perfil 'Coche de Ciudad' detectado. Activando bonus para coches compactos y ligeros.")
+    # --- FIN NUEVA LÓGICA ---
+    
+    # --- ✅ NUEVA LÓGICA PARA FLAG DE "COCHE DE CIUDAD 2" ---
+    # Desglosamos las 6 condiciones para mayor claridad
+
+    # Condición 1: No lleva pasajeros o los lleva ocasionalmente
+    cond_1 = (getattr(info_pasajeros_obj, 'suele_llevar_acompanantes', True) is False) or \
+             (getattr(info_pasajeros_obj, 'frecuencia_viaje_con_acompanantes', None) == "ocasional")
+    # Condición 2: Circula principalmente por ciudad
+    cond_2 = is_yes(getattr(preferencias_obj, 'circula_principalmente_ciudad', 'no'))
+    # Condición 3: No necesita un maletero amplio
+    cond_3 = not is_yes(getattr(preferencias_obj, 'transporta_carga_voluminosa', 'si'))
+    # Condición 4: Sus trayectos habituales son cortos
+    distancia = getattr(preferencias_obj, 'distancia_trayecto', None)
+    cond_4 = distancia in [DistanciaTrayecto.MENOS_10_KM.value, DistanciaTrayecto.ENTRE_10_Y_50_KM.value]
+    # Condición 5: Sí realiza viajes largo
+    cond_5 = is_yes(getattr(preferencias_obj, 'realiza_viajes_largos', 'no'))
+    # Condición 6: Pero esos viajes largos son solo ocasionales
+    frecuencia_vl = getattr(preferencias_obj, 'frecuencia_viajes_largos', None)
+    cond_6 = frecuencia_vl == FrecuenciaViajesLargos.OCASIONALMENTE.value
+
+    # Si TODAS las condiciones se cumplen, activamos el flag
+    if all([cond_1, cond_2, cond_3, cond_4, cond_5, cond_6]):
+        flag_coche_ciudad_2_perfil = True
+        logging.info(f"Flags: Perfil 'Coche de Ciudad 2' detectado. Activando bonus para coches compactos y ligeros.")
+    # --- FIN NUEVA LÓGICA ---
+
     
     return {
         "penalizar_puertas_bajas": penalizar_puertas_bajas_actual, # Propagar
@@ -1509,6 +1639,8 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_bonus_singularidad_lifestyle": flag_bonus_singularidad_lifestyle,
         "flag_deportividad_lifestyle": flag_deportividad_lifestyle,
         "flag_ajuste_maletero_personal" : flag_ajuste_maletero_personal,
+        "flag_coche_ciudad_perfil" :  flag_coche_ciudad_perfil,
+        "flag_coche_ciudad_2_perfil": flag_coche_ciudad_2_perfil,
         "es_municipio_zbe": flag_es_zbe       
     }
     
@@ -1673,12 +1805,11 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     Usa los filtros y pesos finales, busca en BQ, y presenta un mensaje combinado
     con el resumen de criterios y los resultados de los coches.
     """
-    print("--- Ejecutando Nodo: buscar_coches_finales_node ---")
-    logging.debug(f"DEBUG (Buscar BQ Init) ► Estado completo recibido: {state}") 
+    logging.info("--- Ejecutando Nodo: buscar_coches_finales_node ---") 
     k_coches = 5
     historial = state.get("messages", [])
     tabla_resumen_criterios_md = state.get("tabla_resumen_criterios", "No se pudo generar el resumen de criterios.")
-    preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario
+    #preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario
     filtros_finales_obj = state.get("filtros_inferidos") 
     pesos_finales = state.get("pesos")
     economia_obj = state.get("economia")
@@ -1688,6 +1819,8 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     flag_penalizar_antiguo_tec_val = state.get("flag_penalizar_antiguo_por_tecnologia", False)
     flag_aplicar_distintivo_val = state.get("aplicar_logica_distintivo_ambiental", False)
     flag_es_zbe_val = state.get("es_municipio_zbe", False)
+    flag_desfav_car_no_aventura_val = state.get("desfavorecer_carroceria_no_aventura", False)
+    flag_aplicar_logica_objetos_especiales= state.get("aplicar_logica_objetos_especiales")
     # Flags de aventura y penalización de mecánica
     flag_pen_bev_reev_avent_ocas = state.get("penalizar_bev_reev_aventura_ocasional", False)
     flag_pen_phev_avent_ocas= state.get("penalizar_phev_aventura_ocasional", False)
@@ -1695,10 +1828,8 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     flag_fav_car_montana_val = state.get("favorecer_carroceria_montana", False)
     flag_fav_car_comercial_val = state.get("favorecer_carroceria_comercial", False)
     flag_fav_car_pasajeros_pro_val = state.get("favorecer_carroceria_pasajeros_pro", False)
-    flag_desfav_car_no_aventura_val = state.get("desfavorecer_carroceria_no_aventura", False)
     flag_fav_suv_aventura_ocasional = state.get("favorecer_suv_aventura_ocasional")
     flag_fav_pickup_todoterreno_aventura_extrema = state.get("favorecer_pickup_todoterreno_aventura_extrema")
-    flag_aplicar_logica_objetos_especiales= state.get("aplicar_logica_objetos_especiales")
     flag_fav_carroceria_confort= state.get("favorecer_carroceria_confort")
     flag_logica_uso_ocasional = state.get("flag_logica_uso_ocasional")
     flag_favorecer_bev_uso_definido = state.get("flag_favorecer_bev_uso_definido")
@@ -1721,226 +1852,131 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     flag_bonus_singularidad_lifestyle = state.get("flag_bonus_singularidad_lifestyle")
     flag_deportividad_lifestyle = state.get("flag_deportividad_lifestyle")
     flag_ajuste_maletero_personal = state.get("flag_ajuste_maletero_personal")
+    flag_coche_ciudad_perfil = state.get("flag_coche_ciudad_perfil")
+    flag_coche_ciudad_2_perfil = state.get("flag_coche_ciudad_2_perfil")
     km_anuales_val = state.get("km_anuales_estimados")
-
-    # 2. Obtén el thread_id directamente del objeto 'config'
-    # Esta es la forma correcta y segura de accederlo.
     configurable_config = config.get("configurable", {})
     thread_id = configurable_config.get("thread_id", "unknown_thread_in_node") # Fallback por si acaso
 
     logging.info(f"INFO (Buscar BQ) ► Ejecutando búsqueda para thread_id: {thread_id}")
     
+    final_ai_msg = None
     coches_encontrados_raw = [] 
     coches_encontrados = []
     sql_ejecutada = None 
     params_ejecutados = None 
-    mensaje_coches = "No pude realizar la búsqueda de coches en este momento." # Default para la parte de coches
-
+    
+    #mensaje_coches = "No pude realizar la búsqueda de coches en este momento." # Default para la parte de coches
+    # --- 2. BÚSQUEDA EN BIGQUERY ---
     if filtros_finales_obj and pesos_finales:
-        filtros_para_bq = {}
-        if hasattr(filtros_finales_obj, "model_dump"):
-             filtros_para_bq.update(filtros_finales_obj.model_dump(mode='json', exclude_none=True))
-        elif isinstance(filtros_finales_obj, dict): 
-             filtros_para_bq.update({k: v for k, v in filtros_finales_obj.items() if v is not None})
-
-        if economia_obj and economia_obj.modo == 2:
-            filtros_para_bq['modo'] = 2
-            filtros_para_bq['submodo'] = economia_obj.submodo
-            if economia_obj.submodo == 1:
-                 filtros_para_bq['pago_contado'] = economia_obj.pago_contado
-            elif economia_obj.submodo == 2:
-                 filtros_para_bq['cuota_max'] = economia_obj.cuota_max
-        
-        filtros_para_bq['penalizar_puertas_bajas'] = penalizar_puertas_flag
-        filtros_para_bq['flag_penalizar_low_cost_comodidad'] = flag_penalizar_lc_comod
-        filtros_para_bq['flag_penalizar_deportividad_comodidad'] = flag_penalizar_dep_comod
-        filtros_para_bq['flag_penalizar_antiguo_por_tecnologia'] = flag_penalizar_antiguo_tec_val
-        filtros_para_bq['aplicar_logica_distintivo_ambiental'] = flag_aplicar_distintivo_val
-        filtros_para_bq['penalizar_bev_reev_aventura_ocasional'] = flag_pen_bev_reev_avent_ocas
-        filtros_para_bq['penalizar_phev_aventura_ocasional'] = flag_pen_phev_avent_ocas
-        filtros_para_bq['penalizar_electrificados_aventura_extrema'] = flag_pen_electrif_avent_extr
-        filtros_para_bq['es_municipio_zbe'] = flag_es_zbe_val
-        filtros_para_bq['favorecer_carroceria_montana'] = flag_fav_car_montana_val
-        filtros_para_bq['favorecer_carroceria_comercial'] = flag_fav_car_comercial_val
-        filtros_para_bq['favorecer_carroceria_pasajeros_pro'] = flag_fav_car_pasajeros_pro_val
-        filtros_para_bq['desfavorecer_carroceria_no_aventura'] = flag_desfav_car_no_aventura_val
-        filtros_para_bq['favorecer_suv_aventura_ocasional'] = flag_fav_suv_aventura_ocasional
-        filtros_para_bq['favorecer_pickup_todoterreno_aventura_extrema'] = flag_fav_pickup_todoterreno_aventura_extrema
-        filtros_para_bq['aplicar_logica_objetos_especiales'] = flag_aplicar_logica_objetos_especiales
-        filtros_para_bq['favorecer_carroceria_confort'] = flag_fav_carroceria_confort
-        filtros_para_bq['flag_logica_uso_ocasional'] = flag_logica_uso_ocasional
-        filtros_para_bq['flag_favorecer_bev_uso_definido'] = flag_favorecer_bev_uso_definido
-        filtros_para_bq['flag_penalizar_phev_uso_intensivo'] = flag_penalizar_phev_uso_intensivo
-        filtros_para_bq['flag_favorecer_electrificados_por_punto_carga'] = flag_favorecer_electrificados_por_punto_carga
-        filtros_para_bq['flag_logica_diesel_ciudad'] = flag_logica_diesel_ciudad
-        filtros_para_bq['penalizar_awd_ninguna_aventura'] = penalizar_awd_ninguna_val
-        filtros_para_bq['favorecer_awd_aventura_ocasional'] = favorecer_awd_ocasional_val
-        filtros_para_bq['favorecer_awd_aventura_extrema'] = favorecer_awd_extrema_val
-        filtros_para_bq['flag_bonus_nieve_val'] = flag_bonus_nieve_val
-        filtros_para_bq['flag_bonus_montana_val'] = flag_bonus_montana_val
-        filtros_para_bq['flag_logica_reductoras_aventura'] = flag_reductoras_aventura_val
-        filtros_para_bq['flag_bonus_awd_clima_adverso'] = flag_bonus_awd_clima_adverso
-        filtros_para_bq['flag_bonus_seguridad_critico'] = flag_bonus_seguridad_critico
-        filtros_para_bq['flag_bonus_seguridad_fuerte'] = flag_bonus_seguridad_fuerte
-        filtros_para_bq['flag_bonus_fiab_dur_critico'] = flag_bonus_fiab_dur_critico
-        filtros_para_bq['flag_bonus_fiab_dur_fuerte'] = flag_bonus_fiab_dur_fuerte
-        filtros_para_bq['flag_bonus_costes_critico'] = flag_bonus_costes_critico
-        filtros_para_bq['flag_penalizar_tamano_no_compacto'] = flag_penalizar_tamano_no_compacto
-        filtros_para_bq['flag_bonus_singularidad_lifestyle'] = flag_bonus_singularidad_lifestyle
-        filtros_para_bq['flag_deportividad_lifestyle'] = flag_deportividad_lifestyle
-        filtros_para_bq['flag_ajuste_maletero_personal'] = flag_ajuste_maletero_personal
-        filtros_para_bq['km_anuales_estimados'] = km_anuales_val
-        
-        logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
-        logging.debug(f"DEBUG (Buscar BQ) ► Filtros para BQ: {filtros_para_bq}") 
-        logging.debug(f"DEBUG (Buscar BQ) ► Pesos para BQ: {pesos_finales}") 
-        
         try:
+            # --- 2.1. PREPARACIÓN DE FILTROS PARA BQ ---
+            filtros_para_bq = filtros_finales_obj.model_dump(mode='json', exclude_none=True)
+            
+            # ✅ LÓGICA DE ECONOMÍA CORREGIDA Y ENCAPSULADA
+            if economia_obj and economia_obj.modo == 2:
+                filtros_para_bq['modo'] = 2
+                filtros_para_bq['submodo'] = economia_obj.submodo
+                if economia_obj.submodo == 1:
+                    filtros_para_bq['pago_contado'] = economia_obj.pago_contado
+                elif economia_obj.submodo == 2:
+                    filtros_para_bq['cuota_max'] = economia_obj.cuota_max
+            
+            # Añadimos todos los flags al diccionario de filtros
+            for flag_name in state.keys():
+                if flag_name.startswith('flag_') or flag_name.startswith('penalizar_') or flag_name.startswith('favorecer_'):
+                    filtros_para_bq[flag_name] = state.get(flag_name)
+            
+            filtros_para_bq['km_anuales_estimados'] = km_anuales_val
+            filtros_para_bq['penalizar_puertas_bajas'] = penalizar_puertas_flag
+            filtros_para_bq['aplicar_logica_distintivo_ambiental'] = flag_aplicar_distintivo_val
+            filtros_para_bq['es_municipio_zbe'] = flag_es_zbe_val
+            filtros_para_bq['desfavorecer_carroceria_no_aventura'] = flag_desfav_car_no_aventura_val
+            filtros_para_bq['aplicar_logica_objetos_especiales'] = flag_aplicar_logica_objetos_especiales
+
+            logging.debug(f"DEBUG (Buscar BQ) ► Filtros para BQ: {filtros_para_bq}") 
+            logging.debug(f"DEBUG (Buscar BQ) ► Pesos para BQ: {pesos_finales}") 
+            
+
+            k_coches = 12 # O el valor que desees
             resultados_tupla = buscar_coches_bq(
                 filtros=filtros_para_bq, 
                 pesos=pesos_finales, 
                 k=k_coches
             )
-            if isinstance(resultados_tupla, tuple) and len(resultados_tupla) == 3: #val coches encontrados (coches_encontrados_raw),(sql_ejecutada),(params_ejecutados).
-                coches_encontrados_raw, sql_ejecutada, params_ejecutados = resultados_tupla
-            else: 
-                logging.warning("WARN (Buscar BQ) ► buscar_coches_bq no devolvió SQL/params. Logueo será parcial.")
-                coches_encontrados_raw = resultados_tupla if isinstance(resultados_tupla, list) else []
-            # --- SANITIZACIÓN DE NaN ---
+            logging.debug(f"DEBUG (Buscar BQ) ► Llamando a buscar_coches_bq con k={k_coches}")
+            # Desempaquetamos el resultado de la búsqueda
+            coches_encontrados_raw, sql_ejecutada, params_ejecutados = resultados_tupla
+            
+            # Sanitizamos los datos para evitar errores de JSON
             if coches_encontrados_raw:
                 for coche_raw in coches_encontrados_raw:
                     coches_encontrados.append(sanitize_dict_for_json(coche_raw))
-                logging.info(f"INFO (Buscar BQ) ► {len(coches_encontrados_raw)} coches crudos se limpian NaN para ->  {len(coches_encontrados)} coches.")
-            # --- FIN SANITIZACIÓN ---
-            
-            if coches_encontrados:
-                mensaje_coches = f"¡Listo! Basado en todo lo que hablamos, aquí tienes {len(coches_encontrados)} coche(s) que podrían interesarte:\n\n"
-                
-                # ##CODIGO BUCLE PARA CUANDO INTEGREMOS LOGICA EXPLICACION LLM
-                # # #coches_para_df = []
-                # # for i, coche_dict_completo in enumerate(coches_encontrados):
-                # #     # --- LLAMAR AL NUEVO GENERADOR DE EXPLICACIONES ---
-                # #     explicacion_coche = generar_explicacion_coche_mejorada(
-                # #         coche_dict_completo=coche_dict_completo,
-                # #         preferencias_usuario=preferencias_obj,
-                # #         pesos_normalizados=pesos_finales,
-                # #         flag_penalizar_lc_comod=flag_penalizar_lc_comod,
-                # #         flag_penalizar_dep_comod=flag_penalizar_dep_comod,
-                # #         flag_penalizar_ant_tec=flag_penalizar_antiguo_tec_val,
-                # #         flag_es_zbe=flag_es_zbe_val,
-                # #         flag_aplicar_dist_gen=flag_aplicar_distintivo_val,
-                # #         flag_penalizar_puertas = penalizar_puertas_flag,                 
-                # #     )
-                # #     # --- FIN LLAMADA ---
-                # #     # Añadir la explicación al string del mensaje
-                # #     # (Formato más integrado con la tabla)
-                # #     mensaje_coches += f"\n**{i+1}. {coche_dict_completo.get('nombre', 'Coche Desconocido')}**"
-                # #     if coche_dict_completo.get('precio_compra_contado') is not None:
-                # #         precio_f = f"{coche_dict_completo.get('precio_compra_contado'):,.0f}€".replace(",",".")
-                # #         mensaje_coches += f" - {precio_f}"
-                # #     if coche_dict_completo.get('score_total') is not None:
-                # #         score_f = f"{coche_dict_completo.get('score_total'):.3f}"
-                # #         mensaje_coches += f" (Score: {score_f})"
-                # #     mensaje_coches += f"\n   *Por qué podría interesarte:* {explicacion_coche}\n"
+                logging.info(f"INFO (Buscar BQ) ► {len(coches_encontrados)} coches sanitizados y listos.")
 
-
-                # # Si quieres una tabla resumen de los coches (además de la explicación individual)
-                # # df_coches_display = pd.DataFrame(coches_para_df)
-                # # columnas_deseadas_tabla = ['Nº', 'nombre', 'marca', 'precio_compra_contado', 'score_total', 'tipo_carroceria', 'tipo_mecanica']
-                # # # ... (formateo de columnas del df_coches_display) ...
-                # # tabla_coches_md = df_coches_display[columnas_deseadas_tabla].to_markdown(index=False)
-                # # mensaje_coches += "\n" + tabla_coches_md + "\n"
+        except Exception as e_bq:
+            logging.error(f"ERROR (Buscar BQ) ► Falló la ejecución de buscar_coches_bq: {e_bq}", exc_info=True)
+            final_ai_msg = AIMessage(content=f"Lo siento, tuve un problema al buscar en la base de datos: {e_bq}")
+    else:
+        logging.error("ERROR (Buscar BQ) ► Faltan filtros o pesos finales en el estado para la búsqueda.")
+        final_ai_msg = AIMessage(content="Lo siento, falta información interna para realizar la búsqueda final.")
+    
+    # --- 3. CONSTRUCCIÓN DEL MENSAJE FINAL (LÓGICA CORREGIDA) ---
+    if final_ai_msg is None: # Si no hubo un error previo en la búsqueda
+        if coches_encontrados:
+            # --- CASO A: Se encontraron coches ---
+            try:
+                structured_response = {
+                    "type": "car_recommendation",
+                    "introText": f"¡Listo! Basado en todo lo que hablamos, aquí tienes {len(coches_encontrados)} coche(s) que podrían interesarte:",
+                    "cars": []
+                }
                 
-                # mensaje_coches += "\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles?\n"
-                # try:
-                #     df_coches = pd.DataFrame(coches_encontrados)
-                #     columnas_deseadas = [ # Define tus columnas deseadas
-                #         'nombre', 'marca', 'precio_compra_contado', 'score_total',
-                #         'tipo_carroceria', 'tipo_mecanica', 'traccion', 'reductoras', 'foto' 
-                        
-                #     ]
-                #     columnas_a_mostrar = [col for col in columnas_deseadas if col in df_coches.columns]
-                    
-                #     if columnas_a_mostrar:
-                #         if 'precio_compra_contado' in df_coches.columns:
-                #             df_coches['precio_compra_contado'] = df_coches['precio_compra_contado'].apply(lambda x: f"{x:,.0f}€".replace(",",".") if isinstance(x, (int, float)) else "N/A")
-                #         if 'score_total' in df_coches.columns:
-                #              df_coches['score_total'] = df_coches['score_total'].apply(lambda x: f"{x:.3f}" if isinstance(x, float) else x)
-                #         tabla_coches_md = df_coches[columnas_a_mostrar].to_markdown(index=False)
-                #         mensaje_coches += tabla_coches_md
-                #     else:
-                #         mensaje_coches += "No se pudieron formatear los detalles de los coches."
-                # except Exception as e_format_coches:
-                #     logging.error(f"ERROR (Buscar BQ) ► Falló el formateo de la tabla de coches: {e_format_coches}")
-                #     mensaje_coches += "Hubo un problema al mostrar los detalles. Aquí una lista simple:\n"
-                #     for i, coche in enumerate(coches_encontrados):
-                #         nombre = coche.get('nombre', 'N/D'); precio = coche.get('precio_compra_contado')
-                #         precio_str = f"{precio:,.0f}€".replace(",",".") if isinstance(precio, (int, float)) else "N/A"
-                #         mensaje_coches += f"{i+1}. {nombre} - {precio_str}\n"
-                # Iteramos sobre cada coche para construir su "tarjeta" de presentación
                 for i, coche in enumerate(coches_encontrados):
-                    
-                    # --- 1. Preparamos los datos de cada coche ---
+                    # Preparamos los datos de cada coche
                     nombre = coche.get('nombre', 'Coche Desconocido')
-                    url_foto = coche.get('foto')
-                    tipo_mecanica = coche.get('tipo_mecanica')
-                    anyo_unidad = coche.get('ano_unidad')
-                    traccion = coche.get('traccion')
-                    
-                    # Formateamos el precio y el score para mostrarlos
                     precio_str = "N/A"
                     if coche.get('precio_compra_contado') is not None:
                         try:
                             precio_str = f"{coche.get('precio_compra_contado'):,.0f}€".replace(",", ".")
-                        except (ValueError, TypeError):
-                            pass # Mantenemos "N/A" si el formato falla
+                        except (ValueError, TypeError): pass
 
                     score_str = "N/A"
                     if coche.get('score_total') is not None:
                         try:
                             score_str = f"{coche.get('score_total'):.2f} pts"
-                        except (ValueError, TypeError):
-                            pass
+                        except (ValueError, TypeError): pass
 
-                    # --- 2. Generamos la explicación personalizada (lógica omitida temporalmente) ---
-                    # Se omite la llamada a generar_explicacion_coche_mejorada y se usa un texto provisional.
-                    explicacion_coche = "Análisis detallado de la recomendación pendiente de desarrollo."
+                    specs = [spec for spec in [coche.get('tipo_mecanica', ''), str(coche.get('ano_unidad', '')), coche.get('traccion', '')] if spec]
 
-                    # --- 3. Construimos el mensaje en Markdown para este coche ---
-                    mensaje_coches += f"\n---\n"  # Separador horizontal
-                    mensaje_coches += f"### {i+1}. {nombre}\n"  # Título del coche
+                    car_object = {
+                        "name": f"{i+1}. {nombre}",
+                        "specs": specs,
+                        "imageUrl": coche.get('foto'),
+                        "price": precio_str,
+                        "score": score_str,
+                        "analysis": "Análisis detallado de la recomendación pendiente de desarrollo."
+                    }
+                    structured_response["cars"].append(car_object)
 
-                    # ✅ CORREGIDO: Añadido un salto de línea '\n' al final de esta línea.
-                    # Esto asegura que la imagen aparezca en una nueva línea.
-                    mensaje_coches += f"> {tipo_mecanica} | {anyo_unidad} | {traccion}\n"
+                final_ai_msg = AIMessage(
+                    content=structured_response["introText"],
+                    additional_kwargs={"payload": structured_response}
+                )
+            except Exception as e:
+                logging.error(f"ERROR (Buscar BQ) ► Fallo al construir la respuesta estructurada: {e}", exc_info=True)
+                final_ai_msg = AIMessage(content="Lo siento, tuve un problema al formatear los resultados.")
 
-                    # Añadimos la imagen si la URL existe
-                    if url_foto and url_foto.strip():
-                        mensaje_coches += f"![Foto de {nombre}]({url_foto})\n"
-
-                    # Añadimos los detalles clave y la explicación
-                    # Se usa un solo '\n' para que no haya un espacio excesivo con la explicación.
-                    mensaje_coches += f"**Precio:** {precio_str} | **Puntuación:** {score_str}\n"
-                    mensaje_coches += f"*{explicacion_coche}*\n"
+        else:
+            # --- CASO B: No se encontraron coches ---
+            _sugerencia_generada = None
+            # (Tu lógica de heurísticas para generar _sugerencia_generada se mantiene igual)
+            # Heurística 1: Tipo de Mecánica
+            tipos_mecanica_actuales = filtros_para_bq.get("tipo_mecanica", [])
+            mecanicas_electricas_puras = {"BEV", "REEV"} # Conjunto para chequeo eficiente
+            es_solo_electrico_puro = all(m in mecanicas_electricas_puras for m in tipos_mecanica_actuales)
                 
-                mensaje_coches += "\n\n---\n\n¿Qué te parecen estas opciones? ¿Hay alguno que te interese para ver más detalles?"
-                # --- ✅ FIN DE LA NUEVA LÓGICA DE PRESENTACIÓN ---
-               
-                
-            else:
-                # ... (Tu lógica de sugerencias heurísticas para mensaje_coches) ...
-                mensaje_coches = "He aplicado todos tus filtros, pero no encontré coches que coincidan exactamente. ¿Quizás quieras redefinir algún criterio?"
-                print("INFO (Buscar BQ) ► No se encontraron coches. Intentando generar sugerencia.")
-                
-                # Usaremos esta variable para construir la sugerencia
-                _sugerencia_generada = None
-                
-                # Heurística 1: Tipo de Mecánica
-                tipos_mecanica_actuales = filtros_para_bq.get("tipo_mecanica", [])
-                mecanicas_electricas_puras = {"BEV", "REEV"} # Conjunto para chequeo eficiente
-                es_solo_electrico_puro = all(m in mecanicas_electricas_puras for m in tipos_mecanica_actuales)
-                
-                if tipos_mecanica_actuales and es_solo_electrico_puro and len(tipos_mecanica_actuales) <= 3:
+            if tipos_mecanica_actuales and es_solo_electrico_puro and len(tipos_mecanica_actuales) <= 3:
                     _sugerencia_generada = (
                         "No encontré coches que sean únicamente 100% eléctricos (como BEV o REEV) "
                         "con el resto de tus criterios. ¿Te gustaría que amplíe la búsqueda para incluir también "
@@ -1948,7 +1984,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
                     )
                 
                 # Heurística 2: Precio/Cuota (si no se sugirió mecánica)
-                if not _sugerencia_generada: # Solo si no se hizo la sugerencia anterior
+            if not _sugerencia_generada: # Solo si no se hizo la sugerencia anterior
                     precio_actual = filtros_para_bq.get("precio_max_contado_recomendado") or filtros_para_bq.get("pago_contado")
                     cuota_actual = filtros_para_bq.get("cuota_max_calculada") or filtros_para_bq.get("cuota_max")
 
@@ -1963,22 +1999,17 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
                         _sugerencia_generada = (
                             f"Con la cuota mensual de aproximadamente {cuota_actual:,.0f}€ no he encontrado opciones. "
                             f"¿Podríamos considerar una cuota hasta unos {nueva_cuota_sugerida:,.0f}€/mes?"
-                        )
-                if _sugerencia_generada:
-                    mensaje_coches = _sugerencia_generada # Usar la sugerencia específica
+                        )            
+            # ✅ LÓGICA DE MENSAJE CORREGIDA
+            mensaje_final_texto = _sugerencia_generada or "He aplicado todos tus filtros, pero no encontré coches que coincidan exactamente. ¿Quizás quieras redefinir algún criterio general?"
+            final_ai_msg = AIMessage(content=mensaje_final_texto)    
                 
-                if not _sugerencia_generada: # Si ninguna heurística aplicó
-                    _sugerencia_generada = "He aplicado todos tus filtros, pero no encontré coches que coincidan exactamente en este momento. ¿Quizás quieras redefinir algún criterio general?"
-                mensaje_coches = _sugerencia_generada
-
-        except Exception as e_bq:
-            logging.error(f"ERROR (Buscar BQ) ► Falló la ejecución de buscar_coches_bq: {e_bq}")
-            traceback.print_exc()
-            mensaje_coches = f"Lo siento, tuve un problema al buscar en la base de datos: {e_bq}"
-    else:
-        logging.error("ERROR (Buscar BQ) ► Faltan filtros o pesos finales en el estado para la búsqueda.")
-        mensaje_coches = "Lo siento, falta información interna para realizar la búsqueda final."
-
+    # --- 4. ACTUALIZACIÓN DEL HISTORIAL Y RETORNO ---
+    historial_final = list(historial)
+    if final_ai_msg:
+        historial_final.append(final_ai_msg)     
+        
+    # --- 5. LOGGING A BIGQUERY (sin cambios) ---       
     # Logueo a BigQuery (como lo tenías)
     if filtros_finales_obj and pesos_finales: 
         try:
@@ -1999,16 +2030,6 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
             traceback.print_exc()
 #     # --- FIN LLAMADA AL LOGGER ---
         pass # Placeholder
-
-    # --- CONSTRUIR MENSAJE FINAL COMBINADO ---
-    mensaje_final_completo = f"{mensaje_coches}" #f"{tabla_resumen_criterios_md}\n\n---\n\n{mensaje_coches}"
-    
-    final_ai_msg = AIMessage(content=mensaje_final_completo)
-    historial_final = list(historial) 
-    if not historial or historial[-1].content != final_ai_msg.content:
-        historial_final.append(final_ai_msg)
-    else:
-        logging.debug("DEBUG (Buscar BQ) ► Mensaje final combinado duplicado, no se añade.")
 
     # Devolver estado final
     return {
@@ -2059,6 +2080,8 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         "flag_penalizar_tamano_no_compacto": flag_penalizar_tamano_no_compacto,
         "flag_bonus_singularidad_lifestyle" : flag_bonus_singularidad_lifestyle,
         "flag_deportividad_lifestyle": flag_deportividad_lifestyle,
+        "flag_coche_ciudad_perfil" : flag_coche_ciudad_perfil,
+        flag_coche_ciudad_2_perfil : flag_coche_ciudad_2_perfil,
         "flag_ajuste_maletero_personal": flag_ajuste_maletero_personal,
         "pregunta_pendiente": None # Este nodo es final para el turno
         

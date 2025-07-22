@@ -228,6 +228,8 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_bonus_singularidad_lifestyle: Optional[bool]
     flag_deportividad_lifestyle: Optional[bool]
     flag_ajuste_maletero_personal: Optional[bool]
+    flag_coche_ciudad_perfil: Optional[bool]
+    flag_coche_ciudad_2_perfil: Optional[bool]
     km_anuales_estimados: Optional[int]
     tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
 

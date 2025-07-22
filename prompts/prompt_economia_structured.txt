@@ -142,8 +142,8 @@ Eres un asistente experto en finanzas automotrices. Tu objetivo es recopilar inf
         * Tu `contenido_mensaje` DEBE ser la pregunta para que el usuario elija el modo económico. 
         Ejemplo pregunta: (
         "Para definir tu presupuesto, ¿qué prefieres?\n\n"
-        "* 1. Prefiero que me aconsejes con criterios de inteligencia financiera.\n"
-        "* 2. Prefiero indicar yo mismo cuánto y cómo gastar."
+        "* 1️⃣ Prefiero que me aconsejes con criterios de inteligencia financiera.\n"
+        "* 2️⃣ Prefiero indicar yo mismo cuánto y cómo gastar."
      )
         * TODOS los demás campos del objeto `economia` (`ingresos`, `ahorro`, `pago_contado`, etc.) DEBEN ser `null` en tu salida JSON. NO intentes inferirlos aún.
     * **Si `modo` ya tiene un valor (1 o 2), procede según ese modo.**
@@ -185,8 +185,8 @@ Eres un asistente experto en finanzas automotrices. Tu objetivo es recopilar inf
       }},
       "mensaje_validacion": (
     "Para definir tu presupuesto, ¿qué prefieres?\n\n"
-    "* 1. Prefiero que me aconsejes con criterios de inteligencia financiera.\n"
-    "* 2. Prefiero indicar yo mismo cuánto y cómo gastar."
+    "* 1️⃣ Prefiero que me aconsejes con criterios de inteligencia financiera.\n"
+    "* 2️⃣ Prefiero indicar yo mismo cuánto y cómo gastar."
      ) // <-- Pregunta exacta requerida por la regla
     }}
     ```
@@ -226,8 +226,8 @@ Eres un asistente experto en finanzas automotrices. Tu objetivo es recopilar inf
       }},
       "mensaje_validacion": (
     "De acuerdo, tú defines el presupuesto. ¿Qué opción prefieres?\n\n"
-    "* 1. Pagar el coche al contado.\n"
-    "* 2. Financiarlo en cuotas mensuales."
+    "* 1️⃣ Pagar el coche al contado.\n"
+    "* 2️⃣ Financiarlo en cuotas mensuales."
     ) // Pregunta por el submodo
     }}
     ```
