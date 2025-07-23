@@ -124,3 +124,7 @@ def aplicar_postprocesamiento_filtros(
 # 'largo'< 390  ( + 5 puntos))
 # 'peso' < 1000  (+ 2 puntos)
 
+
+# → Penalizar Motorización + Carrocería
+# ◦	Todo lo que no sea BEV + Coupé o BEV + Cabrio (- 5)
+

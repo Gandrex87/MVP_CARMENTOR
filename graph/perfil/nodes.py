@@ -1224,7 +1224,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     flag_ajuste_maletero_personal = False
     flag_coche_ciudad_perfil = False
     flag_coche_ciudad_2_perfil = False
-
+    flag_es_conductor_urbano = False
      
     # Verificar que preferencias_obj exista para acceder a sus atributos
     if not preferencias_obj:
@@ -1271,7 +1271,8 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             "flag_deportividad_lifestyle": flag_deportividad_lifestyle,
             "flag_ajuste_maletero_personal" : flag_ajuste_maletero_personal,
             "flag_coche_ciudad_perfil" :  flag_coche_ciudad_perfil,
-            "flag_coche_ciudad_2_perfil" : flag_coche_ciudad_2_perfil
+            "flag_coche_ciudad_2_perfil" : flag_coche_ciudad_2_perfil,
+            "flag_es_conductor_urbano": flag_es_conductor_urbano
         }
     # --- NUEVA LÓGICA PARA FLAGS DE CARROCERÍA ---
     # Regla 1: Zona de Montaña favorece SUV/TODOTERRENO
@@ -1425,16 +1426,19 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
             flag_bonus_costes_critico = True
             logging.info("Flags: Rating de Costes de Uso CRÍTICO. Activando bonus.")
     #-------------------------
-    # Primero, comprobamos si el usuario NO suele llevar acompañantes.
-    # Usamos getattr para evitar errores si el atributo no existiera.
+     # --- LÓGICA PARA EL FLAG DE PENALIZACIÓN (EL "CUÁNDO") ---
+    # Se activa si el usuario no suele llevar pasajeros o lo hace ocasionalmente.
     if getattr(info_pasajeros_obj, 'suele_llevar_acompanantes', True) is False:
         flag_penalizar_tamano_no_compacto = True
-        logging.info("Flags: Usuario no suele llevar acompañantes. Activando penalización para coches grandes.")
-    
-    # Si sí lleva acompañantes, comprobamos la frecuencia.
     elif getattr(info_pasajeros_obj, 'frecuencia_viaje_con_acompanantes', 'frecuente') == "ocasional":
         flag_penalizar_tamano_no_compacto = True
-        logging.info("Flags: Frecuencia de pasajeros es 'ocasional'. Activando penalización para coches grandes.")
+    if flag_penalizar_tamano_no_compacto:
+        logging.info("Flags: Se activará la penalización por tamaño para coches grandes.")
+    # --- LÓGICA PARA EL FLAG DE CONTEXTO (EL "CÓMO") ---
+    # Se activa si el usuario se identifica como conductor urbano.
+    if is_yes(getattr(preferencias_obj, 'circula_principalmente_ciudad', 'no')):
+        flag_es_conductor_urbano = True
+        logging.info(f"Flags: Perfil 'Conductor Urbano' detectado.")
 
     # --- FIN DE LA LÓGICA CORREGIDA ---
     
@@ -1641,6 +1645,7 @@ def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
         "flag_ajuste_maletero_personal" : flag_ajuste_maletero_personal,
         "flag_coche_ciudad_perfil" :  flag_coche_ciudad_perfil,
         "flag_coche_ciudad_2_perfil": flag_coche_ciudad_2_perfil,
+        "flag_es_conductor_urbano": flag_es_conductor_urbano,
         "es_municipio_zbe": flag_es_zbe       
     }
     
@@ -1854,6 +1859,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     flag_ajuste_maletero_personal = state.get("flag_ajuste_maletero_personal")
     flag_coche_ciudad_perfil = state.get("flag_coche_ciudad_perfil")
     flag_coche_ciudad_2_perfil = state.get("flag_coche_ciudad_2_perfil")
+    flag_es_conductor_urbano = state.get("flag_es_conductor_urbano")
     km_anuales_val = state.get("km_anuales_estimados")
     configurable_config = config.get("configurable", {})
     thread_id = configurable_config.get("thread_id", "unknown_thread_in_node") # Fallback por si acaso
@@ -2081,8 +2087,11 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         "flag_bonus_singularidad_lifestyle" : flag_bonus_singularidad_lifestyle,
         "flag_deportividad_lifestyle": flag_deportividad_lifestyle,
         "flag_coche_ciudad_perfil" : flag_coche_ciudad_perfil,
-        flag_coche_ciudad_2_perfil : flag_coche_ciudad_2_perfil,
+        "flag_coche_ciudad_2_perfil" : flag_coche_ciudad_2_perfil,
+        "flag_es_conductor_urbano": flag_es_conductor_urbano,
         "flag_ajuste_maletero_personal": flag_ajuste_maletero_personal,
+        "flag_bonus_nieve_val": flag_bonus_nieve_val,
+        "flag_bonus_montana_val": flag_bonus_montana_val,
         "pregunta_pendiente": None # Este nodo es final para el turno
         
     }

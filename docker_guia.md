@@ -526,3 +526,19 @@ gcloud run deploy carblau-agent-api \
 ```
 
 Nota: por ahora omito una mejor maquina   --memory=2Gi \ --cpu=2 y dejo --allow-unauthenticated para que cualquiera pueda usarla api sin autenticarse.
+
+#### Mejorando la maquina
+
+gcloud run deploy carblau-agent-api \
+  --image="europe-west1-docker.pkg.dev/thecarmentor-mvp2/carblau-repo/carblau-agent-api:v1" \
+  --region="europe-west1" \
+  --platform="managed" \
+  --allow-unauthenticated \
+  --port="8000" \
+  --service-account="carblau-run-sa@thecarmentor-mvp2.iam.gserviceaccount.com" \
+  --add-cloudsql-instances="thecarmentor-mvp2:europe-west1:carblau-sql-instance" \
+  --set-env-vars="DB_HOST=/cloudsql/thecarmentor-mvp2:europe-west1:carblau-sql-instance" \
+  --set-secrets="DB_USER=DB_USER:latest,DB_PASSWORD=DB_PASSWORD:latest,DB_NAME=DB_NAME:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest" \
+  --timeout=600s \
+  --cpu=2 \
+  --memory=1Gi

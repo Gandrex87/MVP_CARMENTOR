@@ -224,7 +224,8 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_bonus_fiab_dur_critico: Optional[bool]
     flag_bonus_fiab_dur_fuerte: Optional[bool]
     flag_bonus_costes_critico: Optional[bool]
-    flag_penalizar_tamano_no_compacto: Optional[bool]
+    flag_penalizar_tamano_no_compacto: Optional[bool] # trabaja en conjunto con la flag flag_es_conductor_urbano
+    flag_es_conductor_urbano: Optional[bool]
     flag_bonus_singularidad_lifestyle: Optional[bool]
     flag_deportividad_lifestyle: Optional[bool]
     flag_ajuste_maletero_personal: Optional[bool]

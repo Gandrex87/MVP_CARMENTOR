@@ -109,10 +109,6 @@ MIN_MAX_RANGES = {
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 #⚖️ Nivel 1: Ajuste Ligero (de +2 a +5 puntos)
 
-# --- PENALIZACIÓN POR TAMAÑO PARA USO INDIVIDUAL/OCASIONAL ---
-# Penalización para coches grandes si el usuario no suele llevar pasajeros.
-PENALTY_TAMANO_NO_COMPACTO = -8 #-5
-
 # Bonus por tipo de motor
 BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM = 3
 BONUS_BEV_MUY_ALTO_KM = 5
@@ -233,6 +229,11 @@ PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA =  -25
 PENALTY_ANTIGUEDAD_MAS_15_ANOS = -25 # Penalización por Antigüedad (si tecnología es alta)
 BONUS_AWD_AVENTURA_EXTREMA = 20 # flag_bonus_awd_clima_adverso = TRUE AND sd.traccion = 'ALL' THEN
 
+# --- UMBRALES DE TAMAÑO PARA PENALIZACIÓN DE COCHES NO COMPACTOS ---
+# Las medidas deben estar en la misma unidad que tu columna 'largo' en BigQuery (asumimos milímetros)
+UMBRAL_LARGO_CIUDAD_MM = 4250  # 4.25 metros
+UMBRAL_LARGO_CARRETERA_MM = 4500 # 4.50 metros
+PENALTY_TAMANO_NO_COMPACTO = -5
 
 
 # --- FACTORES DE BONUS POR RATINGS DE USUARIO ---
@@ -262,6 +263,8 @@ BONUS_CARROCERIA_COUPE_DEPORTIVO = 4
 BONUS_CARROCERIA_DESCAPOTABLE_DEPORTIVO = 3
 PENALTY_CARROCERIA_COMERCIAL_DEPORTIVO = -10
 PENALTY_CARROCERIA_FURGONETA_DEPORTIVO = -7
+PENALTY_CARROCERIA_SUV_DEPORTIVO = -5
+PENALTY_BEV_NO_DEPORTIVO_LIFESTYLE = -5
 
 # --- PENALIZACIONES PARA LA REGLA DE "MALETERO PERSONAL" ---
 PENALTY_MALETERO_INSUFICIENTE = -5
