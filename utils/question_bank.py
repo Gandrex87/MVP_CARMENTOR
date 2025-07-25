@@ -148,12 +148,6 @@ QUESTION_BANK: Dict[str, List[str]] = {
     ],
       "aventura":[
           (
-            "¿Por qué tipo de vías piensas circular habitualmente?:\n"
-            "* 🛣️ Solo asfalto\n"
-            "* 🌲 También por pistas sin asfaltar, de forma ocasional\n"
-            "* 🏔️ Frecuentemente por terrenos complicados o en condiciones difíciles "
-        ),
-          (
             "¿Con qué tipo de terreno se enfrentará tu coche? :\n"
             "* 🛣️ Solo asfalto\n"
             "* 🌲 También por pistas sin asfaltar, de forma ocasional\n"

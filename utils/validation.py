@@ -8,63 +8,51 @@ logger = logging.getLogger(__name__)
 
 # --- Función de Validación de Perfil (Definida anteriormente) ---
 def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
-    print(f"--- DEBUG CHECK PERFIL ---") # <-- Nuevo Print
-    print(f"Input prefs object: {prefs}") # <-- Nuevo Print
-    print(f"Input prefs type: {type(prefs)}") # <-- Nuevo Print
+    """
+    Verifica si el PerfilUsuario está completo, siguiendo la misma lógica
+    y orden que la función que genera las preguntas.
+    """
     if prefs is None:
         return False
-    campos_obligatorios = [
-        "apasionado_motor", "valora_estetica", "coche_principal_hogar" , "frecuencia_uso", "distancia_trayecto", "circula_principalmente_ciudad" , "uso_profesional", "prefiere_diseno_exclusivo", "altura_mayor_190",
-        "transporta_carga_voluminosa", "arrastra_remolque","aventura", "estilo_conduccion", "tiene_garage", "tiene_punto_carga_propio", "solo_electricos", "transmision_preferida", "prioriza_baja_depreciacion","rating_fiabilidad_durabilidad", 
-        "rating_seguridad","rating_comodidad", "rating_impacto_ambiental", "rating_costes_uso", "rating_tecnologia_conectividad", 
-    ] # por ahora no va 
-    for campo in campos_obligatorios:
-        valor = getattr(prefs, campo, None)
-        #print(f"Checking field '{campo}': value='{valor}', type={type(valor)}") # <-- Nuevo Print
-        if valor is None or (isinstance(valor, str) and not valor.strip()):
-             print(f"DEBUG (Validation Perfil) ► Campo '{campo}' está vacío/None.")
-             return False
-    # 0. distancia_trayecto    
-    if prefs.distancia_trayecto is not None and prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value:
-        # Si el trayecto es corto/medio, la pregunta sobre viajes largos es obligatoria
-        if prefs.realiza_viajes_largos is None:
-            print("DEBUG (Validation Perfil) ► 'distancia_trayecto' es corta/media, pero 'realiza_viajes_largos' es None. Perfil INCOMPLETO.")
-            return False  
-        # Si la respuesta es 'sí', la frecuencia es obligatoria
-        if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None:
-            print("DEBUG (Validation Perfil) ► 'realiza_viajes_largos' es 'sí', pero 'frecuencia_viajes_largos' es None. Perfil INCOMPLETO.")
-            return False  
+
+    # 1. Comprobación de campos básicos (en el mismo orden que las preguntas)
+    campos_base = [
+        "apasionado_motor", "valora_estetica", "coche_principal_hogar", "frecuencia_uso", 
+        "distancia_trayecto", "circula_principalmente_ciudad", "uso_profesional", 
+        "prefiere_diseno_exclusivo", "altura_mayor_190", "transporta_carga_voluminosa", 
+        "arrastra_remolque", "aventura", "estilo_conduccion", "tiene_garage", 
+        "tiene_punto_carga_propio", "solo_electricos", "prioriza_baja_depreciacion",
+        "rating_fiabilidad_durabilidad", "rating_seguridad", "rating_comodidad", 
+        "rating_impacto_ambiental", "rating_costes_uso", "rating_tecnologia_conectividad"
+    ]
+    for campo in campos_base:
+        if getattr(prefs, campo, None) is None:
+            # logging.debug(f"Validation fail: Campo base '{campo}' es None.")
+            return False
+
+    # 2. Comprobación de campos condicionales (lógica extraída de la función de preguntas)
+    # Lógica de viajes largos
+    if prefs.distancia_trayecto != DistanciaTrayecto.MAS_150_KM.value:
+        if prefs.realiza_viajes_largos is None: return False
+        if is_yes(prefs.realiza_viajes_largos) and prefs.frecuencia_viajes_largos is None: return False
     
-    # 1. tipo_uso_profesional
-    if is_yes(prefs.uso_profesional): 
-        if prefs.tipo_uso_profesional is None: # El tipo es Enum, Pydantic maneja valores inválidos
-            print("DEBUG (Validation Perfil) ► 'uso_profesional' es 'sí', pero 'tipo_uso_profesional' es None. Perfil INCOMPLETO.")
-            return False
-    # 2. necesita_espacio_objetos_especiales
-    if is_yes(prefs.transporta_carga_voluminosa):
-        if prefs.necesita_espacio_objetos_especiales is None or \
-           (isinstance(prefs.necesita_espacio_objetos_especiales, str) and not prefs.necesita_espacio_objetos_especiales.strip()):
-            print("DEBUG (Validation Perfil) ► 'transporta_carga_voluminosa' es 'sí', pero 'necesita_espacio_objetos_especiales' es None/vacío. Perfil INCOMPLETO.")
-            return False
-    # 3. Lógica de Garaje/Aparcamiento
-    if prefs.tiene_garage is not None: # Solo si ya se respondió a 'tiene_garage'
-        if is_yes(prefs.tiene_garage): # Si SÍ tiene garaje
-            if prefs.espacio_sobra_garage is None or \
-               (isinstance(prefs.espacio_sobra_garage, str) and not prefs.espacio_sobra_garage.strip()):
-                print("DEBUG (Validation Perfil) ► 'tiene_garage' es 'sí', pero 'espacio_sobra_garage' es None/vacío. Perfil INCOMPLETO.")
-                return False
-            if is_yes(prefs.espacio_sobra_garage) is False: # Si NO tiene espacio de sobra
-                # problema_dimension_garage es List[DimensionProblematica] o None
-                if prefs.problema_dimension_garage is None or not prefs.problema_dimension_garage: # Si es None o lista vacía
-                    print("DEBUG (Validation Perfil) ► 'espacio_sobra_garage' es 'no', pero 'problema_dimension_garage' es None/vacío. Perfil INCOMPLETO.")
-                    return False
-        else: # Si NO tiene garaje (tiene_garage es 'no')
-            if prefs.problemas_aparcar_calle is None or \
-               (isinstance(prefs.problemas_aparcar_calle, str) and not prefs.problemas_aparcar_calle.strip()):
-                print("DEBUG (Validation Perfil) ► 'tiene_garage' es 'no', pero 'problemas_aparcar_calle' es None/vacío. Perfil INCOMPLETO.")
-                return False
-    # Si prefs.tiene_garage es None, ya fue capturado por el bucle de campos_base_obligatorios
-    print("DEBUG (Validation Perfil) ► Todos los campos obligatorios del perfil están presentes.")
+    # Lógica de uso profesional
+    if is_yes(prefs.uso_profesional) and prefs.tipo_uso_profesional is None: return False
+
+    # Lógica de objetos especiales
+    if is_yes(prefs.transporta_carga_voluminosa) and prefs.necesita_espacio_objetos_especiales is None: return False
+
+    # Lógica de transmisión (¡CORREGIDO!)
+    if not is_yes(prefs.solo_electricos) and prefs.transmision_preferida is None: return False
+
+    # Lógica de garaje
+    if is_yes(prefs.tiene_garage):
+        if prefs.espacio_sobra_garage is None: return False
+        if not is_yes(prefs.espacio_sobra_garage) and not prefs.problema_dimension_garage: return False
+    else: # tiene_garage es 'no'
+        if prefs.problemas_aparcar_calle is None: return False
+        
+    # Si todas las comprobaciones pasan, el perfil está completo
     return True
 
 
@@ -141,62 +129,23 @@ def check_economia_completa(econ: Optional[EconomiaUsuario]) -> bool:
 
 def check_pasajeros_completo(info: Optional[InfoPasajeros]) -> bool:
     """
-    Verifica si la información de pasajeros está completa según el nuevo flujo.
+    Verifica si la información de pasajeros está completa.
+    Esta función es el "espejo" de la que genera las preguntas.
     """
-    # logger.debug("--- DEBUG CHECK PASAJEROS ---")
-    if info is None:
-        logger.debug("DEBUG (Validation Pasajeros) ► Objeto InfoPasajeros es None. INCOMPLETO.")
+    if not info:
         return False
 
-    # Imprimir el objeto para depurar
-    # if hasattr(info, "model_dump_json"):
-    #     logger.debug(f"Input info pasajeros: {info.model_dump_json(indent=2)}")
-    # else:
-    #     logger.debug(f"Input info pasajeros: {info}")
-
-    # 1. Verificar el campo principal: suele_llevar_acompanantes
     if info.suele_llevar_acompanantes is None:
-        logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es None. INCOMPLETO.")
         return False
-
-    # 2. Si no suele llevar acompañantes, se considera completo en esta etapa
+    
+    # Si el usuario no lleva acompañantes, la etapa está completa.
     if info.suele_llevar_acompanantes is False:
-        # En este caso, el nodo recopilar_info_pasajeros_node debería haber inferido:
-        # info.frecuencia = "nunca"
-        # info.num_ninos_silla = 0
-        # info.num_otros_pasajeros = 0
-        # Y el LLM debería haber devuelto tipo_mensaje="CONFIRMACION"
-        logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es False. Considerado COMPLETO para el flujo de preguntas.")
         return True
-
-    # 3. Si SÍ suele llevar acompañantes, los siguientes campos son necesarios:
-    if info.suele_llevar_acompanantes is True:
-        if info.frecuencia_viaje_con_acompanantes is None:
-            logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es True, pero 'frecuencia_viaje_con_acompanantes' es None. INCOMPLETO.")
-            return False
+    
+    # Si sí lleva, todos los campos siguientes deben estar rellenos.
+    if (info.frecuencia_viaje_con_acompanantes is None or
+        info.num_ninos_silla is None or
+        info.num_otros_pasajeros is None):
+        return False
         
-        # composicion_pasajeros_texto es un campo de ayuda para el LLM, no estrictamente
-        # necesario para la completitud si los campos numéricos están llenos.
-        # Pero si está vacío y los números también, es incompleto.
-
-        if info.num_ninos_silla is None:
-            logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es True, pero 'num_ninos_silla' es None. INCOMPLETO.")
-            return False
-        
-        if info.num_otros_pasajeros is None:
-            logger.debug("DEBUG (Validation Pasajeros) ► 'suele_llevar_acompanantes' es True, pero 'num_otros_pasajeros' es None. INCOMPLETO.")
-            return False
-            
-        # Adicionalmente, el campo 'frecuencia' (el general) debería tener un valor
-        # si 'frecuencia_viaje_con_acompanantes' lo tiene.
-        if info.frecuencia is None and info.frecuencia_viaje_con_acompanantes is not None:
-             logger.debug("DEBUG (Validation Pasajeros) ► 'frecuencia_viaje_con_acompanantes' tiene valor, pero 'frecuencia' general es None. Considerado INCOMPLETO para la lógica final (aunque el LLM debería inferirlo).")
-             # Esto podría ser un punto donde el LLM no infirió 'frecuencia' correctamente.
-             # Sin embargo, para el flujo de *preguntas*, si los campos anteriores están, se podría considerar completo
-             # y dejar que el nodo de recopilación infiera 'frecuencia'.
-             # Por ahora, lo marcamos como incompleto si 'frecuencia' falta.
-             return False
-
-
-    logger.debug("DEBUG (Validation Pasajeros) ► Todos los campos necesarios de InfoPasajeros están presentes según el flujo. COMPLETO.")
     return True

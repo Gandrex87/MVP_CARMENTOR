@@ -46,7 +46,8 @@ prompt_economia_structured_sys_msg = cargar_prompt("prompt_economia_structured.t
 
 system_prompt_pasajeros = cargar_prompt("system_prompt_pasajeros.txt")
 
-#system_prompt_explicacion_coche = cargar_prompt("system_prompt_explicacion_coche.txt")
 
 system_prompt_explicacion_coche_mejorado = cargar_prompt("system_prompt_explicacion_coche_mejorado.txt")
 
+
+#system_prompt_explicacion_coche = cargar_prompt("system_prompt_explicacion_coche.txt")

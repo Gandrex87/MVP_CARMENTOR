@@ -23,7 +23,6 @@ class InfoClimaUsuario(BaseModel):
     codigo_postal_consultado: Optional[str] = Field(default=None, description="El CP que se consultó.") 
         
 class PerfilUsuario(BaseModel):
-    # Añadir default=None a todos los Optional que no lo tenían
     apasionado_motor : Optional[str] = Field(default=None, description="¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'")
     valora_estetica: Optional[str] = Field(default=None, description="¿Valora la estética del coche? Responde 'sí' o 'no'")
     coche_principal_hogar: Optional[str] = Field(default=None,description="¿Será el coche principal del hogar? Responde 'sí' o 'no'")
@@ -66,7 +65,11 @@ class PerfilUsuario(BaseModel):
 #lleva pasajero e important epasajeros vayan anchos y comodos
 # --- Modelo Pydantic para InfoPasajeros (MODIFICADO) ---
 class InfoPasajeros(BaseModel):
-    # NUEVOS CAMPOS PARA EL FLUJO DE PREGUNTAS
+    """
+    Modelo de datos refinado para almacenar la información sobre los pasajeros.
+    Contiene una lógica de campos clara y no redundante.
+    """
+    # --- Flujo de Preguntas Secuencial ---
     suele_llevar_acompanantes: Optional[bool] = Field(
         default=None, 
         description="¿El usuario suele llevar acompañantes? (true/false)"
@@ -75,31 +78,18 @@ class InfoPasajeros(BaseModel):
         default=None,
         description="Si suele llevar acompañantes, ¿con qué frecuencia? ('ocasional' o 'frecuente')"
     )
-    composicion_pasajeros_texto: Optional[str] = Field(
-        default=None,
-        description="Respuesta textual del usuario a la pregunta sobre la composición de los pasajeros (ej: 'dos niños y un adulto', 'tres adultos')."
-    )
-    
-    # CAMPO quitarlo a futuro EXISTENTE: se inferirá de los nuevos o se preguntará si es necesario
-    frecuencia: Optional[Literal["nunca", "ocasional", "frecuente"]] = Field(
-        default=None, 
-        description="Frecuencia general con la que viaja con pasajeros (inferido o preguntado)."
-    )
-    
-    # CAMPOS EXISTENTES: se inferirán de composicion_pasajeros_texto y la pregunta de sillas
     num_ninos_silla: Optional[int] = Field(
         default=None, 
         ge=0, 
-        description="Número de niños que necesitan silla infantil."
+        description="Número de pasajeros que SÍ necesitan una silla infantil."
     )
     num_otros_pasajeros: Optional[int] = Field(
         default=None, 
         ge=0, 
-        description="Número de otros pasajeros (adultos o niños sin silla), sin contar al conductor."
+        description="Número de otros pasajeros que NO necesitan silla (adultos, adolescentes, niños mayores), sin contar al conductor."
     )
-
     class ConfigDict:
-        use_enum_values = True # Para que los Literal se traten como sus valores
+        use_enum_values = True
 
 class FiltrosInferidos(BaseModel):
     tipo_mecanica: Optional[List[TipoMecanica]] = Field(default=None, description="Lista de motorizaciones recomendadas")

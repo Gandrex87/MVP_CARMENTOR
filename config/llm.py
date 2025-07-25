@@ -1,6 +1,6 @@
 # instanciación del modelo, init_chat_model, y configuración de structured_llm.
 from langchain.chat_models import init_chat_model
-from graph.perfil.state import ResultadoSoloPerfil, ResultadoSoloFiltros, ResultadoEconomia, ResultadoPasajeros, ResultadoCP# Ajusta la ruta de importación
+from graph.perfil.state import ResultadoSoloPerfil, ResultadoSoloFiltros, ResultadoEconomia, ResultadoPasajeros, ResultadoCP , InfoPasajeros# Ajusta la ruta de importación
 from dotenv import load_dotenv
 import logging
 
@@ -93,7 +93,7 @@ if llm and llm_potente and llm_res:
         ResultadoSoloPerfil, method="function_calling"
     )
     llm_pasajeros = llm.with_structured_output(
-        ResultadoPasajeros, method="function_calling"
+        InfoPasajeros, method="function_calling"
     )
     llm_solo_filtros = llm.with_structured_output(
         ResultadoSoloFiltros, method="function_calling"
@@ -114,8 +114,5 @@ else:
     llm_solo_filtros = None
     llm_economia = None
     llm_explicacion_coche = None
-
-
-
 
 

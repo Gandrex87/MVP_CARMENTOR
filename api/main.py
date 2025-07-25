@@ -209,3 +209,70 @@ async def send_message(
     except Exception as e:
         logger.error(f"Error al invocar grafo en /message: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del agente: {str(e)}")
+
+
+# @app.post("/conversation/{thread_id}/message", response_model=AgentMessageResponse, tags=["conversation"])
+# async def send_message(
+#     message_request: UserMessageRequest,
+#     thread_id: str = Path(...)
+# ):
+#     if not car_mentor_graph:
+#         raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail="El servicio del agente no está disponible.")
+    
+#     if not message_request.messages or not message_request.messages[0].content.strip():
+#         raise HTTPException(status_code=400, detail="El contenido del mensaje no puede estar vacío.")
+    
+#     user_content = message_request.messages[0].content
+    
+#     # ==============================================================================
+#     # ▼▼▼ INICIO DE LA LÓGICA MODIFICADA ▼▼▼
+#     # ==============================================================================
+    
+#     # 1. Construimos el "config maestro" que incluye las interrupciones.
+#     config = {
+#         "configurable": {"thread_id": thread_id},
+#         "interrupt_after": [
+#             "generar_mensaje_transicion_perfil",
+#             "generar_mensaje_transicion_pasajeros"
+#         ]
+#     }
+    
+#     logger.info(f"Continuando {thread_id}. Usuario: '{user_content}'. Usando config con interrupciones.")
+    
+#     try:
+#         # 2. Invocamos el grafo con el mensaje del usuario.
+#         #    El grafo se ejecutará hasta que termine o encuentre una interrupción.
+#         new_human_message = HumanMessage(content=user_content)
+#         output = await car_mentor_graph.ainvoke({"messages": [new_human_message]}, config=config)
+        
+#         # 3. Comprobación de continuación: Si el grafo se detuvo, lo continuamos UNA VEZ.
+#         #    Esto es más seguro que un bucle 'while' en un entorno async como FastAPI.
+#         current_state = await car_mentor_graph.get_state(config)
+#         if current_state.next:
+#             logger.info(f"Grafo interrumpido en {thread_id}. Continuando ejecución para finalizar el turno...")
+#             output = await car_mentor_graph.ainvoke(None, config=config)
+
+#         # 4. Procesamos la salida FINAL, que ahora contiene TODOS los mensajes generados.
+#         agent_response_messages: List[Message] = []
+#         if output and "messages" in output:
+#             for msg in output["messages"]:
+#                 message_data = {
+#                     "id": msg.id,
+#                     "role": "agent" if isinstance(msg, AIMessage) else "user",
+#                     "content": msg.content
+#                 }
+#                 if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+#                     message_data["additional_kwargs"] = msg.additional_kwargs
+#                 agent_response_messages.append(Message(**message_data))
+
+#         # El frontend recibirá la lista completa de mensajes, incluyendo la transición
+#         # y la siguiente pregunta, y podrá mostrarlos.
+#         return AgentMessageResponse(thread_id=thread_id, messages=agent_response_messages)
+    
+#     except Exception as e:
+#         logger.error(f"Error al invocar grafo en /message: {e}", exc_info=True)
+#         raise HTTPException(status_code=500, detail=f"Error interno del agente: {str(e)}")
+
+#     # ==============================================================================
+#     # ▲▲▲ FIN DE LA LÓGICA MODIFICADA ▲▲▲
+#     # ==============================================================================
