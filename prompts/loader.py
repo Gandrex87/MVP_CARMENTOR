@@ -38,7 +38,7 @@ def cargar_prompt(nombre_archivo: str) -> str:
 
 system_prompt_cp = cargar_prompt("system_prompt_cp.txt")
 
-system_prompt_saludo_cp = cargar_prompt("system_prompt_saludo.txt")
+#system_prompt_saludo_cp = cargar_prompt("system_prompt_saludo.txt")
 
 system_prompt_perfil= cargar_prompt("system_prompt_perfil.txt")
 

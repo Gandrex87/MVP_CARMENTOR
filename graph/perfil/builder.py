@@ -2,7 +2,7 @@
 
 from langgraph.graph import StateGraph, START, END
 from graph.perfil.state import EstadoAnalisisPerfil # Ajusta la ruta si es necesario
-from graph.perfil.nodes import (  recopilar_cp_node,  buscar_info_clima_node, validar_y_decidir_cp_node, preguntar_cp_node,
+from graph.perfil.nodes import ( saludo_y_pregunta_inicial_node, recopilar_cp_node,  buscar_info_clima_node, validar_y_decidir_cp_node, preguntar_cp_node,
     recopilar_preferencias_node, generar_mensaje_transicion_perfil, construir_filtros_node,recopilar_economia_node, preguntar_economia_node,
     preguntar_preferencias_node, preguntar_economia_node,buscar_coches_finales_node, generar_mensaje_transicion_pasajeros,
     recopilar_info_pasajeros_node, preguntar_info_pasajeros_node,aplicar_filtros_pasajeros_node, calcular_recomendacion_economia_modo1_node,
@@ -17,6 +17,7 @@ def build_sequential_agent_graph():
     workflow = StateGraph(EstadoAnalisisPerfil)
 
     # --- 1. Añadir todos los nodos ---
+    workflow.add_node("saludo_y_pregunta_inicial", saludo_y_pregunta_inicial_node)
     # (Tu lista de nodos es correcta, la mantenemos) 
     workflow.add_node("router", route_based_on_state_node)
     workflow.add_node("recopilar_cp", recopilar_cp_node)
@@ -51,7 +52,7 @@ def build_sequential_agent_graph():
     workflow.add_conditional_edges(
     "router",
     decidir_ruta_inicial, # Tu función de enrutamiento principal
-    {
+    {   "iniciar_conversacion": "saludo_y_pregunta_inicial",
         "recopilar_cp": "recopilar_cp",
         "recopilar_preferencias": "recopilar_preferencias", 
         "recopilar_info_pasajeros": "recopilar_info_pasajeros",
@@ -60,7 +61,8 @@ def build_sequential_agent_graph():
         "buscar_coches_finales": "buscar_coches_finales" 
     }
 )
-
+    # Después del saludo y la primera pregunta, el agente debe esperar la respuesta del usuario.
+    workflow.add_edge("saludo_y_pregunta_inicial", END)
     # --- 3. Conectar las aristas de cada flujo ---
      #Después de intentar recopilar, siempre validamos.
     workflow.add_edge("recopilar_cp", "validar_y_decidir_cp")

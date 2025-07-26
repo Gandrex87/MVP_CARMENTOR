@@ -6,6 +6,10 @@ from utils.conversion import is_yes
 import logging
 logger = logging.getLogger(__name__)
 
+
+
+
+
 # --- Función de Validación de Perfil (Definida anteriormente) ---
 def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     """

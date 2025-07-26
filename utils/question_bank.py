@@ -323,3 +323,26 @@ PREGUNTAS_CP_REINTENTO = [
     "Hmm, ese código postal no es válido. ¿Podrías introducir los 5 dígitos de nuevo, por favor? Si no quieres, dímelo y seguimos adelante.",
     "Necesito un código postal de 5 dígitos para continuar. ¿Podrías verificarlo? Si prefieres no compartirlo, podemos saltar este paso."
 ]
+PREGUNTA_BIENVENIDA = [
+    (
+        "Bienvenid@ a CarBlau, tu asesor inteligente de movilidad. "
+        "Estoy aquí para ayudarte a encontrar el coche que mejor encaja contigo, "
+        "sin marcas detrás ni intereses comerciales. "
+        "Haré preguntas para entender tu perfil como conductor y tus hábitos de uso;"
+        "cuanto más preciso seas, mejor será la recomendación. "
+        "Al final, recibirás una selección totalmente "
+        "objetiva basada en criterios técnicos y tus preferencias. ¡Comenzamos!"  
+    ),
+    ("¡Hola! Soy tu asesor inteligente de CarBlau. Te ayudo a encontrar el coche perfecto para ti "
+     "mediante preguntas sobre tus necesidades y hábitos de conducción. Sin marcas ni "
+     "intereses comerciales: solo criterios objetivos y tus preferencias. ¡Empezamos!"
+    ),
+    ("¡Bienvenid@ a CarBlau! Estoy aquí para encontrar contigo el coche que mejor se adapte a tu vida. "
+     "Haré preguntas para conocerte como conductor: cuanto más preciso seas, mejor será mi recomendación. "
+     "¡Vamos allá!"
+    ),
+    ("Soy tu asesor de CarBlau. Te ayudaré a encontrar el coche ideal. Responde las siguientes preguntas "
+     "con precisión para obtener la mejor recomendación personalizada. "
+     "Al final, recibirás una selección totalmente objetiva basada en criterios técnicos y tus preferencias. ¡Comenzamos!"
+    )
+]

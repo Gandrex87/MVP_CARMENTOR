@@ -19,7 +19,7 @@ from utils.bq_data_lookups import obtener_datos_climaticos_por_cp # IMPORT para 
 from utils.conversion import is_yes 
 from utils.bq_logger import log_busqueda_a_bigquery
 from utils.sanitize_dict_for_json import sanitize_dict_for_json
-from utils.question_bank import QUESTION_BANK , PREGUNTAS_CP_INICIAL , PREGUNTAS_CP_REINTENTO
+from utils.question_bank import QUESTION_BANK , PREGUNTAS_CP_INICIAL , PREGUNTAS_CP_REINTENTO ,PREGUNTA_BIENVENIDA
 import traceback
 from langchain_core.runnables import RunnableConfig
 import pandas as pd
@@ -33,11 +33,28 @@ import logging
 # --- Configuración de Logging ---
 logger = logging.getLogger(__name__)  # ayuda a tener logs mas claros INFO:graph.perfil.nodes:Calculando flags dinámicos...
 
-# En graph/nodes.py
-
 # --- INICIO: NODOS PARA ETAPA DE CÓDIGO POSTAL ---
+# Su única responsabilidad es generar el saludo y la primera pregunta.
 
-# En graph/perfil/nodes.py
+
+def saludo_y_pregunta_inicial_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Genera el mensaje de bienvenida y la primera pregunta sobre el CP.
+    Se ejecuta una sola vez al inicio de la conversación.
+    """
+    print("--- Ejecutando Nodo: saludo_y_pregunta_inicial_node ---")
+    
+    # Elegimos uno de los saludos al azar de nuestra lista de constantes.
+    welcome_message = random.choice(PREGUNTA_BIENVENIDA)
+    
+    first_question = (
+        "Para empezar, ¿puedes decirme tu código postal? Así podré tener en cuenta "
+        "clima, normativas locales, tipo de vías o la disponibilidad de "
+        "recarga eléctrica si contemplas un vehículo electrificado."
+    )
+    
+    # Devolvemos dos mensajes para que el frontend pueda mostrarlos por separado
+    return {"messages": [AIMessage(content=welcome_message), AIMessage(content=first_question)]}
 
 def preguntar_cp_node(state: EstadoAnalisisPerfil) -> dict:
     """
@@ -511,17 +528,17 @@ def recopilar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
     }
 
 
-def validar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
-    """Nodo simple que comprueba si la información de pasajeros está completa."""
-    print("--- Ejecutando Nodo: validar_info_pasajeros_node ---")
-    info_pasajeros = state.get("info_pasajeros")
-    # Llama a la función de utilidad (que crearemos en el siguiente paso)
-    if check_pasajeros_completo(info_pasajeros):
-        print("DEBUG (Pasajeros) ► Validación: Info Pasajeros considerada COMPLETA.")
-    else:
-        print("DEBUG (Pasajeros) ► Validación: Info Pasajeros considerada INCOMPLETA.")
-    # No modifica el estado, solo valida para la condición
-    return {**state}
+# def validar_info_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
+#     """Nodo simple que comprueba si la información de pasajeros está completa."""
+#     print("--- Ejecutando Nodo: validar_info_pasajeros_node ---")
+#     info_pasajeros = state.get("info_pasajeros")
+#     # Llama a la función de utilidad (que crearemos en el siguiente paso)
+#     if check_pasajeros_completo(info_pasajeros):
+#         print("DEBUG (Pasajeros) ► Validación: Info Pasajeros considerada COMPLETA.")
+#     else:
+#         print("DEBUG (Pasajeros) ► Validación: Info Pasajeros considerada INCOMPLETA.")
+#     # No modifica el estado, solo valida para la condición
+#     return {**state}
 
 
 

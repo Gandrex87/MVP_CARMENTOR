@@ -93,7 +93,7 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
     info_clima = state.get("info_clima_usuario") 
     preferencias = state.get("preferencias_usuario")
     info_pasajeros = state.get("info_pasajeros")
-    filtros = state.get("filtros_inferidos")
+    #filtros = state.get("filtros_inferidos")
     economia = state.get("economia")
     pesos = state.get("pesos")
     coches = state.get("coches_recomendados")
@@ -106,15 +106,21 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
     print(f"DEBUG Router: Pesos Calculados? {pesos is not None}")
     print(f"DEBUG Router: Coches Buscados? {coches is not None}")
 
+    messages = state.get("messages", [])
+    if not messages:
+        # Si no hay mensajes, es el inicio. Vamos al nodo de bienvenida.
+        print("DEBUG Router: Decisión -> Conversación nueva. Ir a 'saludo_y_pregunta_inicial'.")
+        return "iniciar_conversacion"
+    
     # Lógica de enrutamiento en orden
-    if info_clima is None: # Si nunca hemos intentado obtener info_clima
+    if info_clima is None:
         print("DEBUG Router: Decisión -> recopilar_cp (Etapa CP no completada)")
         return "recopilar_cp" 
-    # Si info_clima existe (incluso si cp_valido_encontrado es False), la etapa de CP/Clima se considera "pasada".
-    # Continuar con la lógica de las siguientes etapas: Perfil -> Pasajeros -> Filtros ...   
     elif not check_perfil_usuario_completeness(preferencias):
         print("DEBUG Router: Decisión -> recopilar_preferencias")
         return "recopilar_preferencias" 
+    # Si info_clima existe (incluso si cp_valido_encontrado es False), la etapa de CP/Clima se considera "pasada".
+    # Continuar con la lógica de las siguientes etapas: Perfil -> Pasajeros -> Filtros ...   
     elif not check_pasajeros_completo(info_pasajeros):
         print("DEBUG Router: Decisión -> recopilar_info_pasajeros")
         return "recopilar_info_pasajeros"
@@ -129,8 +135,9 @@ def decidir_ruta_inicial(state: EstadoAnalisisPerfil) -> str:
         print("DEBUG Router: Decisión -> buscar_coches_finales")
         return "buscar_coches_finales"
     else: # Conversación completa y coches ya buscados, reiniciar para una nueva consulta
-        print("DEBUG Router: Decisión -> Conversación Completa con coches. Reiniciando (recopilar_cp).")
-        return "recopilar_cp"
+        print("DEBUG Router: Decisión -> Conversación Completa con coches. Reiniciando con saludo.")
+        # APUNTAMOS A LA NUEVA RUTA DE INICIO
+        return "iniciar_conversacion"
     
 
 
