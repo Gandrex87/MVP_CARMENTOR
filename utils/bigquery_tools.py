@@ -306,7 +306,6 @@ def buscar_coches_bq(
     ]
     
     sql_where_clauses = []
-    # ... la lógica para añadir filtros dinámicos se mantiene igual ...
     transmision_val = filtros.get("transmision_preferida")
     if isinstance(transmision_val, str) and transmision_val != "ambos":
         param_name_trans = "param_transmision_auto"
@@ -328,21 +327,42 @@ def buscar_coches_bq(
         sql_where_clauses.append(f"sd.tipo_mecanica IN UNNEST(@tipos_mecanica)")
         params.append(bigquery.ArrayQueryParameter("tipos_mecanica", "STRING", tipos_mecanica_str_list))
 
-    modo_adq_rec = filtros.get("modo_adquisicion_recomendado")
-    precio_a_filtrar, cuota_a_filtrar = None, None
-    if modo_adq_rec == "Contado" and filtros.get("precio_max_contado_recomendado") is not None:
-        precio_a_filtrar = filtros.get("precio_max_contado_recomendado")
-    elif modo_adq_rec == "Financiado" and filtros.get("cuota_max_calculada") is not None:
-        cuota_a_filtrar = filtros.get("cuota_max_calculada")
-    else:
-        precio_a_filtrar = filtros.get("pago_contado")
-        cuota_a_filtrar = filtros.get("cuota_max")
+    # --- LÓGICA DE FILTRADO ECONÓMICO (CORREGIDA Y REFACTORIZADA) ---
 
+    modo_adq_rec = filtros.get("modo_adquisicion_recomendado")
+    precio_a_filtrar = None
+    cuota_a_filtrar = None
+
+    # 1. Determinamos el presupuesto a usar con una lógica explícita
+    if modo_adq_rec == "Contado":
+        # MODO 1 (ASESORADO) - CONTADO
+        precio_a_filtrar = filtros.get("precio_max_contado_recomendado")
+        logging.info(f"Filtro Económico: Modo 1 (Contado). Precio máximo recomendado: {precio_a_filtrar}")
+
+    elif modo_adq_rec == "Financiado":
+        # MODO 1 (ASESORADO) - FINANCIADO
+        cuota_a_filtrar = filtros.get("cuota_max_calculada")
+        logging.info(f"Filtro Económico: Modo 1 (Financiado). Cuota máxima calculada: {cuota_a_filtrar}")
+
+    else:
+        # MODO 2 (DIRECTO) - El usuario proprociona su propio presupuesto
+        # Comprobamos si el usuario dio un pago al contado
+        if filtros.get("pago_contado") is not None:
+            precio_a_filtrar = filtros.get("pago_contado")
+            logging.info(f"Filtro Económico: Modo 2 (Contado). Precio máximo del usuario: {precio_a_filtrar}")
+        # Si no, comprobamos si dio una cuota máxima
+        elif filtros.get("cuota_max") is not None:
+            cuota_a_filtrar = filtros.get("cuota_max")
+            logging.info(f"Filtro Económico: Modo 2 (Financiado). Cuota máxima del usuario: {cuota_a_filtrar}")
+
+    # 2. Construimos la cláusula SQL basándonos en el presupuesto que se haya determinado
     if precio_a_filtrar is not None:
         sql_where_clauses.append(f"COALESCE(sd.precio_compra_contado, 999999999) <= @precio_maximo")
-        params.append(bigquery.ScalarQueryParameter("precio_maximo", "FLOAT64", float(precio_a_filtrar))) 
+        params.append(bigquery.ScalarQueryParameter("precio_maximo", "FLOAT64", float(precio_a_filtrar)))
+    
     elif cuota_a_filtrar is not None:
-        sql_where_clauses.append(f"COALESCE(sd.precio_compra_contado, 0) * {FACTOR_CONVERSION_PRECIO_CUOTA} <= @cuota_maxima")
+        # Asumiendo que FACTOR_CONVERSION_PRECIO_CUOTA está definido como (1.35 / 96)
+        sql_where_clauses.append(f"(COALESCE(sd.precio_compra_contado, 0) * {FACTOR_CONVERSION_PRECIO_CUOTA}) <= @cuota_maxima")
         params.append(bigquery.ScalarQueryParameter("cuota_maxima", "FLOAT64", float(cuota_a_filtrar)))
         
     # PASO 3: CONVERTIR CLÁUSULAS A STRING

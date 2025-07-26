@@ -56,75 +56,26 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     return True
 
 
-# --- función de Validación de Economía ---
 
 def check_economia_completa(econ: Optional[EconomiaUsuario]) -> bool:
     """
-    Verifica si un objeto EconomiaUsuario está lógicamente completo
-    según las reglas de negocio (modo/submodo y campos requeridos).
-    ¡Esta función AHORA contiene la lógica de validación estricta!
+    --- VERSIÓN SIN 'anos_posesion' ---
     """
-    print("--- DEBUG CHECK ECONOMIA (Manual) ---") # <-- Nuevo Print
-    print(f"Input econ object: {econ}") # <-- Nuevo Print
-    
-    if econ is None:
-        print("DEBUG (Validation Economía Manual) ► Objeto EconomiaUsuario es None.")
-        return False 
-
-    modo = econ.modo
-    submodo = econ.submodo # Puede ser None
-
-    if modo is None:
-        print("DEBUG (Validation Economía Manual) ► econ.modo es None.")
-        return False # Si no hay modo, no está completo
-
-    if modo == 1:
-        # Modo 1: Requiere ingresos Y ahorro
-        if econ.ingresos is not None \
-            and econ.ahorro is not None\
-            and econ.anos_posesion is not None: # <-- AÑADIDA ESTA CONDICIÓN:
-            print("DEBUG (Validation Economía Manual) ► Modo 1 completo (ingresos,ahorro y años_posesion presentes).")
-            return True
-        else:
-            # Imprimir qué falta específicamente puede ayudar a depurar
-            missing = []
-            if econ.ingresos is None: missing.append("ingresos")
-            if econ.ahorro is None: missing.append("ahorro")
-            if econ.anos_posesion is None: missing.append("anos_posesion")
-            print(f"DEBUG (Validation Economía Manual) ► Modo 1 INCOMPLETO (faltan: {', '.join(missing)}).")
-            return False
-            
-    elif modo == 2:
-        # Modo 2: Requiere submodo válido
-        if submodo not in (1, 2):
-            print(f"DEBUG (Validation Economía Manual) ► Modo 2 INCOMPLETO (submodo inválido o None: {submodo}).")
-            return False 
-            
-        if submodo == 1:
-            # Modo 2, Submodo 1: Requiere pago_contado
-            if econ.pago_contado is not None:
-                print("DEBUG (Validation Economía Manual) ► Modo 2/Submodo 1 completo (pago_contado presente).")
-                return True
-            else:
-                print(f"DEBUG (Validation Economía Manual) ► Modo 2/Submodo 1 INCOMPLETO (pago_contado={econ.pago_contado}).")
-                return False
-                
-        elif submodo == 2:
-            # Modo 2, Submodo 2: Requiere cuota_max (entrada es opcional)
-            if econ.cuota_max is not None:
-                print("DEBUG (Validation Economía Manual) ► Modo 2/Submodo 2 completo (cuota_max presente).")
-                return True
-            else:
-                print(f"DEBUG (Validation Economía Manual) ► Modo 2/Submodo 2 INCOMPLETO (cuota_max={econ.cuota_max}).")
-                return False
-                
-    else: 
-        # Modo inválido (no debería pasar si Literal[1, 2] funciona)
-        print(f"WARN (Validation Economía Manual) ► Modo desconocido: {modo}.")
+    if not econ or econ.presupuesto_definido is None:
         return False
 
-    # Fallback por si alguna lógica no se cubrió (no debería llegar aquí)
-    return False 
+    if econ.presupuesto_definido is False: # Modo "Asesoramiento"
+        # Ahora solo necesitamos ingresos y ahorro.
+        return all([
+            econ.ingresos is not None,
+            econ.ahorro is not None
+        ])
+    else: # Modo "Usuario Define"
+        # La lógica para pago al contado o cuota máxima se mantiene igual.
+        pago_contado_completo = econ.pago_contado is not None
+        financiacion_completa = econ.cuota_max is not None
+        
+        return pago_contado_completo or financiacion_completa
 
 
 def check_pasajeros_completo(info: Optional[InfoPasajeros]) -> bool:
@@ -149,3 +100,12 @@ def check_pasajeros_completo(info: Optional[InfoPasajeros]) -> bool:
         return False
         
     return True
+
+def es_cp_valido(cp: Optional[str]) -> bool:
+    """
+    Valida si una cadena de texto es un código postal español válido.
+    Retorna True si es una cadena de 5 dígitos, False en caso contrario.
+    """
+    if not cp:
+        return False
+    return cp.isdigit() and len(cp) == 5

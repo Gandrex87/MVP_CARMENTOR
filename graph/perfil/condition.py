@@ -2,19 +2,13 @@
 from .state import EstadoAnalisisPerfil # o donde esté tu TypedDict
 from utils.validation import check_perfil_usuario_completeness, check_economia_completa, check_pasajeros_completo
 from typing import Literal
+import logging
 
 
-# --- NUEVA Función Condicional para la Etapa - 0 de Codigo Postal ---
-def ruta_decision_cp(state: EstadoAnalisisPerfil) -> Literal["buscar_clima", "repreguntar_cp"]:
-    """Decide si el CP es válido para buscar clima o si hay que repreguntar."""
-    print("--- Evaluando Condición: ruta_decision_cp ---")
-    decision = state.get("_decision_cp_validation") # Clave puesta por validar_cp_node
-    if decision == "cp_valido_listo_para_clima":
-        print("DEBUG (Condición CP) ► CP válido/omitido. Procediendo a buscar clima.")
-        return "buscar_clima"
-    else: # "repreguntar_cp" o cualquier otro caso
-        print("DEBUG (Condición CP) ► CP inválido o aclaración necesaria. Repreguntando.")
-        return "repreguntar_cp"
+def ruta_decision_cp_refactorizada(state: EstadoAnalisisPerfil) -> str:
+    """Función simple que lee la decisión tomada en el nodo anterior."""
+    return state.get("_decision_cp_validation")
+
 
 
 
@@ -61,22 +55,29 @@ def decidir_siguiente_paso_perfil(state: EstadoAnalisisPerfil) -> str:
 
 
 
-# En builder.py o condition.py
-
-def ruta_decision_economia(state: EstadoAnalisisPerfil) -> str:
-    """Decide si la economía está completa para finalizar o si necesita preguntar."""
-    print("--- Evaluando Condición: ruta_decision_economia ---")
+#
+def decidir_siguiente_paso_economia(state: EstadoAnalisisPerfil) -> str:
+    """
+    Decide si la información económica está completa para finalizar la etapa
+    o si se necesita formular otra pregunta.
+    """
+    logging.info("--- [Edge/Economía] Decidiendo siguiente paso de economía ---")
+    
     economia = state.get("economia")
-    # Llama a la utilidad que verifica la completitud
+    
     if check_economia_completa(economia):
-        print("DEBUG (Condición Economía) ► Economía COMPLETA. Avanzando a finalizar.")
-        # Clave para ir al nodo final
+        # Si la información está completa, hemos terminado esta etapa.
+        # Devolvemos la clave para iniciar la finalización.
+        logging.info("✅ Info Economía completa. Avanzando a la finalización.")
+        
+        # ▼▼▼ ESTA ES LA LÍNEA CORREGIDA ▼▼▼
+        # Devolvemos "iniciar_finalizacion" para que coincida con la clave
+        # que tu builder.py está esperando.
         return "iniciar_finalizacion"
     else:
-        print("DEBUG (Condición Economía) ► Economía INCOMPLETA. Se necesita pregunta.")
-        # Clave para ir al nuevo nodo que pregunta
-        return "necesita_pregunta_economia"
-
+        # Si falta información, volvemos a preguntar.
+        logging.info("❌ Info Economía incompleta. Transición a 'preguntar_economia'.")
+        return "preguntar_economia"
 
 # --- NUEVO NODO ROUTER (Muy simple) ---
 def route_based_on_state_node(state: EstadoAnalisisPerfil) -> dict:

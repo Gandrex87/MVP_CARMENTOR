@@ -4,14 +4,14 @@ from pydantic import ValidationError # Importar para manejo de errores si es nec
 from .state import (EstadoAnalisisPerfil, 
                     PerfilUsuario, ResultadoSoloPerfil , 
                     FiltrosInferidos, ResultadoSoloFiltros,
-                    EconomiaUsuario,ResultadoEconomia ,
-                    InfoPasajeros, ResultadoPasajeros,
-                    InfoClimaUsuario, ResultadoCP, NivelAventura , FrecuenciaUso, DistanciaTrayecto, FrecuenciaViajesLargos
+                    EconomiaUsuario,
+                    InfoPasajeros, CodigoPostalExtraido,
+                    InfoClimaUsuario, NivelAventura , FrecuenciaUso, DistanciaTrayecto, FrecuenciaViajesLargos
 )
 from config.llm import llm_solo_perfil, llm_economia, llm_pasajeros, llm_cp_extractor
 from prompts.loader import system_prompt_perfil, prompt_economia_structured_sys_msg, system_prompt_pasajeros, system_prompt_cp
 from utils.postprocessing import aplicar_postprocesamiento_perfil, aplicar_postprocesamiento_filtros
-from utils.validation import check_perfil_usuario_completeness , check_economia_completa, check_pasajeros_completo
+from utils.validation import check_perfil_usuario_completeness , check_pasajeros_completo, es_cp_valido
 from utils.formatters import formatear_preferencias_en_tabla
 from utils.weights import compute_raw_weights, normalize_weights
 from utils.bigquery_tools import buscar_coches_bq
@@ -19,7 +19,7 @@ from utils.bq_data_lookups import obtener_datos_climaticos_por_cp # IMPORT para 
 from utils.conversion import is_yes 
 from utils.bq_logger import log_busqueda_a_bigquery
 from utils.sanitize_dict_for_json import sanitize_dict_for_json
-from utils.question_bank import QUESTION_BANK
+from utils.question_bank import QUESTION_BANK , PREGUNTAS_CP_INICIAL , PREGUNTAS_CP_REINTENTO
 import traceback
 from langchain_core.runnables import RunnableConfig
 import pandas as pd
@@ -38,141 +38,115 @@ logger = logging.getLogger(__name__)  # ayuda a tener logs mas claros INFO:graph
 # --- INICIO: NODOS PARA ETAPA DE CÓDIGO POSTAL ---
 
 # En graph/perfil/nodes.py
-def preguntar_cp_inicial_node(state: EstadoAnalisisPerfil) -> dict:
-    print("--- Ejecutando Nodo: preguntar_cp_inicial_node ---")
-    mensaje_pendiente = state.get("pregunta_pendiente")
+
+def preguntar_cp_node(state: EstadoAnalisisPerfil) -> dict:
+    """
+    Genera la pregunta correcta para el código postal.
+    Si es la primera vez, hace la pregunta inicial.
+    Si ya hubo un intento fallido, pide que se reintente.
+    """
+    logging.info("--- Ejecutando Nodo (Refactorizado): preguntar_cp_node ---")
+    
+    # Comprobamos el contador de intentos, no el valor del CP extraído.
+    intentos = state.get("intentos_cp", 0)
+
+    if intentos > 0:
+        # Si ya hubo al menos un intento fallido, elegimos una pregunta de reintento al azar.
+        pregunta = random.choice(PREGUNTAS_CP_REINTENTO)
+    else:
+        # Si no hay ningún intento previo, elegimos una pregunta inicial al azar.
+        pregunta = random.choice(PREGUNTAS_CP_INICIAL)
+
+    # Añadimos el mensaje al historial
     historial_actual = state.get("messages", [])
-    historial_nuevo = list(historial_actual) # Crear copia
-
-    mensaje_a_mostrar = "Por favor, introduce tu código postal de 5 dígitos." # Fallback muy básico
-
-    if mensaje_pendiente and mensaje_pendiente.strip():
-        mensaje_a_mostrar = mensaje_pendiente
-        print(f"DEBUG (Preguntar CP Inicial) ► Usando mensaje pendiente: {mensaje_a_mostrar}")
+    historial_nuevo = list(historial_actual)
+    
+    if not historial_actual or historial_actual[-1].content != pregunta:
+        logging.info(f"DEBUG (Preguntar CP) ► Añadiendo pregunta: {pregunta}")
+        historial_nuevo.append(AIMessage(content=pregunta))
     else:
-        # Esto podría pasar si validar_cp_node no puso un mensaje de fallback
-        # cuando tipo_mensaje_cp_llm era None o inesperado.
-        print("WARN (Preguntar CP Inicial) ► No había mensaje pendiente válido, usando fallback.")
+        logging.warning("DEBUG (Preguntar CP) ► Mensaje duplicado, no se añade.")
 
-    ai_msg = AIMessage(content=mensaje_a_mostrar)
-    if not historial_actual or historial_actual[-1].content != ai_msg.content:
-        historial_nuevo.append(ai_msg)
-        print(f"DEBUG (Preguntar CP Inicial) ► Mensaje final añadido: {mensaje_a_mostrar}")
-    else:
-        print("DEBUG (Preguntar CP Inicial) ► Mensaje duplicado, no se añade.")
+    return {"messages": historial_nuevo}
 
-    # Devolver solo los campos modificados
-    return {
-        "messages": historial_nuevo,
-        "pregunta_pendiente": None # Siempre limpiar
-    }
+
 
 
 def recopilar_cp_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Llama a llm_cp_extractor para obtener el código postal del usuario.
-    Guarda el mensaje del LLM (pregunta de aclaración o confirmación) 
-    y el CP extraído (si lo hay) en el estado.
+    Invoca al LLM con la única tarea de extraer el texto que podría ser
+    un código postal del mensaje del usuario.
     """
-    print("--- Ejecutando Nodo: recopilar_cp_node ---")
+    logging.info("--- Ejecutando Nodo (Refactorizado): recopilar_cp_node ---")
+    
     historial = state.get("messages", [])
-    
-    # No necesitamos la guarda de AIMessage aquí si este es el primer nodo real
-    # o si el nodo anterior (preguntar_cp_inicial) ya es un AIMessage.
-    # Si el flujo es START -> recopilar_cp_node, no habrá AIMessage previo.
-    
-    codigo_postal_extraido_llm = None
-    contenido_msg_llm = "Lo siento, no pude procesar tu código postal en este momento." # Default
-    tipo_msg_llm = "ERROR"
+
+    if not historial or isinstance(historial[-1], AIMessage):
+        logging.debug("DEBUG (CP) ► No hay nuevo mensaje de usuario para procesar.")
+        return {}
 
     try:
-        # llm_cp_extractor devuelve ResultadoCP
-        response: ResultadoCP = llm_cp_extractor.invoke(
-            [system_prompt_cp, *historial], # Pasa el prompt y el historial
-            config={"configurable": {"tags": ["llm_cp_extractor"]}} 
-        )
-        print(f"DEBUG (CP) ► Respuesta llm_cp_extractor: {response}")
-
-        codigo_postal_extraido_llm = response.codigo_postal_extraido
-        tipo_msg_llm = response.tipo_mensaje
-        contenido_msg_llm = response.contenido_mensaje
+        # Construimos la lista de mensajes manualmente para un control total.
+        mensajes_para_llm = [SystemMessage(content=system_prompt_cp), *historial]
         
-        print(f"DEBUG (CP) ► CP extraído por LLM: '{codigo_postal_extraido_llm}', Tipo Mensaje: '{tipo_msg_llm}'")
+        # Invocamos al LLM estructurado.
+        response: CodigoPostalExtraido = llm_cp_extractor.invoke(
+            mensajes_para_llm,
+            config={"configurable": {"tags": ["llm_cp_extractor"]}}
+        )
+        # La única salida de este nodo es el CP extraído, que guardamos en el estado para que el siguiente paso (la arista condicional) lo valide.
+        # Ya no necesitamos 'tipo_mensaje' ni 'contenido_mensaje'.
+        cp_extraido = response.codigo_postal
+        logging.info(f"DEBUG (CP) ► CP extraído por LLM: '{cp_extraido}'")
+        
+        return {
+            "codigo_postal_extraido_temporal": cp_extraido
+        }
 
-    except ValidationError as e_val:
-        print(f"ERROR (CP) ► Error de Validación Pydantic en llm_cp_extractor: {e_val}")
-        contenido_msg_llm = f"Hubo un problema al procesar tu código postal (formato inválido): {e_val}. ¿Podrías intentarlo de nuevo?"
-        tipo_msg_llm = "PREGUNTA_ACLARACION" # Forzar pregunta si hay error de validación
-    except Exception as e:
-        print(f"ERROR (CP) ► Fallo general al invocar llm_cp_extractor: {e}")
-        traceback.print_exc()
-        # contenido_msg_llm ya tiene un default de error
+    except (ValidationError, Exception) as e:
+        logging.error(f"ERROR (CP) ► Fallo en la extracción del CP: {e}", exc_info=True)
+        # En caso de error, devolvemos un valor nulo para que la validación falle
+        # y se pueda volver a preguntar.
+        return {"codigo_postal_extraido_temporal": None}
 
-    # Guardar el CP extraído temporalmente en el estado para validación,
-    # y el mensaje del LLM en pregunta_pendiente.
-    # El CP final validado se guardará en state['codigo_postal_usuario'] en el nodo de validación.
-    return {
-        #**state,
-        "pregunta_pendiente": contenido_msg_llm,
-        "codigo_postal_extraido_temporal": codigo_postal_extraido_llm,
-        "tipo_mensaje_cp_llm": tipo_msg_llm
-    }
 
-def validar_cp_node(state: EstadoAnalisisPerfil) -> dict:
+
+def validar_y_decidir_cp_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Valida el código postal extraído por el LLM.
-    Si es válido, lo guarda en state['codigo_postal_usuario'].
-    Si no es válido, prepara para re-preguntar.
-    Devuelve una clave para la arista condicional: 'cp_valido' o 'repreguntar_cp'.
+    Valida el CP extraído y decide el siguiente paso.
+    Si el CP es válido, avanza.
+    Si es inválido, comprueba el número de intentos. Si es el primer
+    intento, repregunta. Si es el segundo, avanza sin CP.
     """
-    print("--- Ejecutando Nodo: validar_cp_node ---")
-    cp_extraido = state.get("codigo_postal_extraido_temporal")
-    tipo_mensaje_cp_llm = state.get("tipo_mensaje_cp_llm")
+    logging.info("--- Ejecutando Nodo (Refactorizado): validar_y_decidir_cp_node ---")
     
-    decision = "repreguntar_cp" # Por defecto, repreguntar
-    cp_validado_para_estado = None
-    mensaje_para_siguiente_pregunta = state.get("pregunta_pendiente") # Mensaje del LLM
+    cp_extraido = state.get("codigo_postal_extraido_temporal")
+    intentos = state.get("intentos_cp", 0)
 
-    if tipo_mensaje_cp_llm == "CP_OBTENIDO":
-        if cp_extraido and cp_extraido.isdigit() and len(cp_extraido) == 5:
-            print(f"DEBUG (CP Validation) ► CP '{cp_extraido}' parece válido. Procediendo a buscar clima.")
-            cp_validado_para_estado = cp_extraido
-            decision = "cp_valido_listo_para_clima"
-            # No necesitamos un mensaje pendiente si el CP es válido y el LLM ya confirmó
-            # o dio mensaje vacío. El siguiente nodo (buscar_info_clima) no necesita pregunta_pendiente.
-            mensaje_para_siguiente_pregunta = None 
-        elif cp_extraido is None and tipo_mensaje_cp_llm == "CP_OBTENIDO":
-            # Caso donde el usuario se negó a dar CP, y el LLM lo manejó (según prompt)
-            print("DEBUG (CP Validation) ► Usuario no proporcionó CP, pero LLM manejó la situación. Avanzando sin CP.")
-            decision = "cp_valido_listo_para_clima" # Avanza, pero cp_validado_para_estado será None
-            mensaje_para_siguiente_pregunta = None
+    if es_cp_valido(cp_extraido):
+        logging.info(f"DEBUG (CP Val) ► CP '{cp_extraido}' es válido. Avanzando.")
+        # Guardamos el CP final y preparamos la decisión para avanzar.
+        return {
+            "codigo_postal_usuario": cp_extraido,
+            "_decision_cp_validation": "avanzar_a_clima"
+        }
+    else:
+        # El CP extraído no es válido.
+        if intentos >= 1:
+            # Este fue el segundo intento (o más). Dejamos de preguntar.
+            logging.warning("WARN (CP Val) ► Segundo intento fallido. Avanzando sin CP.")
+            return {
+                "codigo_postal_usuario": None, # Aseguramos que no hay CP
+                "_decision_cp_validation": "avanzar_a_clima"
+            }
         else:
-            # El LLM dijo que obtuvo CP, pero no es válido en formato
-            print(f"WARN (CP Validation) ► LLM indicó CP_OBTENIDO, pero CP '{cp_extraido}' es inválido. Repreguntando.")
-            # El mensaje_para_siguiente_pregunta ya debería ser la pregunta de aclaración del LLM
-            # Si no lo es, el nodo preguntar_cp_node debería tener un fallback.
-            if not mensaje_para_siguiente_pregunta or mensaje_para_siguiente_pregunta.strip() == "":
-                 mensaje_para_siguiente_pregunta = "El código postal no parece correcto. ¿Podrías darme los 5 dígitos de tu CP?"
-            decision = "repreguntar_cp"
-            
-    elif tipo_mensaje_cp_llm == "PREGUNTA_ACLARACION":
-        print("DEBUG (CP Validation) ► LLM necesita aclarar CP. Repreguntando.")
-        # mensaje_para_siguiente_pregunta ya contiene la pregunta del LLM
-        decision = "repreguntar_cp"
-    else: # ERROR o tipo inesperado
-        print(f"ERROR (CP Validation) ► Tipo de mensaje LLM inesperado o error: '{tipo_mensaje_cp_llm}'. Repreguntando por seguridad.")
-        mensaje_para_siguiente_pregunta = "Hubo un problema con el código postal. ¿Podrías intentarlo de nuevo con 5 dígitos?"
-        decision = "repreguntar_cp"
+            # Este fue el primer intento fallido. Incrementamos el contador y repreguntamos.
+            logging.info("INFO (CP Val) ► Primer intento fallido. Repreguntando.")
+            return {
+                "intentos_cp": intentos + 1,
+                "_decision_cp_validation": "repreguntar_cp"
+            }
 
-    # Actualizar el estado con el CP validado (si lo hay) y la decisión para el router
-    # Limpiar los campos temporales
-    return {
-        "codigo_postal_usuario": cp_validado_para_estado,
-        "pregunta_pendiente": mensaje_para_siguiente_pregunta,
-        "codigo_postal_extraido_temporal": None,
-        "tipo_mensaje_cp_llm": None,
-        "_decision_cp_validation": decision
-    }
 
 def buscar_info_clima_node(state: EstadoAnalisisPerfil) -> dict:
     """
@@ -181,7 +155,7 @@ def buscar_info_clima_node(state: EstadoAnalisisPerfil) -> dict:
     """
     print("--- Ejecutando Nodo: buscar_info_clima_node ---")
     cp_usuario = state.get("codigo_postal_usuario")
-    info_clima_calculada = None # Default
+    info_clima_calculada = None
 
     if cp_usuario:
         print(f"DEBUG (Clima) ► Buscando datos climáticos para CP: {cp_usuario}")
@@ -639,52 +613,47 @@ def aplicar_filtros_pasajeros_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Calcula filtros/indicadores basados en la información de pasajeros completa
     y los actualiza en el estado.
-    Calcula: plazas_min (siempre), penalizar_puertas_bajas.
+    --- VERSIÓN CORREGIDA PARA USAR EL MODELO InfoPasajeros REFACTORIZADO ---
     """
-    print("--- Ejecutando Nodo: aplicar_filtros_pasajeros_node ---")
-    logger.debug("--- Ejecutando Nodo: aplicar_filtros_pasajeros_node ---")
-    info_pasajeros_obj = state.get("info_pasajeros") # <-- Renombrado para claridad
+    logging.info("--- Ejecutando Nodo: aplicar_filtros_pasajeros_node ---")
+    
+    info_pasajeros_obj = state.get("info_pasajeros")
     filtros_actuales_obj = state.get("filtros_inferidos") or FiltrosInferidos() 
 
-    # Valores por defecto para los flags penalizar_puertas
     penalizar_p = False 
-    
-    # Valores para X y Z (default 0)
     X = 0
     Z = 0
     frecuencia = None
 
-    if info_pasajeros_obj: 
-        # Usar frecuencia_viaje_con_acompanantes si está, sino la general 'frecuencia'
-        # La nueva lógica de InfoPasajeros debería priorizar frecuencia_viaje_con_acompanantes
-        frecuencia = info_pasajeros_obj.frecuencia_viaje_con_acompanantes or info_pasajeros_obj.frecuencia
+    if info_pasajeros_obj:
+        # ▼▼▼ LÍNEA CORREGIDA ▼▼▼
+        # Ya no intentamos acceder al campo 'frecuencia' que fue eliminado.
+        # Usamos directamente el campo correcto.
+        frecuencia = info_pasajeros_obj.frecuencia_viaje_con_acompanantes
+        
         X = info_pasajeros_obj.num_ninos_silla or 0
         Z = info_pasajeros_obj.num_otros_pasajeros or 0
-        logger.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Info recibida: freq='{frecuencia}', X={X}, Z={Z}")
-        print(f"DEBUG (Aplicar Filtros Pasajeros) ► Info recibida: freq='{frecuencia}', X={X}, Z={Z}")
+        logging.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Info recibida: freq='{frecuencia}', X={X}, Z={Z}")
     else:
-        logger.error("ERROR (Aplicar Filtros Pasajeros) ► No hay información de pasajeros en el estado. Se usarán defaults.")
-        frecuencia = "nunca" # Asumir 'nunca' si no hay info
+        logging.error("ERROR (Aplicar Filtros Pasajeros) ► No hay información de pasajeros en el estado.")
+        frecuencia = "nunca"
 
     plazas_calc = X + Z + 1 
-    logger.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Calculado plazas_min = {plazas_calc}")
+    logging.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Calculado plazas_min = {plazas_calc}")
 
-    if frecuencia and frecuencia != "nunca": # Nota: frecuencia ahora puede ser 'ocasional' o 'frecuente'
-        # Regla Penalizar Puertas Bajas (solo si frecuente y X>=1)
-        if frecuencia == "frecuente" and X >= 1:
+    if frecuencia and frecuencia == "frecuente":
+        if X >= 1:
             penalizar_p = True
-            logger.debug("DEBUG (Aplicar Filtros Pasajeros) ► Indicador penalizar_puertas_bajas = True")
-    else:
-        logger.debug("DEBUG (Aplicar Filtros Pasajeros) ► Frecuencia es 'nunca' o None. penalizar_puertas se mantiene False.")
-
+            logging.debug("DEBUG (Aplicar Filtros Pasajeros) ► Indicador penalizar_puertas_bajas = True")
+    
     update_filtros_dict = {"plazas_min": plazas_calc}
     filtros_actualizados = filtros_actuales_obj.model_copy(update=update_filtros_dict)
-    logger.debug(f"DEBUG (Aplicar Filtros Pasajeros) ► Filtros actualizados (con plazas_min): {filtros_actualizados}")
+    
     return {
-    **state, # Pasa todas las claves existentes del estado
-    "filtros_inferidos": filtros_actualizados, # Sobrescribe solo la clave que has modificado
-    "penalizar_puertas_bajas": penalizar_p,      # Y la nueva flag que has calculado
-}
+        "filtros_inferidos": filtros_actualizados,
+        "penalizar_puertas_bajas": penalizar_p,
+    }
+
 
 # --- Fin Nueva Etapa Pasajeros ---
 # --- Fin Etapa 1 ---
@@ -694,29 +663,30 @@ def construir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Construye y refina los filtros de búsqueda de forma determinista
     llamando a la función de post-procesamiento. No utiliza LLM.
+    --- VERSIÓN CORREGIDA PARA EVITAR LA SOBRESCRITURA DE DATOS ---
     """
-    print("--- Ejecutando Nodo: inferir_filtros_node/construir_filtros_node ---")
+    print("--- Ejecutando Nodo: construir_filtros_node ---")
     
     preferencias_obj = state.get("preferencias_usuario")
     info_clima_obj = state.get("info_clima_usuario")
 
-    # Verificar pre-condiciones
+    # ▼▼▼ LÍNEA CORREGIDA 1 ▼▼▼
+    # Obtenemos el objeto de filtros del estado actual. Este objeto ya contiene
+    # los datos económicos calculados en el nodo anterior.
+    filtros_desde_estado = state.get("filtros_inferidos") or FiltrosInferidos()
+
     if not preferencias_obj:
         print("ERROR (Filtros) ► Nodo ejecutado pero 'preferencias_usuario' no existe. No se pueden construir filtros.")
-        # Devolvemos un objeto vacío para no romper el flujo
-        return {"filtros_inferidos": FiltrosInferidos()}
+        return {"filtros_inferidos": filtros_desde_estado}
 
     print("DEBUG (Filtros) ► Preferencias e info_clima disponibles. Construyendo filtros...")
 
-    filtros_finales = None
     try:
-        # 1. Creamos un objeto FiltrosInferidos vacío para empezar.
-        #    Ya no dependemos de una inferencia inicial del LLM.
-        filtros_iniciales = FiltrosInferidos()
-        
-        # 2. El único trabajo del nodo es llamar a esta función determinista.
+        # ▼▼▼ LÍNEA CORREGIDA 2 ▼▼▼
+        # Pasamos el objeto de filtros que hemos recuperado del estado (que ya tiene
+        # los datos económicos) a la función de post-procesamiento.
         filtros_finales = aplicar_postprocesamiento_filtros(
-            filtros=filtros_iniciales,
+            filtros=filtros_desde_estado,
             preferencias=preferencias_obj,
             info_clima=info_clima_obj 
         )
@@ -725,10 +695,8 @@ def construir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
     except Exception as e_post:
         print(f"ERROR (Filtros) ► Fallo construyendo los filtros: {e_post}")
         traceback.print_exc()
-        # En caso de un error inesperado, devolvemos filtros vacíos para seguridad.
-        filtros_finales = FiltrosInferidos()
+        filtros_finales = filtros_desde_estado
         
-    # 3. Devolvemos el estado actualizado. Ya no necesitamos 'pregunta_pendiente'.
     return {
         "filtros_inferidos": filtros_finales
     }
@@ -737,208 +705,198 @@ def construir_filtros_node(state: EstadoAnalisisPerfil) -> dict:
 
 
 # --- Etapa 3: Inferencia y Validación de Recopilación de Economía ---
+
+# --- Lógica de Preguntas (El "Cerebro") ---
+
+def _obtener_siguiente_pregunta_economia(econ: Optional[EconomiaUsuario]) -> str:
+    """
+    Genera la siguiente pregunta económica de forma determinista basándose
+    en el primer campo que falta.
+    """
+    if not econ or econ.presupuesto_definido is None:
+        return (
+            "Para definir tu presupuesto, ¿qué prefieres?\n\n"
+            "* 1️⃣ Prefiero que me aconsejes con criterios de inteligencia financiera.\n"
+            "* 2️⃣ Prefiero indicar yo mismo cuánto y cómo gastar."
+        )
+
+    if econ.presupuesto_definido is False: # Rama "Asesoramiento"
+        if econ.ingresos is None:
+            return "¿Cuáles son tus ingresos netos anuales aproximados? Este dato es clave para darte una recomendación financiera sólida."
+        if econ.ahorro is None:
+            return "Gracias. Ahora, ¿de cuántos ahorros dispones para la compra del vehículo?"
+        # if econ.anos_posesion is None:
+        #     return "Perfecto. Por último, ¿durante cuántos años aproximadamente planeas conservar el coche?"
+    
+    elif econ.presupuesto_definido is True: # Rama "Usuario Define"
+        # 1. Si aún no ha elegido entre contado o financiado, se le pregunta.
+        if econ.tipo_presupuesto is None:
+            return (
+                "De acuerdo, tú defines el presupuesto. ¿Qué opción prefieres?\n\n"
+                "* 1️⃣ Indicar un presupuesto máximo para pagar al contado.\n"
+                "* 2️⃣ Indicar una cuota mensual máxima para financiarlo."
+            )
+        
+        # 2. Si eligió "contado", pero no ha dado la cifra.
+        if econ.tipo_presupuesto == "contado":
+            if econ.pago_contado is None:
+                return "¿Cuál es el presupuesto que destinarías para comprar el coche al contado?"
+
+        # 3. Si eligió "financiado", se piden los detalles.
+        if econ.tipo_presupuesto == "financiado":
+            if econ.cuota_max is None:
+                return "¿Cuál sería la cuota mensual máxima que quieres destinar para financiarlo?"
+            # if econ.anos_posesion is None:
+            #     return "Entendido. ¿Y durante cuántos años aproximadamente planeas financiar el vehículo?"
+
+    # Si se llega aquí, la etapa está completa. Devolvemos una confirmación.
+    return "¡Entendido! Ya tengo toda la información económica que necesito."
+
+
 def preguntar_economia_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Toma la pregunta económica pendiente y la añade como AIMessage al historial.
-    Limpia la pregunta pendiente. Podría generar pregunta default si no hay pendiente.
+    Obtiene la pregunta correcta de nuestra lógica determinista y la
+    añade al historial.
     """
-    print("--- Ejecutando Nodo: preguntar_economia_node ---")
-    pregunta = state.get("pregunta_pendiente")
+    logging.info("--- Ejecuting Nodo (Refactorizado): preguntar_economia_node ---")
+    
+    economia = state.get("economia")
     historial_actual = state.get("messages", [])
-    historial_nuevo = historial_actual 
-
-    mensaje_a_enviar = None
-
-    # Usamos la pregunta guardada si existe
-    if pregunta and pregunta.strip():
-        print(f"DEBUG (Preguntar Economía) ► Usando pregunta guardada: {pregunta}")
-        mensaje_a_enviar = pregunta
+    
+    pregunta = _obtener_siguiente_pregunta_economia(economia)
+    
+    historial_nuevo = list(historial_actual)
+    if not historial_actual or historial_actual[-1].content != pregunta:
+        logging.info(f"DEBUG (Preguntar Economía) ► Añadiendo pregunta: {pregunta}")
+        historial_nuevo.append(AIMessage(content=pregunta))
     else:
-        # Si no había pregunta pendiente (raro, pero podría pasar si el LLM no la generó)
-        # podríamos poner una pregunta genérica de economía.
-        print("WARN (Preguntar Economía) ► Nodo ejecutado pero no había pregunta pendiente. Usando pregunta genérica.")
-        # TODO: Podríamos llamar aquí a _obtener_siguiente_pregunta_economia si tuviéramos esa función
-        mensaje_a_enviar = "Necesito algo más de información sobre tu presupuesto. ¿Podrías darme más detalles?"
+        logging.warning("DEBUG (Preguntar Economía) ► Mensaje duplicado, no se añade.")
 
-    # Añadir el mensaje decidido al historial (evitando duplicados)
-    if mensaje_a_enviar and mensaje_a_enviar.strip():
-        ai_msg = AIMessage(content=mensaje_a_enviar)
-        if not historial_actual or historial_actual[-1].content != ai_msg.content:
-            historial_nuevo = historial_actual + [ai_msg]
-            print(f"DEBUG (Preguntar Economía) ► Mensaje final añadido: {mensaje_a_enviar}")
-        else:
-             print("DEBUG (Preguntar Economía) ► Mensaje final duplicado, no se añade.")
-    else:
-         print("WARN (Preguntar Economía) ► No se determinó ningún mensaje a enviar.")
+    return {"messages": historial_nuevo}
 
-    # Devolver estado: historial actualizado y pregunta_pendiente reseteada
-    return {
-        **state,
-        "messages": historial_nuevo,
-        "pregunta_pendiente": None # Limpiar la pregunta pendiente
-    }
 
 
 def recopilar_economia_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Gestiona la recopilación de datos económicos. Llama a llm_economia,
-    actualiza el estado 'economia' y guarda la pregunta pendiente.
+    Invoca al LLM con la única tarea de extraer los datos económicos
+    del mensaje del usuario.
     """
-    print("--- Ejecutando Nodo: recopilar_economia_node ---")
+    logging.info("--- Ejecutando Nodo (Refactorizado): recopilar_economia_node ---")
+    
     historial = state.get("messages", [])
-    econ_actual = state.get("economia") or EconomiaUsuario() 
-    
-    print("DEBUG (Economía) ► Llamando a llm_economia...")
-    
-    mensaje_validacion = None # Inicializar
-    economia_actualizada = econ_actual # Inicializar con el estado actual
+    economia_actual = state.get("economia") or EconomiaUsuario()
 
-    # Llamar al LLM de Economía
+    if not historial or isinstance(historial[-1], AIMessage):
+        logging.debug("DEBUG (Economía) ► No hay nuevo mensaje de usuario para procesar.")
+        return {}
+
     try:
-        parsed: ResultadoEconomia = llm_economia.invoke(
-            [prompt_economia_structured_sys_msg, *historial],
-            config={"configurable": {"tags": ["llm_economia"]}} 
+        # Construimos la lista de mensajes manualmente para un control total.
+        mensajes_para_llm = [SystemMessage(content=prompt_economia_structured_sys_msg), *historial]
+        
+        # Invocamos al LLM estructurado.
+        response: EconomiaUsuario = llm_economia.invoke(
+            mensajes_para_llm,
+            config={"configurable": {"tags": ["llm_economia"]}}
         )
-        print(f"DEBUG (Economía) ► Respuesta llm_economia: {parsed}")
-
-        economia_nueva = parsed.economia 
-        mensaje_validacion = parsed.mensaje_validacion
-
-        # Actualizar el estado 'economia' fusionando lo nuevo
-        if economia_nueva:
-             update_data = economia_nueva.model_dump(exclude_unset=True) 
-             economia_actualizada = econ_actual.model_copy(update=update_data)
-             print(f"DEBUG (Economía) ► Estado economía actualizado: {economia_actualizada}")
-        # else: # Si no devuelve nada, mantenemos econ_actual que ya tenía el valor antes del try
-
-    except ValidationError as e_val:
-        print(f"ERROR (Economía) ► Error de Validación Pydantic en llm_economia: {e_val}")
-        mensaje_validacion = f"Hubo un problema al procesar tu información económica: faltan datos requeridos ({e_val}). ¿Podrías aclararlo?"
-        # Mantenemos el estado económico anterior en caso de error de validación LLM
-        economia_actualizada = econ_actual 
-    except Exception as e:
-        print(f"ERROR (Economía) ► Fallo al invocar llm_economia: {e}")
-        mensaje_validacion = "Lo siento, tuve un problema técnico procesando tus datos económicos."
-        # Mantenemos el estado económico anterior
-        economia_actualizada = econ_actual
-
-    # --- Guardar Pregunta Pendiente ---
-    pregunta_para_siguiente_nodo = None
-    if mensaje_validacion and mensaje_validacion.strip():
-        pregunta_para_siguiente_nodo = mensaje_validacion.strip()
-        print(f"DEBUG (Economía) ► Guardando pregunta pendiente: {pregunta_para_siguiente_nodo}")
-    else:
-        print(f"DEBUG (Economía) ► No hay pregunta de validación pendiente.")
         
-    # Devolver estado actualizado SIN modificar messages, pero CON pregunta_pendiente
-    return {
-        **state,
-        "economia": economia_actualizada, # Guardar economía actualizada
-        # 'messages' NO se modifica aquí
-        "pregunta_pendiente": pregunta_para_siguiente_nodo # Guardar la pregunta
-    }
-
-def validar_economia_node(state: EstadoAnalisisPerfil) -> dict:
-    """
-    Comprueba si la información económica ('economia') en el estado está completa
-    utilizando la función de utilidad `check_economia_completa`.
-    """
-    print("--- Ejecutando Nodo: validar_economia_node ---")
-    economia = state.get("economia")
-    
-    # Llamar a la función de utilidad que usa el validador Pydantic
-    if check_economia_completa(economia):
-        print("DEBUG (Economía) ► Validación: Economía considerada COMPLETA.")
-    else:
-        print("DEBUG (Economía) ► Validación: Economía considerada INCOMPLETA.")
+        # --- Lógica de Fusión Inteligente ---
+        nuevos_datos = response.model_dump(exclude_unset=True)
         
-    # Este nodo solo valida, no modifica el estado.
-    # La condición del grafo decidirá si volver a recopilar_economia_node o avanzar.
-    return {**state}
+        if nuevos_datos:
+            logging.info(f"DEBUG (Economía) ► Fusionando nuevos datos del LLM: {nuevos_datos}")
+            economia_final = economia_actual.model_copy(update=nuevos_datos)
+        else:
+            logging.info("DEBUG (Economía) ► El LLM no extrajo nuevos datos.")
+            economia_final = economia_actual
+        
+        return {"economia": economia_final}
+
+    except (ValidationError, Exception) as e:
+        logging.error(f"ERROR (Economía) ► Fallo en la extracción de datos económicos: {e}", exc_info=True)
+        # En caso de error, no modificamos el estado para no corromperlo.
+        return {}
+
 # --- Fin Etapa 3 ---
 
 
 # --- Etapa 4: nodo economia ---
+
 def calcular_recomendacion_economia_modo1_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Calcula la recomendación económica (modo_adquisicion_recomendado, 
-    precio_max_contado_recomendado, cuota_max_calculada) si el usuario
-    eligió el Modo 1 y proporcionó los datos necesarios.
-    Actualiza filtros_inferidos en el estado.
+    Calcula la recomendación económica para el Modo 1, con logging detallado
+    para una depuración completa del proceso de decisión.
+    --- VERSIÓN CORREGIDA PARA USAR EL MODELO EconomiaUsuario REFACTORIZADO ---
     """
-    print("--- Ejecutando Nodo: calcular_recomendacion_economia_modo1_node ---")
-    logging.debug("--- Ejecutando Nodo: calcular_recomendacion_economia_modo1_node ---")
+    logging.info("--- Ejecutando Nodo: calcular_recomendacion_economia_modo1_node ---")
     
     economia_obj = state.get("economia")
     filtros_obj = state.get("filtros_inferidos")
 
-    # Si no hay filtros_obj (poco probable si el flujo es correcto), inicializar uno
     if filtros_obj is None:
-        logging.warning("WARN (CalcEconModo1) ► filtros_inferidos era None. Inicializando uno nuevo.")
         filtros_obj = FiltrosInferidos()
         
     filtros_actualizados = filtros_obj.model_copy(deep=True)
-    cambios_realizados = False
-
-    if economia_obj and economia_obj.modo == 1:
-        logging.debug("DEBUG (CalcEconModo1) ► Modo 1 detectado. Intentando calcular recomendación económica...")
+    
+    # ▼▼▼ LÓGICA CORREGIDA ▼▼▼
+    # En lugar de comprobar 'modo == 1', ahora comprobamos si 'presupuesto_definido' es False.
+    if economia_obj and economia_obj.presupuesto_definido is False:
+        logging.info("DEBUG (CalcEconModo1) ► Modo 'Asesoramiento' detectado. Iniciando cálculo...")
         try:
             ingresos = economia_obj.ingresos
             ahorro = economia_obj.ahorro
-            anos_posesion_usuario = economia_obj.anos_posesion
-            
-            if ingresos is not None and ahorro is not None and anos_posesion_usuario is not None:
+            #anos_posesion_usuario = economia_obj.anos_posesion
+            #if ingresos is not None and ahorro is not None and anos_posesion_usuario is not None:
+            if ingresos is not None and ahorro is not None:
                 t = 8 
-                logging.info(f"DEBUG (CalcEconModo1) ► 'anos_posesion_usuario' del usuario ignorado. Usando valor fijo t = {t} años para el cálculo.")
+                
+                # --- ✅ INICIO DE LOGS DE DEP DEBUGGING ---
+                logging.info("--------------------------------------------------")
+                logging.info(" INSPECCIÓN DE CÁLCULO ECONÓMICO (MODO ASESORAMIENTO) ")
+                logging.info(f"  - Inputs: Ingresos={ingresos}€, Ahorro={ahorro}€, Plazo (fijo)={t} años")
 
                 ahorro_utilizable = ahorro * 0.75
-                
-                # La capacidad de ahorro mensual se sigue calculando para el caso de financiación
-                capacidad_ahorro_mensual_coche = (ingresos * 0.10) / 12 
-                
-                # Por defecto, se recomienda financiar
-                modo_adq_rec = "Financiado"
-                precio_max_rec = None
-                cuota_max_calc = capacidad_ahorro_mensual_coche
+                logging.info(f"  - Ahorro Utilizable (75%): {ahorro_utilizable:,.2f}€")
 
-                # --- LÓGICA PARA DECIDIR "CONTADO" ---
                 gasto_potencial_total = ingresos * 0.095 * t
-                ahorro_disponible_para_gasto = ahorro_utilizable * 0.75
+                logging.info(f"  - Gasto Potencial Total (a {t} años): {gasto_potencial_total:,.2f}€")
+                
+                capacidad_ahorro_mensual_coche = (ingresos * 0.095) / 12 
+                logging.info(f"  - Capacidad Ahorro Mensual (Cuota Máx. teórica): {capacidad_ahorro_mensual_coche:,.2f}€/mes")
 
-                if gasto_potencial_total <= ahorro_disponible_para_gasto:
+                # Condición para decidir "Contado"
+                decision_contado = gasto_potencial_total <= ahorro_utilizable
+                logging.info(f"  - Condición Contado: ¿{gasto_potencial_total:,.2f}€ <= {ahorro_utilizable:,.2f}€? -> {decision_contado}")
+                logging.info("--------------------------------------------------")
+                # --- FIN DE LOGS DE DEP DEBUGGING ---
+
+                # Lógica de decisión
+                if decision_contado:
                     modo_adq_rec = "Contado"
-                    # ✅ CORRECCIÓN: El precio máximo recomendado ahora es el gasto potencial total.
-                    # Esto asegura que la recomendación de precio sea coherente con el modelo financiero.
                     precio_max_rec = gasto_potencial_total
-                    cuota_max_calc = None # No hay cuota si es contado
-                # --- FIN DE LA LÓGICA ---
+                    cuota_max_calc = None
+                else:
+                    modo_adq_rec = "Financiado"
+                    precio_max_rec = None
+                    cuota_max_calc = capacidad_ahorro_mensual_coche
                 
-                logging.debug(f"DEBUG (CalcEconModo1) ► Modo Adq Rec: {modo_adq_rec}, Precio Max Rec: {precio_max_rec}, Cuota Max Calc: {cuota_max_calc}")
-                
+                logging.info(f"✅ RECOMENDACIÓN FINAL: Modo={modo_adq_rec}, Precio Máx.={precio_max_rec}, Cuota Máx.={cuota_max_calc}")
+
                 update_dict = {
                     "modo_adquisicion_recomendado": modo_adq_rec,
                     "precio_max_contado_recomendado": precio_max_rec,
                     "cuota_max_calculada": cuota_max_calc
                 }
                 filtros_actualizados = filtros_actualizados.model_copy(update=update_dict) 
-                cambios_realizados = True
-                logging.debug(f"DEBUG (CalcEconModo1) ► Filtros actualizados con recomendación Modo 1: {filtros_actualizados.modo_adquisicion_recomendado}, PrecioMax: {filtros_actualizados.precio_max_contado_recomendado}, CuotaMax: {filtros_actualizados.cuota_max_calculada}")
             else:
-                 logging.warning("WARN (CalcEconModo1) ► Faltan datos (ingresos, ahorro o años) para cálculo Modo 1.")
+                 logging.warning("WARN (CalcEconModo1) ► Faltan datos (ingresos, ahorro o años) para cálculo.")
         except Exception as e_calc:
-            logging.error(f"ERROR (CalcEconModo1) ► Fallo durante cálculo de recomendación Modo 1: {e_calc}")
-            traceback.print_exc()
-            # En caso de error, filtros_actualizados mantiene la copia inicial (sin estos campos o con los anteriores)
+            logging.error(f"ERROR (CalcEconModo1) ► Fallo durante el cálculo: {e_calc}", exc_info=True)
     else:
-         logging.debug("DEBUG (CalcEconModo1) ► Modo no es 1 o no hay datos de economía, omitiendo cálculo de recomendación económica.")
+         logging.info("DEBUG (CalcEconModo1) ► Modo 'Usuario Define' o sin datos de economía, omitiendo cálculo.")
 
-    if cambios_realizados:
-        return {"filtros_inferidos": filtros_actualizados}
-    else:
-        # Si no hubo cambios, devolvemos el estado sin modificar esta clave para evitar escrituras innecesarias
-        # o devolvemos el filtros_actualizados que es una copia del original si no se tocó.
-        # Para LangGraph, es mejor devolver el objeto aunque no haya cambiado, si la clave existe en el estado.
-        return {"filtros_inferidos": filtros_actualizados} 
+    return {"filtros_inferidos": filtros_actualizados}
+
 
 def calcular_flags_dinamicos_node(state: EstadoAnalisisPerfil) -> dict:
     """
@@ -1647,15 +1605,29 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
         try:
             # --- 2.1. PREPARACIÓN DE FILTROS PARA BQ ---
             filtros_para_bq = filtros_finales_obj.model_dump(mode='json', exclude_none=True)
-            
-            # ✅ LÓGICA DE ECONOMÍA CORREGIDA Y ENCAPSULADA
-            if economia_obj and economia_obj.modo == 2:
-                filtros_para_bq['modo'] = 2
-                filtros_para_bq['submodo'] = economia_obj.submodo
-                if economia_obj.submodo == 1:
+
+            # Comprobamos si el usuario definió su propio presupuesto o si pidió asesoramiento.
+            if economia_obj and economia_obj.presupuesto_definido is True:
+                logging.info("DEBUG (Buscar BQ) ► Modo 'Usuario Define' detectado. Añadiendo presupuesto del usuario a los filtros BQ.")
+                
+                # Usamos los valores que el usuario introdujo, infiriendo el tipo por el campo presente.
+                if economia_obj.pago_contado is not None:
+                    # Si el usuario ha definido un pago al contado, usamos ese.
                     filtros_para_bq['pago_contado'] = economia_obj.pago_contado
-                elif economia_obj.submodo == 2:
+                elif economia_obj.cuota_max is not None:
+                    # Si el usuario ha definido una cuota máxima, usamos esa.
                     filtros_para_bq['cuota_max'] = economia_obj.cuota_max
+            
+            else:
+                # Si el usuario eligió el modo "Asesoramiento" (presupuesto_definido is False),
+                # usamos los valores que calculamos en el nodo anterior y que están guardados en los filtros.
+                logging.info("DEBUG (Buscar BQ) ► Modo 'Asesoramiento' detectado. Añadiendo presupuesto calculado a los filtros BQ.")
+                
+                if filtros_finales_obj:
+                    if filtros_finales_obj.modo_adquisicion_recomendado == 'Contado':
+                        filtros_para_bq['pago_contado'] = filtros_finales_obj.precio_max_contado_recomendado
+                    elif filtros_finales_obj.modo_adquisicion_recomendado == 'Financiado':
+                        filtros_para_bq['cuota_max'] = filtros_finales_obj.cuota_max_calculada
             
             # Añadimos todos los flags al diccionario de filtros
             for flag_name in state.keys():

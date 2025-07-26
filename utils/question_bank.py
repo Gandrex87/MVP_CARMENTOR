@@ -311,3 +311,15 @@ QUESTION_BANK: Dict[str, List[str]] = {
     ]
 }
 
+
+PREGUNTAS_CP_INICIAL = [
+    "¿Podrías indicarme tu código postal para personalizar tu recomendación?",
+    "Para empezar, ¿me podrías facilitar tu código postal? Así podré ajustar mejor las sugerencias.",
+    "¿Cuál es tu código postal? Lo usaré para tener en cuenta factores locales en la recomendación."
+]
+
+PREGUNTAS_CP_REINTENTO = [
+    "El código postal no parece correcto. Por favor, asegúrate de que son 5 dígitos. ¿Podrías intentarlo de nuevo? Si prefieres no darlo, no hay problema, podemos continuar.",
+    "Hmm, ese código postal no es válido. ¿Podrías introducir los 5 dígitos de nuevo, por favor? Si no quieres, dímelo y seguimos adelante.",
+    "Necesito un código postal de 5 dígitos para continuar. ¿Podrías verificarlo? Si prefieres no compartirlo, podemos saltar este paso."
+]

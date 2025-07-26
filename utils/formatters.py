@@ -1,20 +1,21 @@
 from typing import Optional, Any, Dict # Añadir tipos
-from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario
+from graph.perfil.state import PerfilUsuario, FiltrosInferidos, EconomiaUsuario 
 #from utils.enums import Transmision, NivelAventura 
 from utils.conversion import is_yes
 
 # Define tipos más específicos para las entradas (opcional pero recomendado)
 PreferenciasInput = Optional[PerfilUsuario | Dict[str, Any]]
 FiltrosInput = Optional[FiltrosInferidos | Dict[str, Any]]
-EconomiaInput = Optional[EconomiaUsuario | Dict[str, Any]]
+EconomiaInput = Optional[EconomiaUsuario | Dict[str, Any]] # <-- Descomentado para claridad
 
 def formatear_preferencias_en_tabla(
     preferencias: PreferenciasInput, 
+    # ▼▼▼ CORRECCIÓN 1: El nombre del parámetro ahora es 'economia' ▼▼▼
+    economia: EconomiaInput, 
+    info_pasajeros: Optional[Dict[str, Any]],
     filtros: FiltrosInput = None, 
-    economia: EconomiaInput = None,
     codigo_postal_usuario: Optional[str] = None,
-    info_clima_usuario: Optional[Dict[str, Any]] = None, # <-- NUEVO PARÁMETRO  
-    info_pasajeros: Optional[Dict[str, Any]] = None # <-- NUEVO PARÁMETRO 
+    info_clima_usuario: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Devuelve una tabla Markdown con:
@@ -25,10 +26,9 @@ def formatear_preferencias_en_tabla(
     # --- Convertir a dict para acceso uniforme (si son Pydantic models) ---
     prefs_dict = preferencias.model_dump(mode='json') if hasattr(preferencias, "model_dump") else preferencias or {}
     filtros_dict = filtros.model_dump(mode='json') if hasattr(filtros, "model_dump") else filtros or {}
-    econ_dict = economia.model_dump(mode='json') if hasattr(economia, "model_dump") else economia or {}
-    info_clima_dict = info_clima_usuario if info_clima_usuario is not None else {} # <-- Usar dict
-    estetica_str = "Importante" if is_yes(prefs_dict.get("valora_estetica")) else "No prioritaria"
-    pasajeros_dict = info_pasajeros if info_pasajeros is not None else {} # <-- Usar dict
+    econ_obj = EconomiaUsuario(**economia) if isinstance(economia, dict) else economia
+    info_clima_dict = info_clima_usuario if info_clima_usuario is not None else {}
+    pasajeros_dict = info_pasajeros if info_pasajeros is not None else {}
     
     # Usar .value para los Enums (asegurándonos de que el valor exista)
     transm_val = prefs_dict.get("transmision_preferida") # Esto será el valor (str) gracias a model_dump(mode='json')
@@ -52,7 +52,7 @@ def formatear_preferencias_en_tabla(
         else:
             tipo_uso_display_str = "No especificado" # <-- VALOR POR DEFECTO
    
-    
+    estetica_str =  prefs_dict.get("valora_estetica")
     dise_exclusivo_val = prefs_dict.get("prefiere_diseno_exclusivo")
     dise_exclusivo_str = "No especificado"
     if dise_exclusivo_val is not None:
@@ -195,49 +195,45 @@ def formatear_preferencias_en_tabla(
                   texto += f"| Cuota Máx. Calculada    | {cuota_str}     |\n"
 
     # --- 3) Economía del usuario ---
-    if econ_dict: # Verifica si hay datos económicos
-        texto += "\n💰 Economía del usuario:\n\n"
-        texto += "| Concepto              | Valor                        |\n" # Ajustar ancho si es necesario
-        texto += "|-----------------------|------------------------------|\n"
-        
-        modo = econ_dict.get("modo") 
-        modo_str = "Asesor Financiero" if modo == 1 else "Presupuesto Definido" if modo == 2 else "No definido"
-        texto += f"| Modo                 | {modo_str}                   |\n"
+   # --- 3) Economía del usuario ---
+    # ▼▼▼ CORRECCIÓN 2: Usamos `texto +=` para AÑADIR, no para sobrescribir ▼▼▼
+    if econ_obj:
+        # Encabezado de la sección
+        texto += "\n💰 **Resumen Económico**\n\n" # <-- Cambio de `=` a `+=`
+        texto += "| Concepto                 | Valor                        |\n"
+        texto += "|--------------------------|------------------------------|\n"
 
-        # --- NUEVA LÍNEA AÑADIDA ---
-        anos = econ_dict.get("anos_posesion")
-        # Formatear si es un número, si no, indicar que no está definido
-        anos_str = f"{anos} años" if isinstance(anos, int) else "No especificado" 
-        texto += f"|Años Posesión Estimados| {anos_str}                  |\n" # <-- Fila añadida
-        # --- FIN LÍNEA AÑADIDA ---
+        # --- Lógica Principal (sin cambios) ---
+        if econ_obj.presupuesto_definido is False:
+            modo_str = "Asesor Financiero"
+            texto += f"| Modo                     | {modo_str:<28} |\n"
+            ing = econ_obj.ingresos
+            ah = econ_obj.ahorro
+            ing_str = f"{ing:,.0f} €".replace(",", ".") if isinstance(ing, (int, float)) else "No definido"
+            ah_str = f"{ah:,.0f} €".replace(",", ".") if isinstance(ah, (int, float)) else "No definido"
+            texto += f"| Ingresos (Anual)         | {ing_str:<28} |\n"
+            texto += f"| Ahorro disponible        | {ah_str:<28} |\n"
 
-        # Resto de la lógica para Modo 1 o Modo 2 (como la tenías corregida)
-        if modo == 1: 
-            ing = econ_dict.get("ingresos")
-            ah  = econ_dict.get("ahorro")
-            ing_str = f"{ing:,.0f} €".replace(",",".") if isinstance(ing, (int, float)) else "No definido"
-            ah_str  = f"{ah:,.0f} €".replace(",",".")  if isinstance(ah, (int, float)) else "No definido"
-            # Podrías ajustar el label si ingresos son mensuales vs anuales
-            texto += f"| Ingresos (Aprox Anual)| {ing_str}                |\n" 
-            texto += f"| Ahorro disponible     | {ah_str}                 |\n"
-        elif modo == 2: 
-            sub = econ_dict.get("submodo") 
-            sub_str = "Pago Contado" if sub == 1 else "Cuotas Mensuales" if sub == 2 else "No definido"
-            texto += f"| Tipo de Pago          | {sub_str}                |\n"
-
-            if sub == 1: 
-                pago = econ_dict.get("pago_contado")
-                pago_str = f"{pago:,.0f} €".replace(",",".") if isinstance(pago, (int, float)) else "No definido"
-                texto += f"| Presupuesto Contado| {pago_str}              |\n"
-            elif sub == 2: 
-                cuota = econ_dict.get("cuota_max")
-                entrada = econ_dict.get("entrada") 
-                
-                cuota_str = f"{cuota:,.0f} €/mes".replace(",",".") if isinstance(cuota, (int, float)) else "No definido"
-                texto += f"| Cuota máxima      | {cuota_str}              |\n"
-                
+        elif econ_obj.presupuesto_definido is True:
+            modo_str = "Presupuesto Definido"
+            texto += f"| Modo                     | {modo_str:<28} |\n"
+            if econ_obj.pago_contado is not None:
+                tipo_pago_str = "Pago Contado"
+                texto += f"| Tipo de Pago             | {tipo_pago_str:<28} |\n"
+                pago = econ_obj.pago_contado
+                pago_str = f"{pago:,.0f} €".replace(",", ".") if isinstance(pago, (int, float)) else "No definido"
+                texto += f"| Presupuesto Contado      | {pago_str:<28} |\n"
+            elif econ_obj.cuota_max is not None:
+                tipo_pago_str = "Cuotas Mensuales"
+                texto += f"| Tipo de Pago             | {tipo_pago_str:<28} |\n"
+                cuota = econ_obj.cuota_max
+                entrada = econ_obj.entrada
+                cuota_str = f"{cuota:,.0f} €/mes".replace(",", ".") if isinstance(cuota, (int, float)) else "No definido"
+                texto += f"| Cuota máxima             | {cuota_str:<28} |\n"
                 if entrada is not None and isinstance(entrada, (int, float)):
-                    ent_str = f"{entrada:,.0f} €".replace(",",".")
-                    texto += f"|Entrada inicial| {ent_str}                |\n"
+                    ent_str = f"{entrada:,.0f} €".replace(",", ".")
+                    texto += f"| Entrada inicial          | {ent_str:<28} |\n"
+        else:
+            texto += "| Modo                     | No definido                  |\n"
 
     return texto.strip()
