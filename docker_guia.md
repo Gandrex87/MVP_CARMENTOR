@@ -323,22 +323,23 @@ Ahora viene la parte emocionante.
 
  ```bash
     docker build -t europe-west1-docker.pkg.dev/[TU_ID_DE_PROYECTO]/[NOMBRE_DEL_REPOSITORIO]/carblau-agent:v1 .
-    ```
-    * Reemplaza `[TU_ID_DE_PROYECTO]` y `[NOMBRE_DEL_REPOSITORIO]`.
-    * `carblau-agent:v1` es el nombre y la etiqueta (versión) de tu imagen.
-    * El `.` al final es importante, le dice a Docker que use el `Dockerfile` del directorio actual.
+```
+
+* Reemplaza `[TU_ID_DE_PROYECTO]` y `NOMBRE_DEL_REPOSITORIO]`.
+    - `carblau-agent:v1` es el nombre y la etiqueta (versión) de tu imagen.
+    - El `.` al final es importante, le dice a Docker que use el `Dockerfile` del directorio actual.
 
 3.  **Subir (Push) la Imagen a Artifact Registry:**
-    ```bash
+```bash
     docker push europe-west1-docker.pkg.dev/[TU_ID_DE_PROYECTO]/[NOMBRE_DEL_REPOSITORIO]/carblau-agent:v1
-    ```
+```
 
 4.  **Desplegar en Cloud Run:** Este es el comando final.
     * **Primero, obtén el Nombre de Conexión de tu Instancia de Cloud SQL:** Ve a la página de tu instancia de Cloud SQL en la consola de GCP y copia el "Nombre de conexión" (ej: `thecarmentor-mvp2:europe-west1:carblau-sql-instance`).
-    * Ejecuta el siguiente comando, reemplazando los placeholders:
+    * Ejecutar comando, reemplazando los placeholders:
 
-    ```bash
-    gcloud run deploy carblau-agent-service \
+```bash
+gcloud run deploy carblau-agent-service \
         --image europe-west1-docker.pkg.dev/[TU_ID_DE_PROYECTO]/[NOMBRE_DEL_REPOSITORIO]/carblau-agent:v1 \
         --platform managed \
         --region europe-west1 \
@@ -346,7 +347,24 @@ Ahora viene la parte emocionante.
         --set-env-vars="DB_HOST=/cloudsql/[NOMBRE_CONEXION_INSTANCIA_SQL],DB_USER=[TU_USUARIO_DB],DB_NAME=[TU_NOMBRE_DB]" \
         --set-secrets="OPENAI_API_KEY=openai-api-key:latest,DB_PASSWORD=carblau-db-password:latest" \
         --add-cloudsql-instances=[NOMBRE_CONEXION_INSTANCIA_SQL]
-    ```
+```
+
+* Es decir:
+  
+```bash
+gcloud run deploy carblau-agent-api \
+  --image="europe-west1-docker.pkg.dev/thecarmentor-mvp2/carblau-repo/carblau-agent-api:debug" \
+  --region="europe-west1" \
+  --service-account="carblau-run-sa@thecarmentor-mvp2.iam.gserviceaccount.com" \
+  --add-cloudsql-instances="thecarmentor-mvp2:europe-west1:carblau-sql-instance" \
+  --set-env-vars="DB_HOST=/cloudsql/thecarmentor-mvp2:europe-west1:carblau-sql-instance" \
+  --set-secrets="DB_USER=DB_USER:latest,DB_PASSWORD=DB_PASSWORD:latest,DB_NAME=DB_NAME:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest" \
+  --memory=2Gi \
+  --cpu=2 \
+  --port="8000" \
+  --timeout=600s
+  ```
+
 
     **Desglose de las Opciones Clave:**
     * `gcloud run deploy carblau-agent-service`: Inicia el despliegue de un servicio llamado `carblau-agent-service`.
@@ -456,9 +474,14 @@ Este es el único comando que necesitas ejecutar ahora. Reemplaza [TU_ID_DE_PROY
   --push .
   ``` 
 
+- Ejecutar comando para crear nueva imagen y hacer push al GCP
+
+tres pasos (build, tag, push)
+``` bash
 docker buildx build --platform linux/amd64 \
   -t europe-west1-docker.pkg.dev/thecarmentor-mvp2/carblau-repo/carblau-agent-api:v1 \
   --push .
+  ```
 
 Crear/validar que el repositorio en artifact registry este creado
 
@@ -487,3 +510,36 @@ Ejecutar:
 ``` bash
 gcloud builds submit --config cloudbuild.yaml .
 ```
+
+- Comando para ejecutar Cloud Run
+``` bash
+gcloud run deploy carblau-agent-api \
+  --image="europe-west1-docker.pkg.dev/thecarmentor-mvp2/carblau-repo/carblau-agent-api:v1" \
+  --region="europe-west1" \
+  --platform="managed" \
+  --allow-unauthenticated \
+  --port="8000" \
+  --service-account="carblau-run-sa@thecarmentor-mvp2.iam.gserviceaccount.com" \
+  --add-cloudsql-instances="thecarmentor-mvp2:europe-west1:carblau-sql-instance" \
+  --set-env-vars="DB_HOST=/cloudsql/thecarmentor-mvp2:europe-west1:carblau-sql-instance" \
+  --set-secrets="DB_USER=DB_USER:latest,DB_PASSWORD=DB_PASSWORD:latest,DB_NAME=DB_NAME:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest" \
+  --timeout=600s
+```
+
+Nota: por ahora omito una mejor maquina   --memory=2Gi \ --cpu=2 y dejo --allow-unauthenticated para que cualquiera pueda usarla api sin autenticarse.
+
+#### Mejorando la maquina
+
+gcloud run deploy carblau-agent-api \
+  --image="europe-west1-docker.pkg.dev/thecarmentor-mvp2/carblau-repo/carblau-agent-api:v1" \
+  --region="europe-west1" \
+  --platform="managed" \
+  --allow-unauthenticated \
+  --port="8000" \
+  --service-account="carblau-run-sa@thecarmentor-mvp2.iam.gserviceaccount.com" \
+  --add-cloudsql-instances="thecarmentor-mvp2:europe-west1:carblau-sql-instance" \
+  --set-env-vars="DB_HOST=/cloudsql/thecarmentor-mvp2:europe-west1:carblau-sql-instance" \
+  --set-secrets="DB_USER=DB_USER:latest,DB_PASSWORD=DB_PASSWORD:latest,DB_NAME=DB_NAME:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest" \
+  --timeout=600s \
+  --cpu=2 \
+  --memory=1Gi

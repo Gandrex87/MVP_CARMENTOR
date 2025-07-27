@@ -97,4 +97,34 @@ def aplicar_postprocesamiento_filtros(
     return filtros_actualizado
 
 
-#REPARTIR LOS PUNTO NO EQUITATIVAMENTE SINO ENTREGAR LOS PUNTOS A LOS MEJORES NORMALIZANDO DESDE 80 AL MEJOR Y 0 AL PermissionError
+# Flag coche_ciudad_perfil:
+
+# suele_llevar_acompanantes = True
+# y frecuencia_viaje_con_acompanantes = "ocasional" o "frecuente"
+# y circula_principalmente_ciudad = 'si' 
+# y transporta_carga_voluminosa = 'no'
+# y distancia_trayecto = DistanciaTrayecto.MENOS_10_KM o  DistanciaTrayecto.ENTRE_10_Y_50_KM 
+# y realiza_viajes_largos = 'nunca'
+
+# Entonces → Bonificar
+# 'largo'< 330  (+ 5 puntos))
+# 'peso' < 950  (+ 2 puntos)
+
+
+# Flag coche ciudad 2:
+
+# suele_llevar_acompanantes =  False o frecuencia_viaje_con_acompanantes = "ocasional"
+# y Circular principalmente ciudad = Sí, y
+# Maletero amplio = No 
+# y Trayecto más frecuente = DistanciaTrayecto.MENOS_10_KM o  DistanciaTrayecto.ENTRE_10_Y_50_KM 
+# y realiza_viajes_largos = 'si'
+# y frecuencia_viajes_largos = FrecuenciaViajesLargos.OCASIONALMENTE
+
+# Entonces → Bonificar
+# 'largo'< 390  ( + 5 puntos))
+# 'peso' < 1000  (+ 2 puntos)
+
+
+# → Penalizar Motorización + Carrocería
+# ◦	Todo lo que no sea BEV + Coupé o BEV + Cabrio (- 5)
+

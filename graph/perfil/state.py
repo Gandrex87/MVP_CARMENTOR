@@ -4,7 +4,7 @@ from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, model_validator
 from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesional, DimensionProblematica, EstiloConduccion,FrecuenciaUso , DistanciaTrayecto, FrecuenciaViajesLargos
-from typing import Literal, Optional
+from typing import Optional, List, Dict, Any , Literal
 
 
 # 🧠 Modelos de Datos (InfoClimaUsuario, PerfilUsuario, FiltrosInferidos, EconomiaUsuario): Estos modelos definen la información que quieres recopilar.
@@ -21,9 +21,19 @@ class InfoClimaUsuario(BaseModel):
     ZONA_GNV: bool = False
     cp_valido_encontrado: bool = Field(default=False, description="Indica si el CP se procesó y se encontró en al menos una categoría o es válido.")
     codigo_postal_consultado: Optional[str] = Field(default=None, description="El CP que se consultó.") 
-        
+
+
+class CodigoPostalExtraido(BaseModel):
+    """
+    Un modelo de datos simple para la salida del LLM.
+    Su único propósito es contener el texto que el LLM ha extraído.
+    """
+    codigo_postal: Optional[str] = Field(
+        default=None,
+        description="El texto extraído del mensaje del usuario que podría ser un código postal."
+    )
+       
 class PerfilUsuario(BaseModel):
-    # Añadir default=None a todos los Optional que no lo tenían
     apasionado_motor : Optional[str] = Field(default=None, description="¿Eres un apasionado/a del motor y/o la movilidad? Responde 'sí' o 'no'")
     valora_estetica: Optional[str] = Field(default=None, description="¿Valora la estética del coche? Responde 'sí' o 'no'")
     coche_principal_hogar: Optional[str] = Field(default=None,description="¿Será el coche principal del hogar? Responde 'sí' o 'no'")
@@ -37,9 +47,8 @@ class PerfilUsuario(BaseModel):
     tipo_uso_profesional: Optional[TipoUsoProfesional] = Field(default=None, description="Si el uso profesional es 'sí', especifica si es para 'pasajeros', 'carga' o 'mixto'")
     prefiere_diseno_exclusivo: Optional[str] = Field(default=None,description="¿Prefiere un diseño exclusivo/diferenciador ('sí') o algo más discreto ('no')?")
     altura_mayor_190: Optional[str] = Field(default=None, description="¿El usuario mide más de 1.90 metros? Responde 'sí' o 'no'")
-    peso_mayor_100: Optional[str] = Field(default=None, description="¿El usuario pesa más de 100 kg? Responde 'sí' o 'no'")
-    transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Transporta con frecuencia equipaje o carga voluminosa? Responde 'sí' o 'no'") #acostumbra a viajar con mucho equipaje
-    necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="Si transporta carga, ¿necesita espacio para objetos de dimensiones especiales (bicicletas, etc.)? Responde 'sí' o 'no'")    
+    transporta_carga_voluminosa: Optional[str] = Field(default=None, description="¿Necesita maletero amplio? Responde 'sí' o 'no'") #acostumbra a viajar con mucho equipaje
+    necesita_espacio_objetos_especiales: Optional[str] = Field(default=None, description="¿Vas a transportar objetos voluminosos como bicicletas, tablas de surf, cochecitos, instrumentos musicales o similares? Responde 'sí' o 'no'")    
     arrastra_remolque: Optional[str] = Field(default=None, description="¿Va a arrastrar remolque pesado o caravana? Responde 'sí' o 'no'" )
      # --- NUEVOS CAMPOS PARA GARAJE/APARCAMIENTO ---
     tiene_garage: Optional[str] = Field(default=None, description="¿Tiene garaje o plaza de aparcamiento propia? Responde 'sí' o 'no'" )
@@ -67,7 +76,11 @@ class PerfilUsuario(BaseModel):
 #lleva pasajero e important epasajeros vayan anchos y comodos
 # --- Modelo Pydantic para InfoPasajeros (MODIFICADO) ---
 class InfoPasajeros(BaseModel):
-    # NUEVOS CAMPOS PARA EL FLUJO DE PREGUNTAS
+    """
+    Modelo de datos refinado para almacenar la información sobre los pasajeros.
+    Contiene una lógica de campos clara y no redundante.
+    """
+    # --- Flujo de Preguntas Secuencial ---
     suele_llevar_acompanantes: Optional[bool] = Field(
         default=None, 
         description="¿El usuario suele llevar acompañantes? (true/false)"
@@ -76,31 +89,18 @@ class InfoPasajeros(BaseModel):
         default=None,
         description="Si suele llevar acompañantes, ¿con qué frecuencia? ('ocasional' o 'frecuente')"
     )
-    composicion_pasajeros_texto: Optional[str] = Field(
-        default=None,
-        description="Respuesta textual del usuario a la pregunta sobre la composición de los pasajeros (ej: 'dos niños y un adulto', 'tres adultos')."
-    )
-    
-    # CAMPO EXISTENTE: se inferirá de los nuevos o se preguntará si es necesario
-    frecuencia: Optional[Literal["nunca", "ocasional", "frecuente"]] = Field(
-        default=None, 
-        description="Frecuencia general con la que viaja con pasajeros (inferido o preguntado)."
-    )
-    
-    # CAMPOS EXISTENTES: se inferirán de composicion_pasajeros_texto y la pregunta de sillas
     num_ninos_silla: Optional[int] = Field(
         default=None, 
         ge=0, 
-        description="Número de niños que necesitan silla infantil."
+        description="Número de pasajeros que SÍ necesitan una silla infantil."
     )
     num_otros_pasajeros: Optional[int] = Field(
         default=None, 
         ge=0, 
-        description="Número de otros pasajeros (adultos o niños sin silla), sin contar al conductor."
+        description="Número de otros pasajeros que NO necesitan silla (adultos, adolescentes, niños mayores), sin contar al conductor."
     )
-
     class ConfigDict:
-        use_enum_values = True # Para que los Literal se traten como sus valores
+        use_enum_values = True
 
 class FiltrosInferidos(BaseModel):
     tipo_mecanica: Optional[List[TipoMecanica]] = Field(default=None, description="Lista de motorizaciones recomendadas")
@@ -120,21 +120,49 @@ class FiltrosInferidos(BaseModel):
     plazas_min: Optional[int] = Field(default=None, description="Número mínimo de plazas recomendadas (conductor + pasajeros).")
    
 #cuanta gana y aplicamos un % 60 /por porcentaje MODO 1 o 2 iNGRESO 
+
 class EconomiaUsuario(BaseModel):
-    modo:         Optional[Literal[1, 2]] = Field(default=None) # Añadir Field(default=None) por si acaso
-    submodo:      Optional[Literal[1, 2]] = Field(default=None)
-    ingresos:     Optional[float] = Field(default=None)
-    ahorro:       Optional[float] = Field(default=None)
-    pago_contado: Optional[float] = Field(default=None)
-    cuota_max:    Optional[float] = Field(default=None)
-    entrada:      Optional[float] = Field(default=None)
-    anos_posesion: Optional[int] = Field(default=None, description="Número estimado de años que el usuario planea conservar el vehículo." )
+    """
+    Modelo de datos refactorizado para la información económica.
+    Es un contenedor simple de datos sin lógica de 'modos' anidada.
+    """
+    
+    # Campo clave para dirigir la conversación desde Python
+    presupuesto_definido: Optional[bool] = Field(
+        default=None,
+        description="Indica si el usuario ya tiene un presupuesto definido (True) o necesita ayuda para calcularlo (False)."
+    )
+    
+    # --- Campos para el Modo 1 (Calcular presupuesto) ---
+    ingresos: Optional[float] = Field(
+        default=None, 
+        description="Ingresos mensuales del usuario."
+    )
+    ahorro: Optional[float] = Field(
+        default=None, 
+        description="Ahorros mensuales del usuario."
+    )
+    tipo_presupuesto: Optional[Literal["contado", "financiado"]] = None
+    # anos_posesion: Optional[int] = Field(
+    #     default=None, 
+    #     description="Número estimado de años que el usuario planea conservar el vehículo."
+    # )
+
+    # --- Campos para el Modo 2 (Presupuesto ya definido) ---
+    pago_contado: Optional[float] = Field(
+        default=None, 
+        description="El presupuesto máximo si el pago es al contado."
+    )
+    cuota_max: Optional[float] = Field(
+        default=None, 
+        description="La cuota mensual máxima si se financia."
+    )
+    entrada: Optional[float] = Field(
+        default=None, 
+        description="La entrada o pago inicial para la financiación (opcional)."
+    )
 
 
-# 🧠 Modelos de Salida (ResultadoEconomia, ResultadoSoloPerfil, ResultadoSoloFiltros): Estos modelos definen la salida esperada del LLM.
-class ResultadoEconomia(BaseModel):
-    economia: EconomiaUsuario = Field(description="Objeto que contiene TODA la información económica recopilada o actualizada.") 
-    mensaje_validacion: str
 
 class ResultadoSoloPerfil(BaseModel):
     """Salida esperada del LLM enfocado solo en el perfil del usuario."""
@@ -165,11 +193,11 @@ class ResultadoSoloFiltros(BaseModel):
 
 
 # Modelo Pydantic para la salida del LLM que extrae el CP ---
-class ResultadoCP(BaseModel):
-    """Salida esperada del LLM enfocado en extraer el código postal."""
-    codigo_postal_extraido: Optional[str] = Field(default=None, description="El código postal numérico de 5 dígitos extraído de la respuesta del usuario.")
-    tipo_mensaje: Literal["PREGUNTA_ACLARACION", "CP_OBTENIDO", "ERROR"] = Field(description="Clasificación: 'PREGUNTA_ACLARACION' si el CP no es válido o falta, 'CP_OBTENIDO' si se extrajo un CP válido, 'ERROR'.")
-    contenido_mensaje: str = Field(description="El texto real del mensaje: la pregunta de aclaración para el CP, una confirmación, o un detalle del error.")
+# class ResultadoCP(BaseModel):
+#     """Salida esperada del LLM enfocado en extraer el código postal."""
+#     codigo_postal_extraido: Optional[str] = Field(default=None, description="El código postal numérico de 5 dígitos extraído de la respuesta del usuario.")
+#     tipo_mensaje: Literal["PREGUNTA_ACLARACION", "CP_OBTENIDO", "ERROR"] = Field(description="Clasificación: 'PREGUNTA_ACLARACION' si el CP no es válido o falta, 'CP_OBTENIDO' si se extrajo un CP válido, 'ERROR'.")
+#     contenido_mensaje: str = Field(description="El texto real del mensaje: la pregunta de aclaración para el CP, una confirmación, o un detalle del error.")
 
 
 
@@ -178,6 +206,7 @@ class ResultadoCP(BaseModel):
 class EstadoAnalisisPerfil(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]  # 👈 sumo todos los mensajes sin perder contexto
     codigo_postal_usuario: Optional[str] # El CP validado
+    intentos_cp: int # Para contar los intentos de obtener el CP
     info_clima_usuario: Optional[InfoClimaUsuario] # Los datos climáticos de BQ
     codigo_postal_extraido_temporal: Optional[str]
     tipo_mensaje_cp_llm: Optional[Literal["PREGUNTA_ACLARACION", "CP_OBTENIDO", "ERROR"]]
@@ -220,8 +249,23 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_bonus_awd_nieve: Optional[bool]  # <-- ✅ 
     flag_bonus_awd_montana: Optional[bool] # <-- ✅ 
     flag_logica_reductoras_aventura: Optional[str]
+    flag_bonus_seguridad_critico: Optional[bool]
+    flag_bonus_seguridad_fuerte: Optional[bool]
+    flag_bonus_fiab_dur_critico: Optional[bool]
+    flag_bonus_fiab_dur_fuerte: Optional[bool]
+    flag_bonus_costes_critico: Optional[bool]
+    flag_penalizar_tamano_no_compacto: Optional[bool] # trabaja en conjunto con la flag flag_es_conductor_urbano
+    flag_es_conductor_urbano: Optional[bool]
+    flag_bonus_singularidad_lifestyle: Optional[bool]
+    flag_deportividad_lifestyle: Optional[bool]
+    flag_ajuste_maletero_personal: Optional[bool]
+    flag_coche_ciudad_perfil: Optional[bool]
+    flag_coche_ciudad_2_perfil: Optional[bool]
     km_anuales_estimados: Optional[int]
-    tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
+    tabla_resumen_criterios: Optional[str]
+    # offset_busqueda: int # Para la paginación de resultados
+    # ultima_busqueda_realizada: Optional[Dict[str, Any]]
+
 
 
 

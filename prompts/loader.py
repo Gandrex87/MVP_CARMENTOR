@@ -23,6 +23,8 @@ def load_prompt(filename: str) -> SystemMessage:
 
 
 
+
+
 #==================#==================#==================new==================#==================#
 # Cargar un prompt desde un archivo   
 def cargar_prompt(nombre_archivo: str) -> str:
@@ -34,15 +36,18 @@ def cargar_prompt(nombre_archivo: str) -> str:
     
 #system_prompt_filtros_template = cargar_prompt("system_prompt_filtros_template.txt")
 
+system_prompt_cp = cargar_prompt("system_prompt_cp.txt")
+
+#system_prompt_saludo_cp = cargar_prompt("system_prompt_saludo.txt")
+
 system_prompt_perfil= cargar_prompt("system_prompt_perfil.txt")
 
 prompt_economia_structured_sys_msg = cargar_prompt("prompt_economia_structured.txt")
 
 system_prompt_pasajeros = cargar_prompt("system_prompt_pasajeros.txt")
 
-system_prompt_cp = cargar_prompt("system_prompt_cp.txt")
-
-#system_prompt_explicacion_coche = cargar_prompt("system_prompt_explicacion_coche.txt")
 
 system_prompt_explicacion_coche_mejorado = cargar_prompt("system_prompt_explicacion_coche_mejorado.txt")
 
+
+#system_prompt_explicacion_coche = cargar_prompt("system_prompt_explicacion_coche.txt")

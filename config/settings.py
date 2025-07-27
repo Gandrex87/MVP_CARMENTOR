@@ -77,8 +77,8 @@ MIN_MAX_RANGES = {
     "ancho": (1410.0, 2164.0),
     "fiabilidad": (1.0, 10.0), 
     "durabilidad": (1.0, 10.0), 
-    "seguridad": (1.0, 10.0),  "comodidad": (1.0, 10.0),  
-    "tecnologia": (1.0, 10.0), "acceso_low_cost": (1.0, 10.0), 
+    "seguridad": (1.0, 10.0),  "comodidad": (0.0, 10.0),  
+    "tecnologia": (1.0, 10.0), "acceso_low_cost": (0.0, 10.0), 
     "deportividad": (1.0, 10.0),"devaluacion": (0.0, 10.0), 
     "maletero_minimo": (11.0, 15000.0), # Litros 
     "maletero_maximo": (11.0, 15000.0), # Litros
@@ -98,7 +98,7 @@ MIN_MAX_RANGES = {
     "potencia_maxima": (41.0, 789.0),    # CV, más es mejor
     "aceleracion_0_100": (2.5, 34.0),
     'autonomia_uso_principal': (21.8, 1480.6),
-    'autonomia_uso_2nd_drive': (326.0, 936.4),
+    'autonomia_uso_2nd_drive': (0.0, 936.4),
     'tiempo_carga_min': (18.0, 640.1),
     'potencia_maxima_carga_AC': (2.3, 22.0),
     'potencia_maxima_carga_DC': (1.0, 270.0),# segundos, un valor menor es mejor, por lo que el escalado debe ser invertido.
@@ -106,93 +106,53 @@ MIN_MAX_RANGES = {
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- VALORES DE AJUSTE DIRECTO AL SCORE (BONUS/PENALIZACIONES) (`utils/bigquery_tools.py`) ---
 
-# --- LÓGICA PARA TRACCIÓN BASADA EN AVENTURA ---
-PENALTY_AWD_NINGUNA_AVENTURA = -10
-BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO = 10
+# --------------------------------------- ## --------------------------------------- ## ---------------------------------------
+#⚖️ Nivel 1: Ajuste Ligero (de +2 a +5 puntos)
 
-BONUS_AWD_AVENTURA_OCASIONAL = 10
-BONUS_AWD_AVENTURA_EXTREMA = 20
+# Bonus por tipo de motor
+BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM = 3
+BONUS_BEV_MUY_ALTO_KM = 5
+BONUS_REEV_MUY_ALTO_KM = 5
 
-# --- LÓGICA PARA REDUCTORAS BASADA EN AVENTURA ---
-BONUS_REDUCTORAS_AVENTURA_OCASIONAL = 10 # 
-BONUS_REDUCTORAS_AVENTURA_EXTREMA = 20   # 
+# --- BONUS/PENALIZACIONES BASADOS EN KM ANUALES ESTIMADOS ---
+# Rango Bajo (< 10.000 km/año)
+PENALTY_OCASION_POCO_KM = -5 
 
-#valores directos que se suman o restan al score (escala 0-1)
+# # --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---Ajustes por clima
+BONUS_AWD_ZONA_MONTA = 5
+BONUS_OCASION_POR_USO_OCASIONAL = 3  # Puntos extra si el coche es de OCASION y el uso es ocasional
+
+PENALTY_PHEV_AVENTURA_OCASIONAL = -5
+BONUS_DISTINTIVO_ECO_CERO_C = 5
+
+# Penalizaciones por Comodidad (si comodidad es alta, penalizar estos)
+PENALTY_LOW_COST_POR_COMODIDAD = -1.5 # Cuánto restar si es muy low-cost y se quiere confort REVISAR
+PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -1.5 # Cuánto restar si es muy deportivo y se quiere confort
+
+BONUS_CARROCERIA_MONTANA = 5 # info_clima_obj.ZONA_CLIMA_MONTA is True / tipo_carroceria IN ('SUV', 'TODOTERRENO')
+BONUS_CARROCERIA_CONFORT = 5 # if rating_comodidad_val > UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA / tipo_carroceria IN ('3VOL', '2VOL', 'SUV', 'FAMILIAR', 'MONOVOLUMEN')
+BONUS_PICKUP_AVENTURA_EXTREMA = 5
+
+# 💪 Nivel 2: Ajuste Moderado (de +6 a +15 puntos)
+
 # Penalización por Puertas
 PENALTY_PUERTAS_BAJAS = -8
 
-# Penalizaciones por Comodidad (si comodidad es alta, penalizar estos)
-PENALTY_LOW_COST_POR_COMODIDAD = -1.5 # Cuánto restar si es muy low-cost y se quiere confort
-PENALTY_DEPORTIVIDAD_POR_COMODIDAD = -1.5 # Cuánto restar si es muy deportivo y se quiere confort
-
-# Esto es para revisar con Teo. al multiplicar no es que reste -10 puntos como estaba antes, sino que exponencia ese valor dependiendo la calificacion del coche
-# solo ocurr con PENALTY_LOW_COST_POR_COMODIDAD y PENALTY_DEPORTIVIDAD_POR_COMODIDAD
-# no aplica una penalización fija, sino una penalización que escala con el nivel de deportividad del coche.
-
-# Veámoslo con un ejemplo práctico:
-# Supongamos que un usuario ha pedido máximo confort, por lo que el @flag_penalizar_deportividad_comodidad está en TRUE.
-
-# Coche A (Poco Deportivo): deportividad_bq_scaled = 2.0
-# Penalización aplicada: 2.0 * -2.0 = -4.0 puntos.
-# Coche B (Algo Deportivo): deportividad_bq_scaled = 6.0
-# Penalización aplicada: 6.0 * -2.0 = -12.0 puntos.
-# Coche C (Muy Deportivo): deportividad_bq_scaled = 9.5
-# Penalización aplicada: 9.5 * -2.0 = -19.0 puntos.
-
-# Penalización por Antigüedad (si tecnología es alta)
-PENALTY_ANTIGUEDAD_MAS_10_ANOS = -20
-PENALTY_ANTIGUEDAD_7_A_10_ANOS = -15
-PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -7
-
-#valores directos que se suman o restan al score (escala 0-1)
 PENALTY_BEV_REEV_AVENTURA_OCASIONAL = -10
-PENALTY_PHEV_AVENTURA_OCASIONAL = -5
-PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA =  -25
 
 # Lógica Distintivo Ambiental (General - activada por alto rating de impacto ambiental - WHEN @flag_aplicar_logica_distintivo = TRUE THEN)
-BONUS_DISTINTIVO_ECO_CERO_C = 5
 PENALTY_DISTINTIVO_NA_B = -8 #Falta separar la nota NA para aplicar diferenciar calificacion.
 
 #WHEN @flag_aplicar_logica_distintivo = TRUE AND COALESCE(sd.ocasion, FALSE) = TRUE THEN
 BONUS_OCASION_POR_IMPACTO_AMBIENTAL = 8 
 
-# Lógica Distintivo Ambiental (Específica ZBE - activada si CP está en ZBE)
-BONUS_ZBE_DISTINTIVO_FAVORABLE_C = 8 
-BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO = 10
+# Bonus por tipo de motor
+BONUS_DIESEL_HEVD_MUY_ALTO_KM = 10
+# # --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---Ajustes por clima
+BONUS_AWD_ZONA_NIEVE = 10
 
-PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA =  -20
-PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B =  -8
-
-
-# Regla 1: Si flag_favorecer_carroceria_montana es TRUE, los coches con tipo_carroceria 'SUV' o 'TODOTERRENO' reciben un bonus.
-# Regla 2: Si flag_favorecer_carroceria_comercial es TRUE, los coches 'COMERCIAL' reciben un bonus.
-# Regla 3: Si flag_favorecer_carroceria_pasajeros_pro es TRUE, los coches '3VOL' o 'MONOVOLUMEN' reciben un bonus.
-# Regla 4: Si flag_desfavorecer_carroceria_no_aventura es TRUE, los coches 'PICKUP' o 'TODOTERRENO' reciben una penalización.
-# Regla 5: si flag_fav_pickup_todoterreno_aventura_extrema es TRUE, coches 'TODOTERRENO' favorece
-# Regla 6: si flag_fav_pickup_todoterreno_aventura_extrema es TRUE, coches 'PICKUP' favorece
-# Regla 7: si flag_aplicar_logica_objetos_especiales = TRUE, favorecer ('MONOVOLUMEN', 'FURGONETA', 'FAMILIAR', 'SUV'), penalty ('3VOL', 'COUPE', 'DESCAPOTABLE')
-# Regla 8: si flag_fav_carroceria_confort = TRUE, favorece ('3VOL', '2VOL', 'SUV', 'FAMILIAR', 'MONOVOLUMEN')
-BONUS_CARROCERIA_MONTANA = 5
-BONUS_CARROCERIA_COMERCIAL = 20
-BONUS_CARROCERIA_PASAJEROS_PRO = 20
-PENALTY_CARROCERIA_NO_AVENTURA = -15
-BONUS_SUV_AVENTURA_OCASIONAL = 20
-BONUS_TODOTERRENO_AVENTURA_EXTREMA = 10 
-BONUS_PICKUP_AVENTURA_EXTREMA = 5
-BONUS_CARROCERIA_OBJETOS_ESPECIALES = 10
-PENALTY_CARROCERIA_OBJETOS_ESPECIALES = -20
-BONUS_CARROCERIA_CONFORT = 8
-
-# Lógica para FrecuenciaUso.OCASIONALMENTE
-BONUS_OCASION_POR_USO_OCASIONAL = 8  # Puntos extra si el coche es de OCASION y el uso es ocasional
-PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL = -10  # Puntos que se restan a BEV/PHEV/REEV si el uso es ocasional
-BONUS_BEV_REEV_USO_DEFINIDO = 10 # Bonus para BEV/REEV si el perfil de uso es el ideal para un eléctrico puro
-PENALTY_PHEV_USO_INTENSIVO_LARGO = -15 # Penalización para PHEVs si el uso es diario/frecuente en trayectos muy largos
-
-# --- BONUS/PENALIZACIONES BASADOS EN KM ANUALES ESTIMADOS ---
-# Rango Bajo (< 10.000 km/año)
-BONUS_MOTOR_POCO_KM = 10
-PENALTY_OCASION_POCO_KM = -5 
+# Bonus para coches que pueden aprovechar un punto de carga propio
+BONUS_PUNTO_CARGA_PROPIO = 10
 
 # Rango Medio (10.000 - 30.000 km/año)
 PENALTY_OCASION_MEDIO_KM = -10
@@ -201,31 +161,123 @@ PENALTY_OCASION_MEDIO_KM = -10
 BONUS_MOTOR_MUCHO_KM = 10
 PENALTY_OCASION_MUCHO_KM = -10
 
-# --- LÓGICA PARA USO MUY ALTO (> 60.000 km/año) ---
-# Bonus por tipo de motor
-BONUS_BEV_MUY_ALTO_KM = 5
-BONUS_REEV_MUY_ALTO_KM = 8
-BONUS_DIESEL_HEVD_MUY_ALTO_KM = 10
-BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM = 3
-
-# Penalización para coches de ocasión
-PENALTY_OCASION_MUY_ALTO_KM_V2 = -20 # Le pongo V2 para no confundir con la otra constante
-
-# Bonus para coches que pueden aprovechar un punto de carga propio
-BONUS_PUNTO_CARGA_PROPIO = 10
-
 # Bonus/Penalty favorecer por conducir en ciudad
 PENALTY_DIESEL_CIUDAD = -15
+# --- LÓGICA PARA TRACCIÓN BASADA EN AVENTURA ---
+PENALTY_AWD_NINGUNA_AVENTURA = -10
+BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO = 10
+
+# Lógica para FrecuenciaUso.OCASIONALMENTE
+
+PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL = -10  # Puntos que se restan a BEV/PHEV/REEV si el uso es ocasional
+BONUS_BEV_REEV_USO_DEFINIDO = 10 # Bonus para BEV/REEV si el perfil de uso es el ideal para un eléctrico puro
+PENALTY_PHEV_USO_INTENSIVO_LARGO = -15 # Penalización para PHEVs si el uso es diario/frecuente en trayectos muy largos
+
+# Lógica Distintivo Ambiental (Específica ZBE - activada si CP está en ZBE)
+BONUS_ZBE_DISTINTIVO_FAVORABLE_C = 8 
+BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO = 10
+
+PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA =  -10
+PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B =  -8
+
+# --- BONUS/PENALIZACIONES BASADOS EN KM ANUALES ESTIMADOS ---
+# Rango Bajo (< 10.000 km/año)
+BONUS_MOTOR_POCO_KM = 8
+
+#flag_aplicar_logica_objetos_especiales = TRUE sd.tipo_carroceria IN ('MONOVOLUMEN', 'FURGONETA', 'FAMILIAR', 'SUV') THEN {BONUS_CARROCERIA_OBJETOS_ESPECIALES} WHEN sd.tipo_carroceria IN ('3VOL', 'COUPE', 'DESCAPOTABLE') THEN {PENALTY_CARROCERIA_OBJETOS_ESPECIALES} ELSE 0.0 END ELSE 0.0 END)
+PENALTY_CARROCERIA_OBJETOS_ESPECIALES = -10
+PENALTY_CARROCERIA_NO_AVENTURA = -15
+
+BONUS_CARROCERIA_OBJETOS_ESPECIALES = 10
+BONUS_SUV_AVENTURA_OCASIONAL = 10
+
+
+PENALTY_ANTIGUEDAD_5_A_7_ANOS  = -7 # Penalización por Antigüedad (si tecnología es alta)
+PENALTY_ANTIGUEDAD_7_A_10_ANOS = -15 # Penalización por Antigüedad (si tecnología es alta)
+PENALTY_ANTIGUEDAD_10_A_15_ANOS = -20 # Penalización por Antigüedad (si tecnología es alta)
+
+
+#@flag_bonus_awd_clima_adverso = TRUE AND sd.traccion = 'ALL' THEN {BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO} WHEN @penalizar_awd_ninguna_aventura = TRUE AND sd.traccion = 'ALL' THEN {PENALTY_AWD_NINGUNA_AVENTURA} WHEN @favorecer_awd_aventura_ocasional = TRUE AND sd.traccion = 'ALL' THEN {BONUS_AWD_AVENTURA_OCASIONAL} WHEN @favorecer_awd_aventura_extrema = TRUE AND sd.traccion = 'ALL' 
+# THEN {BONUS_AWD_AVENTURA_EXTREMA} ELSE 0.0 END) as dbg_ajuste_awd_aventura,
+BONUS_AWD_AVENTURA_OCASIONAL = 10
+# --- LÓGICA PARA REDUCTORAS BASADA EN AVENTURA ---
+BONUS_REDUCTORAS_AVENTURA_OCASIONAL = 10 # 
+
+
+# 🚀 Nivel 3: Ajuste Fuerte / Decisivo (de +16 a +25 puntos)
+
+# Bonus/Penalty favorecer por conducir en ciudad
 BONUS_DIESEL_CIUDAD_OCASIONAL = 20
+# Penalización para coches de ocasión
+PENALTY_OCASION_MUY_ALTO_KM_V2 = -20 
+# --- LÓGICA PARA REDUCTORAS BASADA EN AVENTURA ---
+BONUS_REDUCTORAS_AVENTURA_EXTREMA = 25   # 
+BONUS_TODOTERRENO_AVENTURA_EXTREMA = 25
+BONUS_CARROCERIA_COMERCIAL = 20
+BONUS_CARROCERIA_PASAJEROS_PRO = 20
 
-# --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
-# Ajustes de pesos crudos aditivos por clima
-BONUS_AWD_ZONA_NIEVE = 10
-BONUS_AWD_ZONA_MONTA = 5
+# --- PENALIZACIONES GENERALES POR ANTIGÜEDAD DEL VEHÍCULO ---
+PENALTY_ANO_PRE_1990 = -50
+PENALTY_ANO_1991_1995 = -30
+PENALTY_ANO_1996_2000 = -20
+PENALTY_DIESEL_2001_2006 = -10
 
+
+# ❌ Nivel 4: Penalización de "Veto" (de -25 a -30 puntos o más)
 PENALTY_OCASION_KILOMETRAJE_EXTREMO = -25
+PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA =  -25
+PENALTY_ANTIGUEDAD_MAS_15_ANOS = -25 # Penalización por Antigüedad (si tecnología es alta)
+BONUS_AWD_AVENTURA_EXTREMA = 20 # flag_bonus_awd_clima_adverso = TRUE AND sd.traccion = 'ALL' THEN
+
+# --- UMBRALES DE TAMAÑO PARA PENALIZACIÓN DE COCHES NO COMPACTOS ---
+# Las medidas deben estar en la misma unidad que tu columna 'largo' en BigQuery (asumimos milímetros)
+UMBRAL_LARGO_CIUDAD_MM = 4250  # 4.25 metros
+UMBRAL_LARGO_CARRETERA_MM = 4500 # 4.50 metros
+PENALTY_TAMANO_NO_COMPACTO = -5
 
 
+# --- FACTORES DE BONUS POR RATINGS DE USUARIO ---
+# Multiplican la contribución de una característica al score si el rating es alto.
+#--- FACTORES DE BONUS POR SEGURDIDAD ---
+FACTOR_BONUS_RATING_CRITICO = 6.0  # Para ratings >= 9 (duplica la importancia)
+FACTOR_BONUS_RATING_FUERTE = 3.0   # Para ratings >= 7 (aumenta un 50%)
+
+# --- FACTORES DE BONUS POR ALTO IMPACTO AMBIENTAL ---
+# Multiplican la contribución de fiabilidad/durabilidad si el rating ambiental es alto.
+FACTOR_BONUS_FIABILIDAD_POR_IMPACTO = 1.2   # Aumenta un 50% la importancia
+FACTOR_BONUS_DURABILIDAD_POR_IMPACTO = 1.2    # Aumenta un 50% la importancia
+
+# --- FACTORES DE BONUS POR RATING DE FIABILIDAD/DURABILIDAD ALTO ---
+# Multiplican la contribución de fiabilidad/durabilidad si el rating es alto.
+FACTOR_BONUS_FIAB_DUR_CRITICO = 2.5  # Para ratings >= 9 (aumenta un 80%)
+FACTOR_BONUS_FIAB_DUR_FUERTE = 1.2  # Para ratings >= 7 (aumenta un 30%)
+
+# --- FACTORES DE BONUS POR RATING DE COSTES DE USO ---
+FACTOR_BONUS_COSTES_CRITICO = 4.0
+
+# --- BONUS POR SINGULARIDAD Y ESTILO DE VIDA ---
+BONUS_CARROCERIA_COUPE_SINGULAR = 5
+BONUS_CARROCERIA_DESCAPOTABLE_SINGULAR = 4
+
+BONUS_CARROCERIA_COUPE_DEPORTIVO = 4
+BONUS_CARROCERIA_DESCAPOTABLE_DEPORTIVO = 3
+PENALTY_CARROCERIA_COMERCIAL_DEPORTIVO = -10
+PENALTY_CARROCERIA_FURGONETA_DEPORTIVO = -7
+PENALTY_CARROCERIA_SUV_DEPORTIVO = -5
+PENALTY_BEV_NO_DEPORTIVO_LIFESTYLE = -5
+
+# --- PENALIZACIONES PARA LA REGLA DE "MALETERO PERSONAL" ---
+PENALTY_MALETERO_INSUFICIENTE = -5
+PENALTY_COMERCIAL_USO_PERSONAL = -10
+
+
+# --- BONUS PARA EL PERFIL "COCHE DE CIUDAD" ---
+BONUS_COCHE_MUY_CORTO_CIUDAD = 5
+BONUS_COCHE_LIGERO_CIUDAD = 2
+
+# --- BONUS PARA EL PERFIL "COCHE DE CIUDAD 2" (CON ESCAPADAS) ---
+BONUS_COCHE_CORTO_CIUDAD_2 = 5
+BONUS_COCHE_LIGERO_CIUDAD_2 = 2
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- UMBRALES PARA ACTIVAR FLAGS EN PYTHON (`graph/perfil/nodes.py` - `finalizar_y_presentar_node`) ---
 
@@ -233,122 +285,122 @@ PENALTY_OCASION_KILOMETRAJE_EXTREMO = -25
 UMBRAL_RATING_IMPACTO_PARA_FAV_PESO_CONSUMO = 8
 UMBRAL_RATING_COSTES_USO_PARA_FAV_CONSUMO_COSTES = 7
 UMBRAL_RATING_COMODIDAD_PARA_FAVORECER = 8
-UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS = 8
-UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG = 8
+UMBRAL_COMODIDAD_PARA_PENALIZAR_FLAGS = 7
+UMBRAL_TECNOLOGIA_PARA_PENALIZAR_ANTIGUEDAD_FLAG = 7
 UMBRAL_IMPACTO_AMBIENTAL_PARA_LOGICA_DISTINTIVO_FLAG = 7
-UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA = 8
+UMBRAL_COMODIDAD_PARA_FAVORECER_CARROCERIA = 7
 
 # --------------------------------------- ## --------------------------------------- ## --------------------------------------
 # --- LÓGICA DE PESOS CRUDOS (`utils/weights.py`) ---
-PESO_CRUDO_BASE = 0.0
+# PESO_CRUDO_BASE = 0.0
 
-MIN_SINGLE_RAW_WEIGHT =1.0
-MAX_SINGLE_RAW_WEIGHT = 10.0
+# MIN_SINGLE_RAW_WEIGHT =1.0
+# MAX_SINGLE_RAW_WEIGHT = 10.0
 
-altura_map = {
-        "ninguna": 1.0,
-        "ocasional": 4.0,
-        "extrema": 10.0
-    }
-
-
-#Valores Pesos basado en 'priorizar_ancho' (priorizar_ancho de pasajeros Z>=2)
-
-PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL = 4.0
-PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
-
-# --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
-# Ajustes de pesos crudos aditivos por clima
-AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
+# altura_map = {
+#         "ninguna": 1.0,
+#         "ocasional": 4.0,
+#         "extrema": 10.0
+#     }
 
 
-# Valores de Pesos basados en altura_mayor_190 en Weights.py
+# #Valores Pesos basado en 'priorizar_ancho' (priorizar_ancho de pasajeros Z>=2)
 
-PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190 = 5.0
-PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190 = 8.0
+# PESO_CRUDO_FAV_ANCHO_PASAJEROS_OCASIONAL = 4.0
+# PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 8.0
 
-#Valores Pesos basado en prioriza_baja_depreciacion
-PESO_CRUDO_FAV_DEVALUACION = 10.0
-
-# Valores pesos de carga y espacio en weights.py
-
-PESO_CRUDO_FAV_MALETERO_MIN = 8.0
-PESO_CRUDO_FAV_MALETERO_MAX = 6.0
-PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_ANCHO = 5.0 
-PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_LARGO = 7.0
+# # --- LÓGICA PARA TRACCIÓN AWD BASADA EN CLIMA ---
+# # Ajustes de pesos crudos aditivos por clima
+# AJUSTE_CRUDO_SEGURIDAD_POR_NIEBLA = 2.0 # Cuánto sumar al peso crudo de seguridad si hay niebla
 
 
-# Valores de peso crudo a sumar si se cumplen umbrales de ratings en weights.py
+# # Valores de Pesos basados en altura_mayor_190 en Weights.py
 
-RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD = 6.0
-RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD = 4.0
+# PESO_CRUDO_FAV_BATALLA_ALTURA_MAYOR_190 = 5.0
+# PESO_CRUDO_FAV_IND_ALTURA_INT_ALTURA_MAYOR_190 = 8.0
 
+# #Valores Pesos basado en prioriza_baja_depreciacion
+# PESO_CRUDO_FAV_DEVALUACION = 10.0
 
-RAW_WEIGHT_ADICIONAL_FAV_BAJO_PESO_POR_IMPACTO = 10.0
-RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_IMPACTO = 7.0
-RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES = 5.0 
-RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO = 9.0
-RAW_WEIGHT_FAV_BAJO_COSTE_MANTENIMIENTO_DIRECTO = 7.0
+# # Valores pesos de carga y espacio en weights.py
 
-
-RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_USO_INTENSIVO = 5.0
-
-# --- Reglas para estetica_min, premium_min, singular_min postprocessing.py ---
-PESO_CRUDO_FAV_ESTETICA = 6.0
-
-PESO_CRUDO_FAV_PREMIUM_APASIONADO_MOTOR = 6.0
-PESO_CRUDO_FAV_SINGULAR_APASIONADO_MOTOR= 5.0
-PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO = 6.0
-
-# Pesos crudos para preferencias de garaje/aparcamiento
-PESO_CRUDO_FAV_MENOR_SUPERFICIE = 3.0 # fav_menor_superficie_planta
-PESO_CRUDO_FAV_MENOR_DIAMETRO_GIRO = 5.0 #fav_menor_diametro_giro
-PESO_CRUDO_FAV_MENOR_DIMENSION_GARAJE = 8.0 # Para largo, ancho, alto problemáticos
- # Peso si no es una preocupación explícita
-
-# Pesos crudos para Estilo de Conducción
-# Si estilo es DEPORTIVO
-RAW_PESO_DEPORTIVIDAD_ALTO = 4.0
-RAW_PESO_MENOR_REL_PESO_POTENCIA_ALTO = 10.0
-RAW_PESO_POTENCIA_MAXIMA_ALTO = 5.0
-RAW_PESO_PAR_MOTOR_DEPORTIVO_ALTO = 4.0
-RAW_PESO_MENOR_ACELERACION_ALTO = 6.0
-# Si estilo es MIXTO ()
-RAW_PESO_DEPORTIVIDAD_MEDIO = 2.0
-RAW_PESO_MENOR_REL_PESO_POTENCIA_MEDIO = 5.0
-RAW_PESO_POTENCIA_MAXIMA_MEDIO = 2.5
-RAW_PESO_PAR_MOTOR_DEPORTIVO_MEDIO = 2.0
-RAW_PESO_MENOR_ACELERACION_MEDIO = 3.0
-# Si estilo es TRANQUILO o no definido (base)
-
-RAW_PESO_DEPORTIVIDAD_BAJO = 1.0
-RAW_PESO_MENOR_REL_PESO_POTENCIA_BAJO = 1.0
-RAW_PESO_POTENCIA_MAXIMA_BAJO = 1.0
-RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO = 1.0
-RAW_PESO_MENOR_ACELERACION_BAJO = 1.0
-
-# Pesos crudos para arrastre de remolque si es 'sí' weights.py
-RAW_PESO_PAR_MOTOR_REMOLQUE = 6.0
-RAW_PESO_CAP_REMOLQUE_CF = 7.0
-RAW_PESO_CAP_REMOLQUE_SF = 3.0
-# Pesos crudos base para remolque si es 'no' o None
-
-#Peso crudo favorecer por conducir en ciudad
-PESO_CRUDO_FAV_DIAMETRO_GIRO_CONDUC_CIUDAD = 7.0
-
-# Pesos para nuevas características de carga y autonomía Si km/año > 60.000 
-WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM = 9.0
-WEIGHT_AUTONOMIA_2ND_DRIVE_MUY_ALTO_KM = 3.0
-WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM = 9.0  # Menor tiempo es mejor
-
-WEIGHT_POTENCIA_DC_MUY_ALTO_KM = 9.0
+# PESO_CRUDO_FAV_MALETERO_MIN = 8.0
+# PESO_CRUDO_FAV_MALETERO_MAX = 6.0
+# PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_ANCHO = 5.0 
+# PESO_CRUDO_FAV_MALETERO_ESP_OBJ_ESPECIALES_LARGO = 7.0
 
 
-PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 7.0
+# # Valores de peso crudo a sumar si se cumplen umbrales de ratings en weights.py
 
-# Bonus de peso crudo si el usuario tiene un alto rating de impacto ambiental
-RAW_WEIGHT_BONUS_FIABILIDAD_POR_IMPACTO = 2.0
-RAW_WEIGHT_BONUS_DURABILIDAD_POR_IMPACTO = 3.0
+# RAW_WEIGHT_ADICIONAL_FAV_IND_ALTURA_INT_POR_COMODIDAD = 6.0
+# RAW_WEIGHT_ADICIONAL_FAV_AUTONOMIA_VEHI_POR_COMODIDAD = 4.0
+
+
+# RAW_WEIGHT_ADICIONAL_FAV_BAJO_PESO_POR_IMPACTO = 10.0
+# RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_IMPACTO = 7.0
+# RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_COSTES = 5.0 
+# RAW_WEIGHT_FAV_BAJO_COSTE_USO_DIRECTO = 9.0
+# RAW_WEIGHT_FAV_BAJO_COSTE_MANTENIMIENTO_DIRECTO = 7.0
+
+
+# RAW_WEIGHT_ADICIONAL_FAV_BAJO_CONSUMO_POR_USO_INTENSIVO = 5.0
+
+# # --- Reglas para estetica_min, premium_min, singular_min postprocessing.py ---
+# PESO_CRUDO_FAV_ESTETICA = 6.0
+
+# PESO_CRUDO_FAV_PREMIUM_APASIONADO_MOTOR = 6.0
+# PESO_CRUDO_FAV_SINGULAR_APASIONADO_MOTOR= 5.0
+# PESO_CRUDO_FAV_SINGULAR_PREF_DISENO_EXCLUSIVO = 6.0
+
+# # Pesos crudos para preferencias de garaje/aparcamiento
+# PESO_CRUDO_FAV_MENOR_SUPERFICIE = 3.0 # fav_menor_superficie_planta
+# PESO_CRUDO_FAV_MENOR_DIAMETRO_GIRO = 5.0 #fav_menor_diametro_giro
+# PESO_CRUDO_FAV_MENOR_DIMENSION_GARAJE = 8.0 # Para largo, ancho, alto problemáticos
+#  # Peso si no es una preocupación explícita
+
+# # Pesos crudos para Estilo de Conducción
+# # Si estilo es DEPORTIVO
+# RAW_PESO_DEPORTIVIDAD_ALTO = 4.0
+# RAW_PESO_MENOR_REL_PESO_POTENCIA_ALTO = 10.0
+# RAW_PESO_POTENCIA_MAXIMA_ALTO = 5.0
+# RAW_PESO_PAR_MOTOR_DEPORTIVO_ALTO = 4.0
+# RAW_PESO_MENOR_ACELERACION_ALTO = 6.0
+# # Si estilo es MIXTO ()
+# RAW_PESO_DEPORTIVIDAD_MEDIO = 2.0
+# RAW_PESO_MENOR_REL_PESO_POTENCIA_MEDIO = 5.0
+# RAW_PESO_POTENCIA_MAXIMA_MEDIO = 2.5
+# RAW_PESO_PAR_MOTOR_DEPORTIVO_MEDIO = 2.0
+# RAW_PESO_MENOR_ACELERACION_MEDIO = 3.0
+# # Si estilo es TRANQUILO o no definido (base)
+
+# RAW_PESO_DEPORTIVIDAD_BAJO = 1.0
+# RAW_PESO_MENOR_REL_PESO_POTENCIA_BAJO = 1.0
+# RAW_PESO_POTENCIA_MAXIMA_BAJO = 1.0
+# RAW_PESO_PAR_MOTOR_DEPORTIVO_BAJO = 1.0
+# RAW_PESO_MENOR_ACELERACION_BAJO = 1.0
+
+# # Pesos crudos para arrastre de remolque si es 'sí' weights.py
+# RAW_PESO_PAR_MOTOR_REMOLQUE = 6.0
+# RAW_PESO_CAP_REMOLQUE_CF = 7.0
+# RAW_PESO_CAP_REMOLQUE_SF = 3.0
+# # Pesos crudos base para remolque si es 'no' o None
+
+# #Peso crudo favorecer por conducir en ciudad
+# PESO_CRUDO_FAV_DIAMETRO_GIRO_CONDUC_CIUDAD = 7.0
+
+# # Pesos para nuevas características de carga y autonomía Si km/año > 60.000 
+# WEIGHT_AUTONOMIA_PRINCIPAL_MUY_ALTO_KM = 9.0
+# WEIGHT_AUTONOMIA_2ND_DRIVE_MUY_ALTO_KM = 3.0
+# WEIGHT_TIEMPO_CARGA_MIN_MUY_ALTO_KM = 9.0  # Menor tiempo es mejor
+
+# WEIGHT_POTENCIA_DC_MUY_ALTO_KM = 9.0
+
+
+# PESO_CRUDO_FAV_ANCHO_PASAJEROS_FRECUENTE = 7.0
+
+# # Bonus de peso crudo si el usuario tiene un alto rating de impacto ambiental
+# RAW_WEIGHT_BONUS_FIABILIDAD_POR_IMPACTO = 2.0
+# RAW_WEIGHT_BONUS_DURABILIDAD_POR_IMPACTO = 3.0
 
 # filtro de la cuota máxima en la funcion de busqueda en BigQuery bigquery_tools.py
 FACTOR_CONVERSION_PRECIO_CUOTA = 1.35 / 96

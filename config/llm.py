@@ -1,6 +1,6 @@
 # instanciación del modelo, init_chat_model, y configuración de structured_llm.
 from langchain.chat_models import init_chat_model
-from graph.perfil.state import ResultadoSoloPerfil, ResultadoSoloFiltros, ResultadoEconomia, ResultadoPasajeros, ResultadoCP# Ajusta la ruta de importación
+from graph.perfil.state import PerfilUsuario, ResultadoSoloFiltros, EconomiaUsuario, CodigoPostalExtraido, InfoPasajeros# Ajusta la ruta de importación
 from dotenv import load_dotenv
 import logging
 
@@ -47,7 +47,7 @@ load_dotenv()
 
 MODEL_NAME_OPENAI = "gpt-4o-mini" # O el modelo OpenAI que prefieras
 MODEL_NAME_OPENAI_2 = "gpt-3.5-turbo" # mas barato
-TEMPERATURE_AGENT = 0.3 # Puedes ajustar la temperatura
+TEMPERATURE_AGENT = 0.2 # Puedes ajustar la temperatura
 TEMPERATURE_AGENT_2 = 0.4
 
 
@@ -87,19 +87,19 @@ except Exception as e:
 # --- LLMs Estructurados (manteniendo method="function_calling") ---
 if llm and llm_potente and llm_res:
     llm_cp_extractor = llm.with_structured_output(
-        ResultadoCP, method="function_calling"
+        CodigoPostalExtraido, method="function_calling"
     )
     llm_solo_perfil = llm.with_structured_output(
-        ResultadoSoloPerfil, method="function_calling"
+        PerfilUsuario, method="function_calling"
     )
     llm_pasajeros = llm.with_structured_output(
-        ResultadoPasajeros, method="function_calling"
+        InfoPasajeros, method="function_calling"
     )
     llm_solo_filtros = llm.with_structured_output(
         ResultadoSoloFiltros, method="function_calling"
     )
     llm_economia = llm_potente.with_structured_output(
-        ResultadoEconomia, method="function_calling"
+        EconomiaUsuario, method="function_calling"
     )
     # LLM para explicaciones
     llm_explicacion_coche = llm_res 
@@ -114,8 +114,5 @@ else:
     llm_solo_filtros = None
     llm_economia = None
     llm_explicacion_coche = None
-
-
-
 
 
