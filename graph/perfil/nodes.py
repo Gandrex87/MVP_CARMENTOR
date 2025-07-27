@@ -1,9 +1,9 @@
 from utils.explanation_generator import generar_explicacion_coche_mejorada # <-- NUEVO IMPORT
-from langchain_core.messages import AIMessage , SystemMessage
+from langchain_core.messages import AIMessage , SystemMessage, HumanMessage
 from pydantic import ValidationError # Importar para manejo de errores si es necesario
 from .state import (EstadoAnalisisPerfil, 
-                    PerfilUsuario, ResultadoSoloPerfil , 
-                    FiltrosInferidos, ResultadoSoloFiltros,
+                    PerfilUsuario, 
+                    FiltrosInferidos,
                     EconomiaUsuario,
                     InfoPasajeros, CodigoPostalExtraido,
                     InfoClimaUsuario, NivelAventura , FrecuenciaUso, DistanciaTrayecto, FrecuenciaViajesLargos
@@ -201,110 +201,123 @@ def buscar_info_clima_node(state: EstadoAnalisisPerfil) -> dict:
 
 # --- Etapa 1: Recopilación de Preferencias del Usuario ---
 
+# def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
+#     """
+#     Procesa la entrada del usuario, llama al LLM para extraer nueva información,
+#     y FUSIONA esa nueva información con el perfil existente.
+#     --- VERSIÓN FINAL COMPLETAMENTE REFACTORIZADA ---
+#     """
+#     logging.info("--- Ejecutando Nodo (Final): recopilar_preferencias_node ---")
+    
+#     historial = state.get("messages", [])
+#     preferencias_actuales_obj = state.get("preferencias_usuario") or PerfilUsuario()
+
+#     # Si el último mensaje es de la IA, no hay nueva entrada de usuario que procesar.
+#     if not historial or isinstance(historial[-1], AIMessage):
+#         logging.debug("(Perfil) ► No hay nuevo mensaje de usuario para procesar.")
+#         return {} # No hay cambios en el estado
+
+#     logging.debug("(Perfil) ► Llamando a llm_solo_perfil...")
+    
+#     perfil_final_a_guardar = preferencias_actuales_obj # Por defecto, mantenemos el perfil actual
+
+#     try:
+#         # La variable 'response' ahora es de tipo PerfilUsuario directamente.
+#         response: PerfilUsuario = llm_solo_perfil.invoke(
+#             [SystemMessage(content=system_prompt_perfil), *historial],
+#             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
+#         )
+        
+#         # 'response' es ahora el objeto PerfilUsuario que necesitamos.
+#         preferencias_del_llm = response
+        
+#         # --- Lógica de Fusión Inteligente ---
+#         if preferencias_del_llm:
+#             nuevos_datos = preferencias_del_llm.model_dump(exclude_unset=True)
+            
+#             if nuevos_datos:
+#                 logging.info(f"DEBUG (Perfil) ► Fusionando nuevos datos del LLM: {nuevos_datos}")
+#                 perfil_consolidado = preferencias_actuales_obj.model_copy(update=nuevos_datos)
+#             else:
+#                 logging.info("DEBUG (Perfil) ► El LLM no extrajo nuevos datos.")
+#                 perfil_consolidado = preferencias_actuales_obj
+            
+#             # Asumiendo que tienes una función de post-procesamiento
+#             perfil_final_a_guardar = aplicar_postprocesamiento_perfil(perfil_consolidado)
+#         else:
+#             logging.warning("WARN (Perfil) ► El LLM no devolvió un objeto de preferencias.")
+#             perfil_final_a_guardar = preferencias_actuales_obj
+
+#     except ValidationError as e_val:
+#         logging.error(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val.errors()}")
+#         # En caso de error de formato, no actualizamos el perfil para no corromperlo.
+#         perfil_final_a_guardar = preferencias_actuales_obj 
+
+#     except Exception as e_general:
+#         logging.error(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil o en post-procesamiento: {e_general}", exc_info=True)
+#         perfil_final_a_guardar = preferencias_actuales_obj
+
+#     # Este nodo solo actualiza el perfil. No devuelve mensajes.
+#     return {
+#         "preferencias_usuario": perfil_final_a_guardar,
+#     }
+
 def recopilar_preferencias_node(state: EstadoAnalisisPerfil) -> dict:
     """
     Procesa la entrada del usuario, llama al LLM para extraer nueva información,
-    y FUSIONA esa nueva información con el perfil existente para evitar la pérdida de estado.
+    y FUSIONA esa nueva información con el perfil existente.
+    --- VERSIÓN CORREGIDA PARA EVITAR ALUCINACIONES ---
     """
-    logging.info("--- Ejecutando Nodo: recopilar_preferencias_node ---")
+    logging.info("--- Ejecutando Nodo (Final): recopilar_preferencias_node ---")
     
     historial = state.get("messages", [])
-    # Obtenemos el perfil completo que ya tenemos guardado.
     preferencias_actuales_obj = state.get("preferencias_usuario") or PerfilUsuario()
 
-    if historial and isinstance(historial[-1], AIMessage):
-        logging.debug("(Perfil) ► Último mensaje es AIMessage, omitiendo llamada a llm_solo_perfil.")
-        return {"pregunta_pendiente": state.get("pregunta_pendiente")}
+    # Si el último mensaje no es del usuario, no hay nueva entrada que procesar.
+    if not historial or not isinstance(historial[-1], HumanMessage):
+        logging.debug("(Perfil) ► No hay nuevo mensaje de usuario para procesar.")
+        return {} 
 
-    logging.debug("(Perfil) ► Llamando a llm_solo_perfil...")
+    logging.debug("(Perfil) ► Llamando a llm_solo_perfil con contexto limitado...")
     
-    perfil_final_a_guardar = preferencias_actuales_obj
-    mensaje_para_siguiente_nodo = "Lo siento, tuve un problema técnico."
+    # --- ✅ CAMBIO CLAVE: ACORTAR EL CONTEXTO ---
+    # En lugar de pasar todo el historial, pasamos solo la última pregunta del agente
+    # y la última respuesta del usuario. Esto enfoca al LLM en la tarea inmediata.
+    contexto_relevante = historial[-2:]
+
+    perfil_final_a_guardar = preferencias_actuales_obj 
 
     try:
-        response: ResultadoSoloPerfil = llm_solo_perfil.invoke(
-            [system_prompt_perfil, *historial],
+        response: PerfilUsuario = llm_solo_perfil.invoke(
+            # Usamos el contexto acotado en lugar de todo el historial
+            [SystemMessage(content=system_prompt_perfil), *contexto_relevante], 
             config={"configurable": {"tags": ["llm_solo_perfil"]}} 
         )
         
-        preferencias_del_llm = response.preferencias_usuario
-        mensaje_para_siguiente_nodo = response.contenido_mensaje
-
-        # --- ✅ INICIO DE LA LÓGICA DE FUSIÓN INTELIGENTE ---
+        preferencias_del_llm = response
+        
         if preferencias_del_llm:
-            # 1. Creamos una copia del perfil actual para trabajar sobre ella.
-            perfil_actualizado = preferencias_actuales_obj.model_copy(deep=True)
-
-            # 2. Convertimos la respuesta del LLM en un diccionario, pero SOLO
-            #    con los campos que el LLM realmente ha rellenado (excluye los None o no establecidos).
-            #    exclude_unset=True es crucial aquí.
             nuevos_datos = preferencias_del_llm.model_dump(exclude_unset=True)
             
             if nuevos_datos:
                 logging.info(f"DEBUG (Perfil) ► Fusionando nuevos datos del LLM: {nuevos_datos}")
-                # 3. Usamos .model_copy(update=...) para fusionar los nuevos datos en el perfil existente.
-                #    Esto actualiza los campos nuevos sin borrar los antiguos.
-                perfil_consolidado = perfil_actualizado.model_copy(update=nuevos_datos)
+                perfil_consolidado = preferencias_actuales_obj.model_copy(update=nuevos_datos)
             else:
-                # Si el LLM se ejecutó pero no extrajo datos (ej. por un meta-comentario),
-                # mantenemos el perfil tal como estaba.
-                logging.info("DEBUG (Perfil) ► El LLM no extrajo nuevos datos, se mantiene el perfil actual.")
-                perfil_consolidado = perfil_actualizado
+                logging.info("DEBUG (Perfil) ► El LLM no extrajo nuevos datos.")
+                perfil_consolidado = preferencias_actuales_obj
             
-            # 4. Aplicamos el post-procesamiento sobre el perfil ya fusionado y completo.
             perfil_final_a_guardar = aplicar_postprocesamiento_perfil(perfil_consolidado)
         else:
-            logging.warning("WARN (Perfil) ► El LLM no devolvió un objeto de preferencias. Se mantiene el perfil actual.")
-            perfil_final_a_guardar = preferencias_actuales_obj
-        # --- FIN DE LA LÓGICA DE FUSIÓN ---
-    except ValidationError as e_val:
-        logging.error(f"ERROR (Perfil) ► Error de Validación Pydantic en llm_solo_perfil: {e_val.errors()}")
-        
-        custom_error_message = None
-        campo_rating_erroneo_para_reset = None
-        preferencias_para_reset = preferencias_actuales_obj.model_copy(deep=True)
-
-        for error in e_val.errors():
-            loc = error.get('loc', ())
-            if len(loc) > 1 and str(loc[0]) == 'preferencias_usuario' and str(loc[1]).startswith('rating_'):
-                campo_rating = str(loc[1])
-                tipo_error_pydantic = error.get('type')
-                valor_input = error.get('input')
-
-                if tipo_error_pydantic in ['less_than_equal', 'greater_than_equal', 'less_than', 'greater_than', 'finite_number', 'int_parsing']:
-                    nombre_amigable = MAPA_RATING_A_PREGUNTA_AMIGABLE.get(campo_rating, f"el campo '{campo_rating}'")
-                    custom_error_message = (
-                        f"Para {nombre_amigable}, necesito una puntuación entre 0 y 10. "
-                        f"Parece que ingresaste '{valor_input}'. ¿Podrías darme un valor en la escala de 0 a 10, por favor?"
-                    )
-                    campo_rating_erroneo_para_reset = campo_rating
-                    break 
-        
-        if custom_error_message:
-            mensaje_para_siguiente_nodo = custom_error_message
-            if campo_rating_erroneo_para_reset and hasattr(preferencias_para_reset, campo_rating_erroneo_para_reset):
-                setattr(preferencias_para_reset, campo_rating_erroneo_para_reset, None)
-            perfil_final_a_guardar = preferencias_para_reset
-        else:
-            error_msg_detalle = e_val.errors()[0]['msg'] if e_val.errors() else 'Error desconocido'
-            mensaje_para_siguiente_nodo = f"Hubo un problema al entender tus preferencias (formato inválido). ¿Podrías reformular? Detalle: {error_msg_detalle}"
+            logging.warning("WARN (Perfil) ► El LLM no devolvió un objeto de preferencias.")
             perfil_final_a_guardar = preferencias_actuales_obj
 
-    except Exception as e_general:
-        logging.error(f"ERROR (Perfil) ► Fallo general al invocar llm_solo_perfil o en post-procesamiento: {e_general}", exc_info=True)
-        mensaje_para_siguiente_nodo = "Lo siento, tuve un problema técnico. ¿Podríamos intentarlo de nuevo?"
+    except Exception as e:
+        logging.error(f"ERROR (Perfil) ► Fallo en la invocación del LLM o fusión: {e}", exc_info=True)
         perfil_final_a_guardar = preferencias_actuales_obj
 
-    logging.debug(f"DEBUG (Perfil) ► Estado final de 'preferencias_usuario' a guardar: {perfil_final_a_guardar.model_dump_json(indent=2) if perfil_final_a_guardar else 'None'}")
-    logging.debug(f"DEBUG (Perfil) ► Guardando 'pregunta_pendiente': {mensaje_para_siguiente_nodo}")
-        
     return {
         "preferencias_usuario": perfil_final_a_guardar,
-        "pregunta_pendiente": mensaje_para_siguiente_nodo
     }
-
-
-
 
 def _obtener_siguiente_pregunta_perfil(prefs: Optional[PerfilUsuario]) -> str:
     """
@@ -548,7 +561,7 @@ def _obtener_siguiente_pregunta_pasajeros(info: Optional[InfoPasajeros]) -> str:
     primer campo que falta en el objeto InfoPasajeros.
     """
     if not info or info.suele_llevar_acompanantes is None:
-        return "¿Sueles viajar con acompañantes en el coche habitualmente?\n\n* ✅ Sí\n* ❌ No"
+        return "¿Vas a llevar acompañantes en el coche?\n\n* ✅ Sí\n* ❌ No"
 
     # Si el usuario SÍ lleva acompañantes, continuamos con las sub-preguntas.
     if info.suele_llevar_acompanantes is True:
@@ -729,6 +742,7 @@ def _obtener_siguiente_pregunta_economia(econ: Optional[EconomiaUsuario]) -> str
     """
     Genera la siguiente pregunta económica de forma determinista basándose
     en el primer campo que falta.
+    --- VERSIÓN FINAL CORREGIDA CON PREGUNTAS DE SEGUIMIENTO ---
     """
     if not econ or econ.presupuesto_definido is None:
         return (
@@ -742,32 +756,28 @@ def _obtener_siguiente_pregunta_economia(econ: Optional[EconomiaUsuario]) -> str
             return "¿Cuáles son tus ingresos netos anuales aproximados? Este dato es clave para darte una recomendación financiera sólida."
         if econ.ahorro is None:
             return "Gracias. Ahora, ¿de cuántos ahorros dispones para la compra del vehículo?"
-        # if econ.anos_posesion is None:
-        #     return "Perfecto. Por último, ¿durante cuántos años aproximadamente planeas conservar el coche?"
     
     elif econ.presupuesto_definido is True: # Rama "Usuario Define"
-        # 1. Si aún no ha elegido entre contado o financiado, se le pregunta.
         if econ.tipo_presupuesto is None:
+            
+            # ▼▼▼ PREGUNTA REFORMULADA Y ÚNICA ▼▼▼
             return (
-                "De acuerdo, tú defines el presupuesto. ¿Qué opción prefieres?\n\n"
-                "* 1️⃣ Indicar un presupuesto máximo para pagar al contado.\n"
-                "* 2️⃣ Indicar una cuota mensual máxima para financiarlo."
+                "Perfecto. Al indicar tú el presupuesto, ¿qué modalidad prefieres?\n\n"
+                "* 1️⃣ Un pago único al contado.\n"
+                "* 2️⃣ Una cuota mensual de financiación."
             )
         
-        # 2. Si eligió "contado", pero no ha dado la cifra.
-        if econ.tipo_presupuesto == "contado":
-            if econ.pago_contado is None:
-                return "¿Cuál es el presupuesto que destinarías para comprar el coche al contado?"
+        # 2. Si eligió "contado", pero no ha dado la cifra, se le pregunta.
+        if econ.tipo_presupuesto == "contado" and econ.pago_contado is None:
+            return "¿Cuál es tu presupuesto? Puedes indicarme un pago máximo al contado."
 
-        # 3. Si eligió "financiado", se piden los detalles.
-        if econ.tipo_presupuesto == "financiado":
-            if econ.cuota_max is None:
-                return "¿Cuál sería la cuota mensual máxima que quieres destinar para financiarlo?"
-            # if econ.anos_posesion is None:
-            #     return "Entendido. ¿Y durante cuántos años aproximadamente planeas financiar el vehículo?"
+        # 3. Si eligió "financiado", pero no ha dado la cifra, se le pregunta.
+        if econ.tipo_presupuesto == "financiado" and econ.cuota_max is None:
+            return "Indícame la cuota máxima que estás dispuesto a pagar por el coche."
 
     # Si se llega aquí, la etapa está completa. Devolvemos una confirmación.
     return "¡Entendido! Ya tengo toda la información económica que necesito."
+
 
 
 def preguntar_economia_node(state: EstadoAnalisisPerfil) -> dict:
@@ -792,47 +802,80 @@ def preguntar_economia_node(state: EstadoAnalisisPerfil) -> dict:
     return {"messages": historial_nuevo}
 
 
-
 def recopilar_economia_node(state: EstadoAnalisisPerfil) -> dict:
     """
-    Invoca al LLM con la única tarea de extraer los datos económicos
-    del mensaje del usuario.
+    Primero intenta manejar respuestas numéricas simples de forma determinista.
+    Si la respuesta es compleja, delega la extracción al LLM.
+    --- VERSIÓN FINAL REFORZADA Y DETERMINISTA ---
     """
-    logging.info("--- Ejecutando Nodo (Refactorizado): recopilar_economia_node ---")
-    
+    logging.info("--- Ejecutando Nodo (Reforzado): recopilar_economia_node ---")
+
     historial = state.get("messages", [])
     economia_actual = state.get("economia") or EconomiaUsuario()
 
-    if not historial or isinstance(historial[-1], AIMessage):
-        logging.debug("DEBUG (Economía) ► No hay nuevo mensaje de usuario para procesar.")
+    if not historial or not isinstance(historial[-1], HumanMessage):
         return {}
 
+    # Extraemos la última pregunta y respuesta para analizarlas
+    last_ai_message = historial[-2].content if len(historial) > 1 else ""
+    last_human_message = historial[-1].content.strip().lower()
+
+    # --- ✅ MANEJO DETERMINISTA DE RESPUESTAS NUMÉRICAS ---
+    # Interceptamos respuestas simples ("1", "2", etc.) antes de llamar al LLM.
+    
+    update_data = None
+    
+    # Caso 1: El usuario elige entre "Asesoramiento" o "Presupuesto Propio"
+    # Caso 1: Busca la frase clave de la primera pregunta.
+    if "para definir tu presupuesto" in last_ai_message.lower():
+        if last_human_message in ["1", "la 1", "1️⃣"]:
+            update_data = {"presupuesto_definido": False}
+        elif last_human_message in ["2", "la 2", "2️⃣"]:
+            update_data = {"presupuesto_definido": True}
+
+    # Caso 2: Busca la frase clave de la segunda pregunta (la reformulada).
+    elif "¿qué modalidad prefieres?" in last_ai_message.lower():
+        if last_human_message in ["1", "la 1", "1️⃣"]:
+            update_data = {"tipo_presupuesto": "contado"}
+        elif last_human_message in ["2", "la 2", "2️⃣"]:
+            update_data = {"tipo_presupuesto": "financiado"}
+
+
+    # Si hemos encontrado una correspondencia determinista, la aplicamos y terminamos.
+    if update_data:
+        logging.info(f"DEBUG (Economía) ► Aplicando actualización determinista: {update_data}")
+        economia_final = economia_actual.model_copy(update=update_data)
+        return {"economia": economia_final}
+    
+    # --- SI LA RESPUESTA NO ERA SIMPLE, PROCEDEMOS CON EL LLM ---
+    logging.debug("DEBUG (Economía) ► La respuesta no es simple, delegando al LLM...")
+    
+    # Usamos el contexto limitado que ya habiamos implementado
+    contexto_relevante = historial[-2:]
+    
     try:
-        # Construimos la lista de mensajes manualmente para un control total.
-        mensajes_para_llm = [SystemMessage(content=prompt_economia_structured_sys_msg), *historial]
-        
-        # Invocamos al LLM estructurado.
+        mensajes_para_llm = [SystemMessage(content=prompt_economia_structured_sys_msg), *contexto_relevante]
         response: EconomiaUsuario = llm_economia.invoke(
-            mensajes_para_llm,
-            config={"configurable": {"tags": ["llm_economia"]}}
+            mensajes_para_llm, config={"configurable": {"tags": ["llm_economia"]}}
         )
         
-        # --- Lógica de Fusión Inteligente ---
+        # ... (el resto de la lógica de fusión y normalización que ya teníamos)
+        if response and response.tipo_presupuesto:
+            response.tipo_presupuesto = response.tipo_presupuesto.lower()
+            
         nuevos_datos = response.model_dump(exclude_unset=True)
-        
         if nuevos_datos:
             logging.info(f"DEBUG (Economía) ► Fusionando nuevos datos del LLM: {nuevos_datos}")
             economia_final = economia_actual.model_copy(update=nuevos_datos)
         else:
-            logging.info("DEBUG (Economía) ► El LLM no extrajo nuevos datos.")
             economia_final = economia_actual
-        
+            
         return {"economia": economia_final}
 
-    except (ValidationError, Exception) as e:
+    except Exception as e:
         logging.error(f"ERROR (Economía) ► Fallo en la extracción de datos económicos: {e}", exc_info=True)
-        # En caso de error, no modificamos el estado para no corromperlo.
         return {}
+
 
 # --- Fin Etapa 3 ---
 
@@ -1555,7 +1598,9 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     con el resumen de criterios y los resultados de los coches.
     """
     logging.info("--- Ejecutando Nodo: buscar_coches_finales_node ---") 
-    k_coches = 5
+    k_coches =  12
+    # Obtenemos el offset actual del estado, si no existe, empezamos en 0.
+    offset = state.get("offset_busqueda", 0)
     historial = state.get("messages", [])
     tabla_resumen_criterios_md = state.get("tabla_resumen_criterios", "No se pudo generar el resumen de criterios.")
     #preferencias_obj = state.get("preferencias_usuario") # Objeto PerfilUsuario
@@ -1570,7 +1615,6 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     flag_es_zbe_val = state.get("es_municipio_zbe", False)
     flag_desfav_car_no_aventura_val = state.get("desfavorecer_carroceria_no_aventura", False)
     flag_aplicar_logica_objetos_especiales= state.get("aplicar_logica_objetos_especiales")
-    # Flags de aventura y penalización de mecánica
     flag_pen_bev_reev_avent_ocas = state.get("penalizar_bev_reev_aventura_ocasional", False)
     flag_pen_phev_avent_ocas= state.get("penalizar_phev_aventura_ocasional", False)
     flag_pen_electrif_avent_extr = state.get("penalizar_electrificados_aventura_extrema", False)
@@ -1662,7 +1706,6 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
             logging.debug(f"DEBUG (Buscar BQ) ► Pesos para BQ: {pesos_finales}") 
             
 
-            k_coches = 5 # O el valor que desees
             resultados_tupla = buscar_coches_bq(
                 filtros=filtros_para_bq, 
                 pesos=pesos_finales, 

@@ -1,19 +1,18 @@
-
 <Instrucciones>
 Tu única tarea es analizar el último mensaje del usuario y extraer cualquier información que corresponda a los campos del modelo de datos `EconomiaUsuario`, siguiendo estas reglas:
 
-- **Interpretación de la Elección Inicial (MUY IMPORTANTE):**
+- **Interpretación de la Elección Inicial (Asesoramiento vs. Presupuesto Propio):**
   - La primera pregunta que hace el agente es: "1. Aconsejarme, 2. Indicar yo mismo".
-  - Si el usuario responde **"1"**, **"la 1"**, **"la primera"**, o dice que quiere **"asesoramiento"**, DEBES establecer el campo `presupuesto_definido` a `False`.
-  - Si el usuario responde **"2"**, **"la 2"**, **"la segunda"**, o dice que quiere **"indicar él mismo"** su presupuesto, DEBES establecer el campo `presupuesto_definido` a `True`.
+  - Si el usuario responde **"1"**, **"la 1"**, o dice que quiere **"asesoramiento"**, o similares, DEBES establecer el campo `presupuesto_definido` a `False`.
+  - Si el usuario responde **"2"**, **"la 2"**, o dice que quiere **"indicar él mismo"** su presupuesto, DEBES establecer el campo `presupuesto_definido` a `True`.
 
-- **Interpretación de la Elección Secundaria (Contado vs. Financiado):**
+- **Interpretación de la Elección Secundaria (Contado vs. Financiado) (MUY IMPORTANTE):**
   - La siguiente pregunta puede ser: "1. Pagar al contado, 2. Financiar".
-  - Si el usuario responde **"1"**, **"contado"**, o similar, DEBES establecer el campo `tipo_presupuesto` a `"contado"`.
-  - Si el usuario responde **"2"**, **"financiar"**, o similar, DEBES establecer el campo `tipo_presupuesto` a `"financiado"`.
+  - Si el usuario responde **"1"**, **"la 1"**, **"contado"**, o similar, DEBES establecer el campo `tipo_presupuesto` a `"contado"`.
+  - Si el usuario responde **"2"**, **"la 2"**, **"financiar"**, o similar, DEBES establecer el campo `tipo_presupuesto` a `"financiado"`.
 
 - **Extracción de Números:**
-  - Extrae cualquier valor numérico que el usuario proporcione para los campos: `ingresos`, `ahorro`, `anos_posesion`, `pago_contado`, `cuota_max`, `entrada`.
+  - Extrae cualquier valor numérico que el usuario proporcione para los campos: `ingresos`, `ahorro`, `pago_contado`, `cuota_max`, `entrada`.
   - Interpreta el lenguaje natural (ej: "45 mil euros" -> 45000).
 
 - **Reglas Estrictas:**
@@ -30,9 +29,9 @@ Extracción Esperada: {"presupuesto_definido": false}
 Historial: [AIMessage(content='Para definir tu presupuesto, ¿qué prefieres?...'), HumanMessage(content='la segunda opción')]
 Extracción Esperada: {"presupuesto_definido": true}
 
-# Ejemplo 3: Usuario elige financiar
-Historial: [AIMessage(content='¿Qué opción prefieres? 1. Contado 2. Financiar'), HumanMessage(content='2')]
-Extracción Esperada: {"tipo_presupuesto": "financiado"}
+# Ejemplo 3: Usuario elige pagar al contado (¡EL CASO IMPORTANTE!)
+Historial: [AIMessage(content='¿Qué opción prefieres? 1. Contado 2. Financiar'), HumanMessage(content='la 1')]
+Extracción Esperada: {"tipo_presupuesto": "contado"}
 
 # Ejemplo 4: Usuario da sus ingresos
 Historial: [AIMessage(content='¿Cuáles son tus ingresos anuales?'), HumanMessage(content='Gano unos 45000 euros al año.')]

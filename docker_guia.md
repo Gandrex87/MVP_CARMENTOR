@@ -475,7 +475,8 @@ Este es el único comando que necesitas ejecutar ahora. Reemplaza [TU_ID_DE_PROY
   ``` 
 
 - Ejecutar comando para crear nueva imagen y hacer push al GCP
-  
+
+tres pasos (build, tag, push)
 ``` bash
 docker buildx build --platform linux/amd64 \
   -t europe-west1-docker.pkg.dev/thecarmentor-mvp2/carblau-repo/carblau-agent-api:v1 \

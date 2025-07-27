@@ -96,10 +96,8 @@ QUESTION_BANK: Dict[str, List[str]] = {
         "¿Tu uso principal del coche es en ciudad?\n* ✅ Sí\n* ❌ No"
     ],
     "uso_profesional": [
-        "¿El coche lo destinaras principalmente para uso personal o más para fines profesionales (trabajo)?",
-        "¿El uso principal del coche será para tu vida personal o para el trabajo?",
-        "¿El uso habitual será más personal o profesional?",
-        "¿Lo emplearás principalmente como coche de uso particular o como herramienta de trabajo?"
+        "¿El coche lo destinaras principalmente para fines profesionales (trabajo)?\n* ✅ Sí\n* ❌ No",
+        "¿Lo emplearás principalmente como herramienta de trabajo?\n* ✅ Sí\n* ❌ No"
     ],
     "tipo_uso_profesional": [
         "¿Y ese uso profesional será principalmente para llevar pasajeros, transportar carga o un uso mixto?",
@@ -110,7 +108,7 @@ QUESTION_BANK: Dict[str, List[str]] = {
 	    "¿Lo necesitas como transporte para pasajeros, para carga, o para ambas funciones?"
     ],
     "prefiere_diseno_exclusivo":[
-        "¿Prefieres conducir algo que marque la diferencia o que se integre sin llamar la atención?",
+        "¿Prefieres conducir algo que marque la diferencia?\n* ✅ Sí\n* ❌ No",
         "Al conducir, ¿te gusta diferenciarte del resto o prefieres la discreción y pasar más desapercibido?",
         "¿Te gusta que tu coche llame la atención o prefieres algo más discreto?",
     	"¿Eres de los que conducen para diferenciarse o prefieres no destacar demasiado?",
@@ -188,7 +186,7 @@ QUESTION_BANK: Dict[str, List[str]] = {
         "¿El espacio donde aparcas permite maniobrar fácilmente con cualquier coche?\n* ✅ Sí\n* ❌ No"
     ],
      "problema_dimension_garage":[
-         "Comprendo que el espacio es ajustado. ¿Cuál es la principal limitación de dimensión?\n ↔️ Ancho\n ↕️ Alto\n ⬅️➡️ Largo",
+         "Comprendo que el espacio es ajustado. ¿Cuáles son las principales limitaciones de dimensión?\n ↔️ Ancho\n ↕️ Alto\n ⬅️➡️ Largo",
          "¿Qué es lo que más limita el tipo de coche que puedes aparcar ahí?\n ↔️ Ancho\n ↕️ Alto\n ⬅️➡️ Largo"  
     ],
      "problemas_aparcar_calle":[

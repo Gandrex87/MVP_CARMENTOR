@@ -4,7 +4,7 @@ from langchain_core.messages import HumanMessage, BaseMessage,AIMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, model_validator
 from utils.enums import Transmision, TipoMecanica, NivelAventura, TipoUsoProfesional, DimensionProblematica, EstiloConduccion,FrecuenciaUso , DistanciaTrayecto, FrecuenciaViajesLargos
-from typing import Literal, Optional
+from typing import Optional, List, Dict, Any , Literal
 
 
 # 🧠 Modelos de Datos (InfoClimaUsuario, PerfilUsuario, FiltrosInferidos, EconomiaUsuario): Estos modelos definen la información que quieres recopilar.
@@ -142,6 +142,7 @@ class EconomiaUsuario(BaseModel):
         default=None, 
         description="Ahorros mensuales del usuario."
     )
+    tipo_presupuesto: Optional[Literal["contado", "financiado"]] = None
     # anos_posesion: Optional[int] = Field(
     #     default=None, 
     #     description="Número estimado de años que el usuario planea conservar el vehículo."
@@ -261,7 +262,9 @@ class EstadoAnalisisPerfil(TypedDict):
     flag_coche_ciudad_perfil: Optional[bool]
     flag_coche_ciudad_2_perfil: Optional[bool]
     km_anuales_estimados: Optional[int]
-    tabla_resumen_criterios: Optional[str] # Para la tabla MD de finalizar_y_presentar
+    tabla_resumen_criterios: Optional[str]
+    # offset_busqueda: int # Para la paginación de resultados
+    # ultima_busqueda_realizada: Optional[Dict[str, Any]]
 
 
 

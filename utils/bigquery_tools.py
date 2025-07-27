@@ -417,8 +417,8 @@ def buscar_coches_bq(
             (CASE WHEN COALESCE(potencia_maxima_carga_DC, 0) = 0 THEN 0.0 ELSE COALESCE(SAFE_DIVIDE(potencia_maxima_carga_DC - {min_pot_dc}, NULLIF({max_pot_dc} - {min_pot_dc}, 0)), 0) END) AS potencia_maxima_carga_DC_scaled,
             
         FROM
-            --`thecarmentor-mvp2.web_cars.match_coches_pruebas_10`
-            `thecarmentor-mvp2.web_cars.match_coches_pruebas`
+            `thecarmentor-mvp2.web_cars.coches_prueba_2`
+            --`thecarmentor-mvp2.web_cars.match_coches_pruebas`
     ),      
     -- ESTE ES EL CTE CLAVE CON TODOS LOS DESGLOSES
     DebugScores AS (

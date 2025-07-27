@@ -5,7 +5,8 @@ from graph.perfil.state import PerfilUsuario, EconomiaUsuario, InfoPasajeros,Dis
 from utils.conversion import is_yes
 import logging
 logger = logging.getLogger(__name__)
-
+#from graph.perfil.nodes import _obtener_siguiente_pregunta_perfil
+from utils.question_bank import QUESTION_BANK
 
 
 
@@ -59,27 +60,56 @@ def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
     # Si todas las comprobaciones pasan, el perfil está completo
     return True
 
+# def check_perfil_usuario_completeness(prefs: Optional[PerfilUsuario]) -> bool:
+#     """
+#     Verifica si el PerfilUsuario está completo utilizando la función que genera
+#     las preguntas como ÚNICA FUENTE DE VERDAD.
+#     --- VERSIÓN REFACTORIZADA Y ROBUSTA ---
+#     """
+#     if prefs is None:
+#         return False
 
+#     # Obtenemos la siguiente pregunta que el agente haría.
+#     siguiente_pregunta = _obtener_siguiente_pregunta_perfil(prefs)
+    
+#     # Comprobamos si la pregunta generada es una de las de fallback.
+#     # Esto indica que ya no hay más campos específicos que rellenar.
+#     # Asegúrate de que QUESTION_BANK["fallback"] es una lista o tupla.
+#     preguntas_de_fallback = QUESTION_BANK["fallback"]
+
+#     if siguiente_pregunta in preguntas_de_fallback:
+#         # Si la siguiente pregunta es una de fallback, consideramos el perfil completo.
+#         logging.debug("(Check Completeness) ► La siguiente pregunta es de fallback. Perfil COMPLETO.")
+#         return True
+#     else:
+#         # Si la pregunta es específica, el perfil aún está incompleto.
+#         logging.debug(f"(Check Completeness) ► Perfil incompleto. Siguiente pregunta a realizar: {siguiente_pregunta}")
+#         return False
 
 def check_economia_completa(econ: Optional[EconomiaUsuario]) -> bool:
     """
-    --- VERSIÓN SIN 'anos_posesion' ---
+    Verifica si la información económica está completa, siguiendo la nueva
+    lógica determinista.
     """
     if not econ or econ.presupuesto_definido is None:
         return False
 
     if econ.presupuesto_definido is False: # Modo "Asesoramiento"
-        # Ahora solo necesitamos ingresos y ahorro.
         return all([
             econ.ingresos is not None,
             econ.ahorro is not None
         ])
     else: # Modo "Usuario Define"
-        # La lógica para pago al contado o cuota máxima se mantiene igual.
-        pago_contado_completo = econ.pago_contado is not None
-        financiacion_completa = econ.cuota_max is not None
+        if econ.tipo_presupuesto is None:
+            return False
         
-        return pago_contado_completo or financiacion_completa
+        if econ.tipo_presupuesto == "contado":
+            return econ.pago_contado is not None
+        
+        if econ.tipo_presupuesto == "financiado":
+            return econ.cuota_max is not None
+            
+    return False
 
 
 def check_pasajeros_completo(info: Optional[InfoPasajeros]) -> bool:
