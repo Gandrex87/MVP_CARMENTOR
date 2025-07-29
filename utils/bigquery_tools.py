@@ -6,8 +6,8 @@ from google.cloud import bigquery
 from config.settings import ( 
     MIN_MAX_RANGES,PENALTY_PUERTAS_BAJAS,PENALTY_LOW_COST_POR_COMODIDAD, PENALTY_DEPORTIVIDAD_POR_COMODIDAD, PENALTY_ANTIGUEDAD_7_A_10_ANOS, PENALTY_ANTIGUEDAD_10_A_15_ANOS, PENALTY_ANTIGUEDAD_MAS_15_ANOS, PENALTY_ANTIGUEDAD_5_A_7_ANOS, BONUS_DISTINTIVO_ECO_CERO_C, PENALTY_DISTINTIVO_NA_B, BONUS_OCASION_POR_IMPACTO_AMBIENTAL,  PENALTY_BEV_REEV_AVENTURA_OCASIONAL,PENALTY_PHEV_AVENTURA_OCASIONAL, PENALTY_ELECTRIFICADOS_AVENTURA_EXTREMA,BONUS_CARROCERIA_MONTANA, BONUS_CARROCERIA_COMERCIAL,BONUS_CARROCERIA_PASAJEROS_PRO, PENALTY_CARROCERIA_NO_AVENTURA , BONUS_SUV_AVENTURA_OCASIONAL, BONUS_TODOTERRENO_AVENTURA_EXTREMA, BONUS_PICKUP_AVENTURA_EXTREMA, BONUS_CARROCERIA_OBJETOS_ESPECIALES, PENALTY_CARROCERIA_OBJETOS_ESPECIALES,  BONUS_CARROCERIA_CONFORT, FACTOR_CONVERSION_PRECIO_CUOTA,
     BONUS_OCASION_POR_USO_OCASIONAL, PENALTY_ELECTRIFICADOS_POR_USO_OCASIONAL, BONUS_BEV_REEV_USO_DEFINIDO,PENALTY_PHEV_USO_INTENSIVO_LARGO, BONUS_MOTOR_POCO_KM, PENALTY_OCASION_POCO_KM, PENALTY_OCASION_MEDIO_KM, BONUS_MOTOR_MUCHO_KM, PENALTY_OCASION_MUCHO_KM, PENALTY_OCASION_MUY_ALTO_KM_V2 ,BONUS_BEV_MUY_ALTO_KM , BONUS_REEV_MUY_ALTO_KM , BONUS_DIESEL_HEVD_MUY_ALTO_KM, BONUS_PHEVD_GLP_GNV_MUY_ALTO_KM, BONUS_PUNTO_CARGA_PROPIO, PENALTY_AWD_NINGUNA_AVENTURA,  BONUS_AWD_AVENTURA_OCASIONAL, BONUS_AWD_AVENTURA_EXTREMA, BONUS_AWD_ZONA_NIEVE, BONUS_AWD_ZONA_MONTA, BONUS_REDUCTORAS_AVENTURA_EXTREMA , PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_NA, PENALTY_ZBE_DISTINTIVO_DESFAVORABLE_B , BONUS_ZBE_DISTINTIVO_FAVORABLE_C , BONUS_ZBE_DISTINTIVO_FAVORABLE_ECO_CERO, 
-    BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO, PENALTY_DIESEL_CIUDAD , BONUS_DIESEL_CIUDAD_OCASIONAL, FACTOR_ESCALA_BASE, PENALTY_OCASION_KILOMETRAJE_EXTREMO, FACTOR_BONUS_RATING_CRITICO,FACTOR_BONUS_RATING_FUERTE, FACTOR_BONUS_FIABILIDAD_POR_IMPACTO, FACTOR_BONUS_DURABILIDAD_POR_IMPACTO, BONUS_REDUCTORAS_AVENTURA_OCASIONAL, FACTOR_BONUS_FIAB_DUR_CRITICO , FACTOR_BONUS_FIAB_DUR_FUERTE,FACTOR_BONUS_COSTES_CRITICO, PENALTY_ANO_PRE_1990 ,PENALTY_ANO_1991_1995, PENALTY_ANO_1996_2000 ,PENALTY_DIESEL_2001_2006, PENALTY_TAMANO_NO_COMPACTO, BONUS_CARROCERIA_COUPE_SINGULAR, BONUS_CARROCERIA_DESCAPOTABLE_SINGULAR,
-    BONUS_CARROCERIA_COUPE_DEPORTIVO, BONUS_CARROCERIA_DESCAPOTABLE_DEPORTIVO, PENALTY_CARROCERIA_COMERCIAL_DEPORTIVO, PENALTY_CARROCERIA_FURGONETA_DEPORTIVO, PENALTY_MALETERO_INSUFICIENTE , PENALTY_COMERCIAL_USO_PERSONAL, BONUS_COCHE_MUY_CORTO_CIUDAD, BONUS_COCHE_LIGERO_CIUDAD , BONUS_COCHE_CORTO_CIUDAD_2 , BONUS_COCHE_LIGERO_CIUDAD_2,  UMBRAL_LARGO_CIUDAD_MM , UMBRAL_LARGO_CARRETERA_MM, PENALTY_CARROCERIA_SUV_DEPORTIVO, PENALTY_BEV_NO_DEPORTIVO_LIFESTYLE
+    BONUS_AWD_NINGUNA_AVENTURA_CLIMA_ADVERSO, PENALTY_DIESEL_CIUDAD , BONUS_DIESEL_CIUDAD_OCASIONAL, FACTOR_ESCALA_BASE, PENALTY_OCASION_KILOMETRAJE_EXTREMO, FACTOR_BONUS_RATING_CRITICO,FACTOR_BONUS_RATING_FUERTE, FACTOR_BONUS_FIABILIDAD_POR_IMPACTO, FACTOR_BONUS_DURABILIDAD_POR_IMPACTO, BONUS_REDUCTORAS_AVENTURA_OCASIONAL, FACTOR_BONUS_FIAB_DUR_CRITICO , FACTOR_BONUS_FIAB_DUR_FUERTE,FACTOR_BONUS_COSTES_CRITICO, PENALTY_ANO_PRE_1990 ,PENALTY_ANO_1991_1995, PENALTY_ANO_1996_2000 ,PENALTY_DIESEL_2001_2006, PENALTY_TAMANO_CARRETERA, PENALTY_TAMANO_CIUDAD, BONUS_CARROCERIA_COUPE_SINGULAR, BONUS_CARROCERIA_DESCAPOTABLE_SINGULAR, BONUS_CARROCERIA_COUPE_DEPORTIVO, BONUS_CARROCERIA_DESCAPOTABLE_DEPORTIVO, PENALTY_CARROCERIA_COMERCIAL_DEPORTIVO, PENALTY_CARROCERIA_FURGONETA_DEPORTIVO, 
+    PENALTY_MALETERO_INSUFICIENTE , PENALTY_COMERCIAL_USO_PERSONAL, BONUS_COCHE_MUY_CORTO_CIUDAD, BONUS_COCHE_LIGERO_CIUDAD , BONUS_COCHE_CORTO_CIUDAD_2 , BONUS_COCHE_LIGERO_CIUDAD_2,  UMBRAL_LARGO_CIUDAD_MM , UMBRAL_LARGO_CARRETERA_MM, PENALTY_CARROCERIA_SUV_DEPORTIVO, PENALTY_BEV_NO_DEPORTIVO_LIFESTYLE, FACTOR_PRECIO_MINIMO
     )
 # --- Configuración de Logging ---
 logger = logging.getLogger(__name__) 
@@ -329,41 +329,47 @@ def buscar_coches_bq(
 
     # --- LÓGICA DE FILTRADO ECONÓMICO (CORREGIDA Y REFACTORIZADA) ---
 
+# --- LÓGICA DE FILTRADO ECONÓMICO (CORREGIDA Y REFACTORIZADA) ---
+
     modo_adq_rec = filtros.get("modo_adquisicion_recomendado")
-    precio_a_filtrar = None
-    cuota_a_filtrar = None
+    precio_maximo = None
+    cuota_maxima = None
 
-    # 1. Determinamos el presupuesto a usar con una lógica explícita
+    # 1. Determinamos el presupuesto MÁXIMO a usar con una lógica explícita
     if modo_adq_rec == "Contado":
-        # MODO 1 (ASESORADO) - CONTADO
-        precio_a_filtrar = filtros.get("precio_max_contado_recomendado")
-        logging.info(f"Filtro Económico: Modo 1 (Contado). Precio máximo recomendado: {precio_a_filtrar}")
-
+        precio_maximo = filtros.get("precio_max_contado_recomendado")
     elif modo_adq_rec == "Financiado":
-        # MODO 1 (ASESORADO) - FINANCIADO
-        cuota_a_filtrar = filtros.get("cuota_max_calculada")
-        logging.info(f"Filtro Económico: Modo 1 (Financiado). Cuota máxima calculada: {cuota_a_filtrar}")
-
+        cuota_maxima = filtros.get("cuota_max_calculada")
     else:
-        # MODO 2 (DIRECTO) - El usuario proprociona su propio presupuesto
-        # Comprobamos si el usuario dio un pago al contado
-        if filtros.get("pago_contado") is not None:
-            precio_a_filtrar = filtros.get("pago_contado")
-            logging.info(f"Filtro Económico: Modo 2 (Contado). Precio máximo del usuario: {precio_a_filtrar}")
-        # Si no, comprobamos si dio una cuota máxima
-        elif filtros.get("cuota_max") is not None:
-            cuota_a_filtrar = filtros.get("cuota_max")
-            logging.info(f"Filtro Económico: Modo 2 (Financiado). Cuota máxima del usuario: {cuota_a_filtrar}")
+        # MODO 2 (DIRECTO) - El usuario proporciona su propio presupuesto
+        precio_maximo = filtros.get("pago_contado")
+        if precio_maximo is None:
+            cuota_maxima = filtros.get("cuota_max")
 
-    # 2. Construimos la cláusula SQL basándonos en el presupuesto que se haya determinado
-    if precio_a_filtrar is not None:
+    # 2. Construimos las cláusulas SQL basándonos en el presupuesto que se haya determinado
+    if precio_maximo is not None:
+        precio_minimo = precio_maximo * FACTOR_PRECIO_MINIMO
+        logging.info(f"Filtro Económico: Rango de precio Contado -> {precio_minimo:,.0f}€ a {precio_maximo:,.0f}€")
+        
+        # Filtro de Límite Superior
         sql_where_clauses.append(f"COALESCE(sd.precio_compra_contado, 999999999) <= @precio_maximo")
-        params.append(bigquery.ScalarQueryParameter("precio_maximo", "FLOAT64", float(precio_a_filtrar)))
+        params.append(bigquery.ScalarQueryParameter("precio_maximo", "FLOAT64", float(precio_maximo)))
+        
+        # ✅ NUEVO FILTRO DE LÍMITE INFERIOR
+        sql_where_clauses.append(f"sd.precio_compra_contado >= @precio_minimo")
+        params.append(bigquery.ScalarQueryParameter("precio_minimo", "FLOAT64", float(precio_minimo)))
     
-    elif cuota_a_filtrar is not None:
-        # Asumiendo que FACTOR_CONVERSION_PRECIO_CUOTA está definido como (1.35 / 96)
+    elif cuota_maxima is not None:
+        cuota_minima = cuota_maxima * FACTOR_PRECIO_MINIMO
+        logging.info(f"Filtro Económico: Rango de Cuota -> {cuota_minima:,.0f}€/mes a {cuota_maxima:,.0f}€/mes")
+
+        # Filtro de Límite Superior
         sql_where_clauses.append(f"(COALESCE(sd.precio_compra_contado, 0) * {FACTOR_CONVERSION_PRECIO_CUOTA}) <= @cuota_maxima")
-        params.append(bigquery.ScalarQueryParameter("cuota_maxima", "FLOAT64", float(cuota_a_filtrar)))
+        params.append(bigquery.ScalarQueryParameter("cuota_maxima", "FLOAT64", float(cuota_maxima)))
+        
+        # ✅ NUEVO FILTRO DE LÍMITE INFERIOR
+        sql_where_clauses.append(f"(COALESCE(sd.precio_compra_contado, 0) * {FACTOR_CONVERSION_PRECIO_CUOTA}) >= @cuota_minima")
+        params.append(bigquery.ScalarQueryParameter("cuota_minima", "FLOAT64", float(cuota_minima)))
         
     # PASO 3: CONVERTIR CLÁUSULAS A STRING
     sql_where_clauses_str = ""
@@ -512,17 +518,22 @@ def buscar_coches_bq(
             (CASE WHEN @flag_logica_diesel_ciudad = 'PENALIZAR' AND sd.tipo_mecanica IN ('DIESEL', 'HEVD', 'MHEVD') THEN {PENALTY_DIESEL_CIUDAD} WHEN @flag_logica_diesel_ciudad = 'BONIFICAR' AND sd.tipo_mecanica IN ('DIESEL', 'HEVD', 'MHEVD') THEN {BONUS_DIESEL_CIUDAD_OCASIONAL} ELSE 0.0 END) as dbg_ajuste_diesel_ciudad,
             -- ✅ LÓGICA MEJORADA: Penalización por tamaño no compacto, AHORA CONTEXTUAL
             (CASE 
-                WHEN @flag_penalizar_tamano_no_compacto = TRUE AND
-                     (
-                        -- Si es conductor urbano, penaliza coches > 4.25m
-                        (@flag_es_conductor_urbano = TRUE AND sd.largo >= {UMBRAL_LARGO_CIUDAD_MM}) 
-                        OR
-                        -- Si NO es conductor urbano, penaliza coches > 4.50m
-                        (@flag_es_conductor_urbano = FALSE AND sd.largo >= {UMBRAL_LARGO_CARRETERA_MM})
-                     )
-                THEN {PENALTY_TAMANO_NO_COMPACTO} 
+                -- La regla solo se activa si el flag principal está activo
+                WHEN @flag_penalizar_tamano_no_compacto = TRUE THEN
+                    -- Ahora, aplicamos la penalización correcta según el contexto
+                    (CASE
+                        -- Si es conductor urbano, usa el umbral y la penalización de ciudad
+                        WHEN @flag_es_conductor_urbano = TRUE AND sd.largo >= {UMBRAL_LARGO_CIUDAD_MM}
+                        THEN {PENALTY_TAMANO_CIUDAD}
+                        
+                        -- Si NO es conductor urbano, usa el umbral y la penalización de carretera
+                        WHEN @flag_es_conductor_urbano = FALSE AND sd.largo >= {UMBRAL_LARGO_CARRETERA_MM}
+                        THEN {PENALTY_TAMANO_CARRETERA}
+                        
+                        ELSE 0.0
+                    END)
                 ELSE 0.0 
-            END) as dbg_pen_tamano_no_compacto,
+            END) as dbg_pen_tamano_contextual,
              (CASE 
                 WHEN @flag_bonus_singularidad_lifestyle = TRUE AND sd.tipo_carroceria = 'COUPE' THEN {BONUS_CARROCERIA_COUPE_SINGULAR}
                 WHEN @flag_bonus_singularidad_lifestyle = TRUE AND sd.tipo_carroceria = 'DESCAPOTABLE' THEN {BONUS_CARROCERIA_DESCAPOTABLE_SINGULAR}
@@ -615,7 +626,7 @@ def buscar_coches_bq(
                 dbg_bonus_punto_carga + dbg_ajuste_awd_aventura + dbg_bonus_awd_nieve + dbg_bonus_awd_montana +
                 dbg_bonus_reductoras + dbg_ajuste_diesel_ciudad + dbg_ajuste_km_anuales + dbg_bonus_seguridad  +
                 dbg_bonus_fiabilidad + dbg_bonus_durabilidad + dbg_bonus_bajo_consumo + dbg_bonus_coste_uso +
-                dbg_bonus_coste_mantenimiento + dbg_pen_antiguedad_general + dbg_pen_tamano_no_compacto + dbg_bonus_lifestyle + 
+                dbg_bonus_coste_mantenimiento + dbg_pen_antiguedad_general + dbg_pen_tamano_contextual + dbg_bonus_lifestyle + 
                 dbg_ajuste_deportividad_lifestyle + dbg_ajuste_maletero_personal + dbg_bonus_coche_ciudad + dbg_bonus_coche_ciudad_2
             ) AS ajustes_experto
         FROM DebugScores
