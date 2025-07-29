@@ -231,9 +231,11 @@ BONUS_AWD_AVENTURA_EXTREMA = 20 # flag_bonus_awd_clima_adverso = TRUE AND sd.tra
 
 # --- UMBRALES DE TAMAÑO PARA PENALIZACIÓN DE COCHES NO COMPACTOS ---
 # Las medidas deben estar en la misma unidad que tu columna 'largo' en BigQuery (asumimos milímetros)
-UMBRAL_LARGO_CIUDAD_MM = 4250  # 4.25 metros
+UMBRAL_LARGO_CIUDAD_MM = 4310  # 4.31 metros
+PENALTY_TAMANO_CIUDAD = -7    
+
 UMBRAL_LARGO_CARRETERA_MM = 4500 # 4.50 metros
-PENALTY_TAMANO_NO_COMPACTO = -5
+PENALTY_TAMANO_CARRETERA = -5   
 
 
 # --- FACTORES DE BONUS POR RATINGS DE USUARIO ---
@@ -278,6 +280,12 @@ BONUS_COCHE_LIGERO_CIUDAD = 2
 # --- BONUS PARA EL PERFIL "COCHE DE CIUDAD 2" (CON ESCAPADAS) ---
 BONUS_COCHE_CORTO_CIUDAD_2 = 5
 BONUS_COCHE_LIGERO_CIUDAD_2 = 2
+
+
+# --- FACTOR PARA EL RANGO DE PRECIO MÍNIMO ---
+# Límite inferior del rango de búsqueda como un porcentaje del precio/cuota máximo.
+# 0.5 = 50%
+FACTOR_PRECIO_MINIMO = 0.5
 # --------------------------------------- ## --------------------------------------- ## ---------------------------------------
 # --- UMBRALES PARA ACTIVAR FLAGS EN PYTHON (`graph/perfil/nodes.py` - `finalizar_y_presentar_node`) ---
 

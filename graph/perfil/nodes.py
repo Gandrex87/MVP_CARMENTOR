@@ -1598,7 +1598,7 @@ def buscar_coches_finales_node(state: EstadoAnalisisPerfil, config: RunnableConf
     con el resumen de criterios y los resultados de los coches.
     """
     logging.info("--- Ejecutando Nodo: buscar_coches_finales_node ---") 
-    k_coches =  12
+    k_coches =  7
     # Obtenemos el offset actual del estado, si no existe, empezamos en 0.
     offset = state.get("offset_busqueda", 0)
     historial = state.get("messages", [])
